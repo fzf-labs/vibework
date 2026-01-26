@@ -2,6 +2,13 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { ProjectManager } from './managers/ProjectManager'
+import { GitManager } from './managers/GitManager'
+import { CLIProcessManager } from './managers/CLIProcessManager'
+
+let projectManager: ProjectManager
+let gitManager: GitManager
+let cliProcessManager: CLIProcessManager
 
 function createWindow(): void {
   // Create the browser window.
@@ -49,8 +56,77 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // Initialize managers
+  projectManager = new ProjectManager()
+  gitManager = new GitManager()
+  cliProcessManager = new CLIProcessManager()
+
+  // IPC handlers for project management
+  ipcMain.handle('projects:getAll', () => {
+    return projectManager.getAllProjects()
+  })
+
+  ipcMain.handle('projects:get', (_, id: string) => {
+    return projectManager.getProject(id)
+  })
+
+  ipcMain.handle('projects:add', (_, project) => {
+    return projectManager.addProject(project)
+  })
+
+  ipcMain.handle('projects:update', (_, id: string, updates) => {
+    return projectManager.updateProject(id, updates)
+  })
+
+  ipcMain.handle('projects:delete', (_, id: string) => {
+    return projectManager.deleteProject(id)
+  })
+
+  // IPC handlers for Git operations
+  ipcMain.handle('git:clone', async (_, remoteUrl: string, targetPath: string) => {
+    try {
+      await gitManager.clone(remoteUrl, targetPath)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:init', async (_, path: string) => {
+    try {
+      await gitManager.init(path)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  // IPC handlers for CLI process management
+  ipcMain.handle('cli:startSession', (_, sessionId: string, command: string, args: string[], cwd?: string) => {
+    try {
+      cliProcessManager.startSession(sessionId, command, args, cwd)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('cli:stopSession', (_, sessionId: string) => {
+    try {
+      cliProcessManager.stopSession(sessionId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('cli:getOutput', (_, sessionId: string) => {
+    try {
+      return cliProcessManager.getSessionOutput(sessionId)
+    } catch (error) {
+      return []
+    }
+  })
 
   createWindow()
 
