@@ -2,9 +2,9 @@ import React, { useState } from 'react'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 import Overview from '../../pages/Overview'
-import Tasks from '../../pages/Tasks'
-import Skills from '../../pages/Skills'
-import MCPs from '../../pages/MCPs'
+import Task from '../../pages/Task'
+import Skill from '../../pages/Skill'
+import MCP from '../../pages/MCP'
 
 const MainLayout: React.FC = () => {
   const [activeNav, setActiveNav] = useState('overview')
@@ -14,11 +14,11 @@ const MainLayout: React.FC = () => {
       case 'overview':
         return <Overview />
       case 'tasks':
-        return <Tasks />
+        return <Task />
       case 'skills':
-        return <Skills />
+        return <Skill />
       case 'mcps':
-        return <MCPs />
+        return <MCP />
       default:
         return <Overview />
     }

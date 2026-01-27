@@ -1,5 +1,5 @@
 import React from 'react'
-import SkillCard from '../components/skills/SkillCard'
+import SkillCard from '../components/skill/SkillCard'
 
 const Skills: React.FC = () => {
   const skills = [

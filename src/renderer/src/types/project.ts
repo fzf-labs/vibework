@@ -1,3 +1,5 @@
+import { Pipeline } from './task'
+
 export interface Project {
   id: string
   name: string
@@ -30,19 +32,6 @@ export interface Skill {
   name: string
   description: string
   enabled: boolean
-}
-
-export interface Pipeline {
-  id: string
-  name: string
-  stages: PipelineStage[]
-}
-
-export interface PipelineStage {
-  id: string
-  name: string
-  requiresConfirmation: boolean
-  command?: string
 }
 
 export interface EditorConfig {

@@ -1,33 +1,16 @@
-import React, { useEffect, useState } from 'react'
-import { Project } from '../types/project'
-import ProjectCard from '../components/projects/ProjectCard'
-import NewProjectDialog from '../components/projects/NewProjectDialog'
+import React, { useState } from 'react'
+import { useProjects } from '@/hooks'
+import ProjectCard from '@/components/project/ProjectCard'
+import NewProjectDialog from '@/components/project/NewProjectDialog'
 
 const Projects: React.FC = () => {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
+  const { projects, loading, addProject } = useProjects()
   const [showNewDialog, setShowNewDialog] = useState(false)
-
-  useEffect(() => {
-    loadProjects()
-  }, [])
-
-  const loadProjects = async () => {
-    try {
-      const data = await window.api.projects.getAll()
-      setProjects(data)
-    } catch (error) {
-      console.error('Failed to load projects:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleCreateProject = async (projectData: any) => {
     try {
-      await window.api.projects.add(projectData)
+      await addProject(projectData)
       setShowNewDialog(false)
-      loadProjects()
     } catch (error) {
       console.error('Failed to create project:', error)
     }

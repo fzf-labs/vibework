@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Project } from '../../types/project'
-import NewProjectDialog from '../projects/NewProjectDialog'
+import NewProjectDialog from './NewProjectDialog'
 
 interface ProjectSelectorProps {
   onProjectChange?: (project: Project | null) => void

@@ -1,5 +1,5 @@
 import React from 'react'
-import ProjectSelector from './ProjectSelector'
+import ProjectSelector from '@/components/project/ProjectSelector'
 
 const TopBar: React.FC = () => {
   return (

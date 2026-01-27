@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { CLISession } from '../../types/cli'
 
 interface CLIOutputViewerProps {
   sessionId: string

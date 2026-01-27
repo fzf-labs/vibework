@@ -1,5 +1,5 @@
 import React from 'react'
-import KanbanColumn from '../components/tasks/KanbanColumn'
+import KanbanColumn from '../components/task/KanbanColumn'
 
 const Tasks: React.FC = () => {
   const todoTasks = [

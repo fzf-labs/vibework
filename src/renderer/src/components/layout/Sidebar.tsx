@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import SettingsDialog from '../settings/SettingsDialog'
+import SettingDialog from '../setting/SettingDialog'
 
 interface NavItem {
   id: string
@@ -128,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeNav, onNavChange }) => {
         </div>
       </div>
 
-      {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingDialog onClose={() => setShowSettings(false)} />}
     </div>
   )
 }
