@@ -29,7 +29,6 @@ export default {
   retry: 'Retry',
   openInFinder: 'Open in Finder',
   apiKeyError: 'Model configuration error. Please check your API Key',
-  configureModel: 'Click to configure model',
   // Plan
   executionPlan: 'Execution Plan',
   pendingApproval: 'Pending',

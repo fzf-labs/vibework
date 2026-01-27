@@ -47,12 +47,10 @@ export default {
     internalError: 'Internal server error. Please check log file: {logPath}',
     openLogFile: 'Open Log File',
     claudeCodeNotFound:
-      'Claude Code is not installed or unavailable. Please configure a custom AI model in Settings, or install Claude Code (npm install -g @anthropic-ai/claude-code)',
-    configureModel: 'Configure Model',
+      'Claude Code is not installed or unavailable. Please install Claude Code (npm install -g @anthropic-ai/claude-code).',
     apiKeyError:
-      'AI model request failed. Please check your model configuration (API URL, API key, model name, etc.)',
-    configureApiKey: 'Go to Settings',
+      'AI model request failed. Please check your API key and service configuration.',
     agentProcessError:
-      'Agent encountered an error. Please check your model configuration and try again.',
+      'Agent encountered an error. Please check your configuration and try again.',
   },
 };

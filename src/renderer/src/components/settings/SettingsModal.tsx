@@ -6,12 +6,6 @@ import {
   syncSettingsWithBackend,
   type Settings as SettingsType,
 } from '@/data/settings';
-import {
-  getAppDataDir,
-  getDisplayPath,
-  getMcpConfigPath,
-  getSkillsDir,
-} from '@/lib/paths';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 
@@ -23,9 +17,7 @@ import { AccountSettings } from './tabs/AccountSettings';
 import { DataSettings } from './tabs/DataSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
-import { ModelSettings } from './tabs/ModelSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
-import { WorkplaceSettings } from './tabs/WorkplaceSettings';
 import type { SettingsCategory } from './types';
 
 interface SettingsModalProps {
@@ -50,19 +42,12 @@ export function SettingsModal({
       setActiveCategory(initialCategory);
     }
   }, [initialCategory, open]);
-  const [defaultPaths, setDefaultPaths] = useState({
-    workDir: '',
-    mcpConfigPath: '',
-    skillsPath: '',
-  });
   const { t } = useLanguage();
 
   // Category list
   const categories: SettingsCategory[] = [
     'account',
     'general',
-    'workplace',
-    'model',
     'mcp',
     'skills',
     'data',
@@ -72,19 +57,6 @@ export function SettingsModal({
   const getCategoryLabel = (id: SettingsCategory): string => {
     return t.settings[id];
   };
-
-  // Load default paths on mount
-  useEffect(() => {
-    async function loadDefaultPaths() {
-      const [workDir, mcpConfigPath, skillsPath] = await Promise.all([
-        getAppDataDir().then(getDisplayPath),
-        getMcpConfigPath().then(getDisplayPath),
-        getSkillsDir().then(getDisplayPath),
-      ]);
-      setDefaultPaths({ workDir, mcpConfigPath, skillsPath });
-    }
-    loadDefaultPaths();
-  }, []);
 
   // Load settings on mount
   useEffect(() => {
@@ -97,7 +69,7 @@ export function SettingsModal({
   const handleSettingsChange = (newSettings: SettingsType) => {
     setSettings(newSettings);
     saveSettings(newSettings);
-    // Sync model configuration with backend
+    // Sync settings with backend
     syncSettingsWithBackend().catch((error) => {
       console.error('[Settings] Failed to sync with backend:', error);
     });
@@ -164,21 +136,6 @@ export function SettingsModal({
 
               {activeCategory === 'general' && (
                 <GeneralSettings
-                  settings={settings}
-                  onSettingsChange={handleSettingsChange}
-                />
-              )}
-
-              {activeCategory === 'workplace' && (
-                <WorkplaceSettings
-                  settings={settings}
-                  onSettingsChange={handleSettingsChange}
-                  defaultPaths={defaultPaths}
-                />
-              )}
-
-              {activeCategory === 'model' && (
-                <ModelSettings
                   settings={settings}
                   onSettingsChange={handleSettingsChange}
                 />

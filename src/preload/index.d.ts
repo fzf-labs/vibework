@@ -152,6 +152,31 @@ interface NotificationAPI {
   }>
 }
 
+interface DatabaseAPI {
+  // Session
+  createSession: (input: unknown) => Promise<unknown>
+  getSession: (id: string) => Promise<unknown>
+  getAllSessions: () => Promise<unknown[]>
+  updateSessionTaskCount: (sessionId: string, count: number) => Promise<void>
+  // Task
+  createTask: (input: unknown) => Promise<unknown>
+  getTask: (id: string) => Promise<unknown>
+  getAllTasks: () => Promise<unknown[]>
+  updateTask: (id: string, updates: unknown) => Promise<unknown>
+  deleteTask: (id: string) => Promise<boolean>
+  getTasksBySessionId: (sessionId: string) => Promise<unknown[]>
+  // Message
+  createMessage: (input: unknown) => Promise<unknown>
+  getMessagesByTaskId: (taskId: string) => Promise<unknown[]>
+  deleteMessagesByTaskId: (taskId: string) => Promise<number>
+  // File
+  createFile: (input: unknown) => Promise<unknown>
+  getFilesByTaskId: (taskId: string) => Promise<unknown[]>
+  getAllFiles: () => Promise<unknown[]>
+  toggleFileFavorite: (fileId: number) => Promise<unknown>
+  deleteFile: (fileId: number) => Promise<boolean>
+}
+
 interface FSAPI {
   readFile: (path: string) => Promise<Uint8Array>
   readTextFile: (path: string) => Promise<string>
@@ -177,10 +202,28 @@ interface PathAPI {
   appDataDir: () => Promise<string>
   appConfigDir: () => Promise<string>
   tempDir: () => Promise<string>
+  vibeworkDataDir: () => Promise<string>
 }
 
 interface AppAPI {
   getVersion: () => Promise<string>
+}
+
+interface AppSettings {
+  theme: 'light' | 'dark' | 'system'
+  accentColor: string
+  backgroundStyle: string
+  language: string
+  notifications: {
+    enabled: boolean
+    sound: boolean
+  }
+}
+
+interface SettingsAPI {
+  get: () => Promise<AppSettings>
+  update: (updates: Partial<AppSettings>) => Promise<AppSettings>
+  reset: () => Promise<AppSettings>
 }
 
 interface API {
@@ -195,11 +238,13 @@ interface API {
   previewConfig: PreviewConfigAPI
   preview: PreviewAPI
   notification: NotificationAPI
+  database: DatabaseAPI
   fs: FSAPI
   dialog: DialogAPI
   shell: ShellAPI
   path: PathAPI
   app: AppAPI
+  settings: SettingsAPI
 }
 
 declare global {

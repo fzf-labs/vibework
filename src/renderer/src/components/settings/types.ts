@@ -1,16 +1,11 @@
-import type {
-  AIProvider,
-  Settings as SettingsType,
-} from '@/data/settings';
+import type { Settings as SettingsType } from '@/data/settings';
 
-export type { SettingsType, AIProvider };
+export type { SettingsType };
 
 // Settings category type
 export type SettingsCategory =
   | 'account'
   | 'general'
-  | 'workplace'
-  | 'model'
   | 'mcp'
   | 'skills'
   | 'connector'
@@ -21,24 +16,6 @@ export type SettingsCategory =
 export interface SettingsTabProps {
   settings: SettingsType;
   onSettingsChange: (settings: SettingsType) => void;
-}
-
-// Workplace settings props (includes default paths)
-export interface WorkplaceSettingsProps extends SettingsTabProps {
-  defaultPaths: {
-    workDir: string;
-    mcpConfigPath: string;
-    skillsPath: string;
-  };
-}
-
-// Dependency status for workspace settings
-export interface DependencyStatus {
-  claudeCode: boolean;
-  node: boolean;
-  python: boolean;
-  codex: boolean;
-  srt: boolean;
 }
 
 // MCP Server Config Types
@@ -92,6 +69,5 @@ export interface SkillInfo {
 }
 
 // Sub-tab types
-export type ModelSubTab = 'settings' | string;
 export type MCPSubTab = 'settings' | string;
 export type SkillsSubTab = 'settings' | string;

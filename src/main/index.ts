@@ -3,6 +3,7 @@ import { join } from 'path'
 import { readFile, writeFile, stat, rm, access } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { getAppPaths } from './services/AppPaths'
 import { ProjectService } from './services/ProjectService'
 import { GitService } from './services/GitService'
 import { CLIProcessService } from './services/CLIProcessService'
@@ -15,6 +16,7 @@ import { PreviewConfigService } from './services/PreviewConfigService'
 import { PreviewService } from './services/PreviewService'
 import { NotificationService } from './services/NotificationService'
 import { DatabaseService } from './services/DatabaseService'
+import { SettingsService } from './services/SettingsService'
 
 let projectService: ProjectService
 let gitService: GitService
@@ -28,6 +30,7 @@ let previewConfigService: PreviewConfigService
 let previewService: PreviewService
 let notificationService: NotificationService
 let databaseService: DatabaseService
+let settingsService: SettingsService
 
 type CLIToolConfigInput = Parameters<CLIToolConfigService['saveConfig']>[1]
 type ClaudeCodeConfigUpdate = Parameters<ClaudeCodeService['saveConfig']>[0]
@@ -84,8 +87,17 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // Initialize app paths and migrate data from old location
+  const appPaths = getAppPaths()
+  const migration = appPaths.migrateFromOldLocation()
+  if (migration.migrated) {
+    console.log('[App] Data migration completed:')
+    migration.details.forEach((detail) => console.log(`  - ${detail}`))
+  }
+
   // Initialize services
-  projectService = new ProjectService()
+  databaseService = new DatabaseService()
+  projectService = new ProjectService(databaseService)
   gitService = new GitService()
   cliProcessService = new CLIProcessService()
   claudeCodeService = new ClaudeCodeService()
@@ -96,7 +108,7 @@ app.whenReady().then(() => {
   previewConfigService = new PreviewConfigService()
   previewService = new PreviewService()
   notificationService = new NotificationService()
-  databaseService = new DatabaseService()
+  settingsService = new SettingsService()
 
   // IPC handlers for project management
   ipcMain.handle('projects:getAll', () => {
@@ -108,7 +120,12 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('projects:add', (_, project) => {
-    return projectService.addProject(project)
+    try {
+      const result = projectService.addProject(project)
+      return { success: true, data: result }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
 
   ipcMain.handle('projects:update', (_, id: string, updates) => {
@@ -965,6 +982,23 @@ app.whenReady().then(() => {
 
   ipcMain.handle('path:tempDir', () => {
     return app.getPath('temp')
+  })
+
+  ipcMain.handle('path:vibeworkDataDir', () => {
+    return appPaths.getRootDir()
+  })
+
+  // IPC handlers for settings
+  ipcMain.handle('settings:get', () => {
+    return settingsService.getSettings()
+  })
+
+  ipcMain.handle('settings:update', (_, updates) => {
+    return settingsService.updateSettings(updates)
+  })
+
+  ipcMain.handle('settings:reset', () => {
+    return settingsService.resetSettings()
   })
 
   // IPC handlers for app operations

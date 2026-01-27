@@ -29,7 +29,6 @@ export default {
   retry: '重试',
   openInFinder: '在访达中打开',
   apiKeyError: '模型配置错误，请检查 API Key 是否正确',
-  configureModel: '点击配置模型',
   // Plan
   executionPlan: '执行计划',
   pendingApproval: '待确认',

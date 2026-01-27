@@ -195,10 +195,16 @@ const api = {
   path: {
     appDataDir: () => ipcRenderer.invoke('path:appDataDir'),
     appConfigDir: () => ipcRenderer.invoke('path:appConfigDir'),
-    tempDir: () => ipcRenderer.invoke('path:tempDir')
+    tempDir: () => ipcRenderer.invoke('path:tempDir'),
+    vibeworkDataDir: () => ipcRenderer.invoke('path:vibeworkDataDir')
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion')
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    update: (updates: unknown) => ipcRenderer.invoke('settings:update', updates),
+    reset: () => ipcRenderer.invoke('settings:reset')
   }
 }
 

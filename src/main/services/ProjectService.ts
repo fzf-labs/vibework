@@ -1,105 +1,88 @@
-import { app } from 'electron'
-import { join } from 'path'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import {
+  DatabaseService,
+  Project as DbProject,
+  CreateProjectInput,
+  UpdateProjectInput
+} from './DatabaseService'
 
-interface Project {
+export interface Project {
   id: string
   name: string
   path: string
-  type: 'local' | 'remote'
-  remoteUrl?: string
   description?: string
-  lastOpened?: string
+  config: Record<string, unknown>
   createdAt: string
-  config: ProjectConfig
+  updatedAt: string
 }
 
-interface ProjectConfig {
-  mcpServers?: unknown[]
-  skills?: unknown[]
-  pipelines?: unknown[]
-  editor?: unknown
+export interface CreateProjectOptions {
+  name: string
+  path: string
+  description?: string
+  config?: Record<string, unknown>
 }
 
 export class ProjectService {
-  private projectsFile: string
-  private projects: Project[] = []
+  private db: DatabaseService
 
-  constructor() {
-    const userDataPath = app.getPath('userData')
-    const dataDir = join(userDataPath, 'data')
-
-    if (!existsSync(dataDir)) {
-      mkdirSync(dataDir, { recursive: true })
-    }
-
-    this.projectsFile = join(dataDir, 'projects.json')
-    this.loadProjects()
+  constructor(db: DatabaseService) {
+    this.db = db
   }
 
-  private loadProjects(): void {
-    try {
-      if (existsSync(this.projectsFile)) {
-        const data = readFileSync(this.projectsFile, 'utf-8')
-        this.projects = JSON.parse(data)
-      }
-    } catch (error) {
-      console.error('Failed to load projects:', error)
-      this.projects = []
-    }
-  }
-
-  private saveProjects(): void {
-    try {
-      writeFileSync(this.projectsFile, JSON.stringify(this.projects, null, 2))
-    } catch (error) {
-      console.error('Failed to save projects:', error)
+  private toProject(dbProject: DbProject): Project {
+    return {
+      id: dbProject.id,
+      name: dbProject.name,
+      path: dbProject.path,
+      description: dbProject.description || undefined,
+      config: dbProject.config ? JSON.parse(dbProject.config) : {},
+      createdAt: dbProject.created_at,
+      updatedAt: dbProject.updated_at
     }
   }
 
   getAllProjects(): Project[] {
-    return this.projects
+    return this.db.getAllProjects().map((p) => this.toProject(p))
   }
 
   getProject(id: string): Project | undefined {
-    return this.projects.find((p) => p.id === id)
+    const project = this.db.getProject(id)
+    return project ? this.toProject(project) : undefined
   }
 
-  addProject(project: Omit<Project, 'id' | 'createdAt'>): Project {
-    const newProject: Project = {
-      ...project,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString()
+  getProjectByPath(path: string): Project | undefined {
+    const project = this.db.getProjectByPath(path)
+    return project ? this.toProject(project) : undefined
+  }
+
+  addProject(options: CreateProjectOptions): Project {
+    const existing = this.db.getProjectByPath(options.path)
+    if (existing) {
+      throw new Error(`项目路径已存在: ${options.path}`)
     }
 
-    this.projects.push(newProject)
-    this.saveProjects()
-    return newProject
+    const input: CreateProjectInput = {
+      name: options.name,
+      path: options.path,
+      description: options.description,
+      config: options.config
+    }
+
+    const created = this.db.createProject(input)
+    return this.toProject(created)
   }
 
   updateProject(id: string, updates: Partial<Project>): Project | null {
-    const index = this.projects.findIndex((p) => p.id === id)
-    if (index === -1) return null
+    const input: UpdateProjectInput = {}
+    if (updates.name !== undefined) input.name = updates.name
+    if (updates.description !== undefined) input.description = updates.description
+    if (updates.config !== undefined) input.config = updates.config
 
-    this.projects[index] = { ...this.projects[index], ...updates }
-    this.saveProjects()
-    return this.projects[index]
+    const updated = this.db.updateProject(id, input)
+    return updated ? this.toProject(updated) : null
   }
 
   deleteProject(id: string): boolean {
-    const index = this.projects.findIndex((p) => p.id === id)
-    if (index === -1) return false
-
-    this.projects.splice(index, 1)
-    this.saveProjects()
-    return true
-  }
-
-  updateLastOpened(id: string): void {
-    const project = this.getProject(id)
-    if (project) {
-      project.lastOpened = new Date().toISOString()
-      this.saveProjects()
-    }
+    return this.db.deleteProject(id)
   }
 }

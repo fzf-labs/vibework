@@ -1,0 +1,96 @@
+// Settings type definitions
+
+export interface AIProvider {
+  id: string;
+  name: string;
+  apiKey: string;
+  baseUrl: string;
+  enabled: boolean;
+  models: string[];
+  icon?: string;
+  apiKeyUrl?: string;
+  canDelete?: boolean;
+}
+
+export interface MCPServer {
+  id: string;
+  name: string;
+  type: 'stdio' | 'http';
+  command?: string;
+  args?: string[];
+  url?: string;
+  enabled: boolean;
+}
+
+export type SandboxProviderType =
+  | 'docker'
+  | 'native'
+  | 'e2b'
+  | 'codex'
+  | 'claude'
+  | 'custom';
+
+export interface SandboxProviderSetting {
+  id: string;
+  type: SandboxProviderType;
+  name: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
+export type AgentRuntimeType = 'claude' | 'codex' | 'deepagents' | 'custom';
+
+export interface AgentRuntimeSetting {
+  id: string;
+  type: AgentRuntimeType;
+  name: string;
+  enabled: boolean;
+  config: {
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+    executablePath?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface UserProfile {
+  nickname: string;
+  avatar: string;
+}
+
+export type AccentColor =
+  | 'orange'
+  | 'blue'
+  | 'green'
+  | 'purple'
+  | 'pink'
+  | 'red'
+  | 'sage';
+
+export type BackgroundStyle = 'default' | 'warm' | 'cool';
+
+export interface Settings {
+  profile: UserProfile;
+  providers: AIProvider[];
+  defaultProvider: string;
+  defaultModel: string;
+  mcpConfigPath: string;
+  mcpEnabled: boolean;
+  mcpUserDirEnabled: boolean;
+  mcpAppDirEnabled: boolean;
+  skillsPath: string;
+  skillsEnabled: boolean;
+  skillsUserDirEnabled: boolean;
+  skillsAppDirEnabled: boolean;
+  workDir: string;
+  sandboxEnabled: boolean;
+  sandboxProviders: SandboxProviderSetting[];
+  defaultSandboxProvider: string;
+  agentRuntimes: AgentRuntimeSetting[];
+  defaultAgentRuntime: string;
+  theme: 'light' | 'dark' | 'system';
+  accentColor: AccentColor;
+  backgroundStyle: BackgroundStyle;
+  language: string;
+}

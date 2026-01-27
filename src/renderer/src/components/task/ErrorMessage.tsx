@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import { useLanguage } from '@/providers/language-provider';
-import { SettingsModal } from '@/components/settings';
 
 interface ErrorMessageProps {
   message: string;
@@ -8,53 +6,28 @@ interface ErrorMessageProps {
 
 export function ErrorMessage({ message }: ErrorMessageProps) {
   const { t } = useLanguage();
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Check if this is a Claude Code not found error
   if (message === '__CLAUDE_CODE_NOT_FOUND__') {
     return (
-      <>
-        <div className="flex items-start gap-3 py-2">
-          <WarningIcon className="text-amber-500" />
-          <div className="flex flex-col gap-1">
-            <p className="text-muted-foreground text-sm">
-              {t.common.errors.claudeCodeNotFound}
-            </p>
-            <SettingsButton onClick={() => setSettingsOpen(true)}>
-              {t.common.errors.configureModel}
-            </SettingsButton>
-          </div>
-        </div>
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialCategory="model"
-        />
-      </>
+      <div className="flex items-start gap-3 py-2">
+        <WarningIcon className="text-amber-500" />
+        <p className="text-muted-foreground text-sm">
+          {t.common.errors.claudeCodeNotFound}
+        </p>
+      </div>
     );
   }
 
   // Check if this is an API key error
   if (message === '__API_KEY_ERROR__') {
     return (
-      <>
-        <div className="flex items-start gap-3 py-2">
-          <WarningIcon className="text-amber-500" />
-          <div className="flex flex-col gap-1">
-            <p className="text-muted-foreground text-sm">
-              {t.common.errors.apiKeyError}
-            </p>
-            <SettingsButton onClick={() => setSettingsOpen(true)}>
-              {t.common.errors.configureApiKey}
-            </SettingsButton>
-          </div>
-        </div>
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialCategory="model"
-        />
-      </>
+      <div className="flex items-start gap-3 py-2">
+        <WarningIcon className="text-amber-500" />
+        <p className="text-muted-foreground text-sm">
+          {t.common.errors.apiKeyError}
+        </p>
+      </div>
     );
   }
 
@@ -83,24 +56,12 @@ export function ErrorMessage({ message }: ErrorMessageProps) {
 
   if (isApiKeyError) {
     return (
-      <>
-        <div className="flex items-start gap-3 py-2">
-          <WarningIcon className="text-amber-500" />
-          <div className="flex flex-col gap-1">
-            <p className="text-muted-foreground text-sm">
-              {t.common.errors.apiKeyError}
-            </p>
-            <SettingsButton onClick={() => setSettingsOpen(true)}>
-              {t.common.errors.configureApiKey}
-            </SettingsButton>
-          </div>
-        </div>
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialCategory="model"
-        />
-      </>
+      <div className="flex items-start gap-3 py-2">
+        <WarningIcon className="text-amber-500" />
+        <p className="text-muted-foreground text-sm">
+          {t.common.errors.apiKeyError}
+        </p>
+      </div>
     );
   }
 
@@ -120,22 +81,5 @@ function WarningIcon({ className }: { className?: string }) {
         <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7 4.5a1 1 0 112 0v3a1 1 0 11-2 0v-3zm1 7a1 1 0 100-2 1 1 0 000 2z" />
       </svg>
     </div>
-  );
-}
-
-function SettingsButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="text-primary hover:text-primary/80 cursor-pointer text-left text-sm underline underline-offset-2"
-    >
-      {children}
-    </button>
   );
 }

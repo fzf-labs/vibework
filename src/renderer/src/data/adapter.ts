@@ -11,54 +11,19 @@ import type {
   LibraryFile
 } from './types'
 
-// 声明全局类型
-declare global {
-  interface Window {
-    api: {
-      database: {
-        // Session
-        createSession: (input: CreateSessionInput) => Promise<Session>
-        getSession: (id: string) => Promise<Session | null>
-        getAllSessions: () => Promise<Session[]>
-        updateSessionTaskCount: (sessionId: string, count: number) => Promise<void>
-
-        // Task
-        createTask: (input: CreateTaskInput) => Promise<Task>
-        getTask: (id: string) => Promise<Task | null>
-        getAllTasks: () => Promise<Task[]>
-        updateTask: (id: string, updates: UpdateTaskInput) => Promise<Task | null>
-        deleteTask: (id: string) => Promise<boolean>
-        getTasksBySessionId: (sessionId: string) => Promise<Task[]>
-
-        // Message
-        createMessage: (input: CreateMessageInput) => Promise<Message>
-        getMessagesByTaskId: (taskId: string) => Promise<Message[]>
-        deleteMessagesByTaskId: (taskId: string) => Promise<number>
-
-        // File
-        createFile: (input: CreateFileInput) => Promise<LibraryFile>
-        getFilesByTaskId: (taskId: string) => Promise<LibraryFile[]>
-        getAllFiles: () => Promise<LibraryFile[]>
-        toggleFileFavorite: (fileId: number) => Promise<LibraryFile | null>
-        deleteFile: (fileId: number) => Promise<boolean>
-      }
-    }
-  }
-}
-
 // 导出统一的数据库 API（通过 IPC 调用 Main 进程）
 export const db = {
   // ============ Session 操作 ============
   createSession: (input: CreateSessionInput): Promise<Session> => {
-    return window.api.database.createSession(input)
+    return window.api.database.createSession(input) as Promise<Session>
   },
 
   getSession: (id: string): Promise<Session | null> => {
-    return window.api.database.getSession(id)
+    return window.api.database.getSession(id) as Promise<Session | null>
   },
 
   getAllSessions: (): Promise<Session[]> => {
-    return window.api.database.getAllSessions()
+    return window.api.database.getAllSessions() as Promise<Session[]>
   },
 
   updateSessionTaskCount: (sessionId: string, count: number): Promise<void> => {
@@ -67,19 +32,19 @@ export const db = {
 
   // ============ Task 操作 ============
   createTask: (input: CreateTaskInput): Promise<Task> => {
-    return window.api.database.createTask(input)
+    return window.api.database.createTask(input) as Promise<Task>
   },
 
   getTask: (id: string): Promise<Task | null> => {
-    return window.api.database.getTask(id)
+    return window.api.database.getTask(id) as Promise<Task | null>
   },
 
   getAllTasks: (): Promise<Task[]> => {
-    return window.api.database.getAllTasks()
+    return window.api.database.getAllTasks() as Promise<Task[]>
   },
 
   updateTask: (id: string, updates: UpdateTaskInput): Promise<Task | null> => {
-    return window.api.database.updateTask(id, updates)
+    return window.api.database.updateTask(id, updates) as Promise<Task | null>
   },
 
   deleteTask: (id: string): Promise<boolean> => {
@@ -87,16 +52,16 @@ export const db = {
   },
 
   getTasksBySessionId: (sessionId: string): Promise<Task[]> => {
-    return window.api.database.getTasksBySessionId(sessionId)
+    return window.api.database.getTasksBySessionId(sessionId) as Promise<Task[]>
   },
 
   // ============ Message 操作 ============
   createMessage: (input: CreateMessageInput): Promise<Message> => {
-    return window.api.database.createMessage(input)
+    return window.api.database.createMessage(input) as Promise<Message>
   },
 
   getMessagesByTaskId: (taskId: string): Promise<Message[]> => {
-    return window.api.database.getMessagesByTaskId(taskId)
+    return window.api.database.getMessagesByTaskId(taskId) as Promise<Message[]>
   },
 
   deleteMessagesByTaskId: (taskId: string): Promise<number> => {
@@ -105,19 +70,19 @@ export const db = {
 
   // ============ File 操作 ============
   createFile: (input: CreateFileInput): Promise<LibraryFile> => {
-    return window.api.database.createFile(input)
+    return window.api.database.createFile(input) as Promise<LibraryFile>
   },
 
   getFilesByTaskId: (taskId: string): Promise<LibraryFile[]> => {
-    return window.api.database.getFilesByTaskId(taskId)
+    return window.api.database.getFilesByTaskId(taskId) as Promise<LibraryFile[]>
   },
 
   getAllFiles: (): Promise<LibraryFile[]> => {
-    return window.api.database.getAllFiles()
+    return window.api.database.getAllFiles() as Promise<LibraryFile[]>
   },
 
   toggleFileFavorite: (fileId: number): Promise<LibraryFile | null> => {
-    return window.api.database.toggleFileFavorite(fileId)
+    return window.api.database.toggleFileFavorite(fileId) as Promise<LibraryFile | null>
   },
 
   deleteFile: (fileId: number): Promise<boolean> => {

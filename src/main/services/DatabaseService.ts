@@ -1,8 +1,30 @@
 import Database from 'better-sqlite3'
-import { app } from 'electron'
-import { join } from 'path'
+import { getAppPaths } from './AppPaths'
 
 // 类型定义
+export interface Project {
+  id: string
+  name: string
+  path: string
+  description: string | null
+  config: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateProjectInput {
+  name: string
+  path: string
+  description?: string
+  config?: Record<string, unknown>
+}
+
+export interface UpdateProjectInput {
+  name?: string
+  description?: string
+  config?: Record<string, unknown>
+}
+
 interface CreateSessionInput {
   id: string
   prompt: string
@@ -96,7 +118,8 @@ export class DatabaseService {
   private db: Database.Database
 
   constructor() {
-    const dbPath = join(app.getPath('userData'), 'vibework.db')
+    const appPaths = getAppPaths()
+    const dbPath = appPaths.getDatabaseFile()
     console.log('[DatabaseService] Initializing database at:', dbPath)
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
@@ -105,6 +128,19 @@ export class DatabaseService {
 
   private initTables(): void {
     console.log('[DatabaseService] Creating tables...')
+
+    // 创建 projects 表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        path TEXT NOT NULL UNIQUE,
+        description TEXT,
+        config TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `)
 
     // 创建 sessions 表
     this.db.exec(`
@@ -171,6 +207,7 @@ export class DatabaseService {
 
     // 创建索引
     this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
       CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
       CREATE INDEX IF NOT EXISTS idx_messages_task_id ON messages(task_id);
@@ -390,6 +427,75 @@ export class DatabaseService {
   deleteFile(fileId: number): boolean {
     const stmt = this.db.prepare('DELETE FROM files WHERE id = ?')
     const result = stmt.run(fileId)
+    return result.changes > 0
+  }
+
+  // ============ Project 操作 ============
+  createProject(input: CreateProjectInput): Project {
+    const now = new Date().toISOString()
+    const id = crypto.randomUUID()
+    const stmt = this.db.prepare(`
+      INSERT INTO projects (id, name, path, description, config, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    stmt.run(
+      id,
+      input.name,
+      input.path,
+      input.description || null,
+      input.config ? JSON.stringify(input.config) : null,
+      now,
+      now
+    )
+    return this.getProject(id)!
+  }
+
+  getProject(id: string): Project | null {
+    const stmt = this.db.prepare('SELECT * FROM projects WHERE id = ?')
+    return stmt.get(id) as Project | null
+  }
+
+  getProjectByPath(path: string): Project | null {
+    const stmt = this.db.prepare('SELECT * FROM projects WHERE path = ?')
+    return stmt.get(path) as Project | null
+  }
+
+  getAllProjects(): Project[] {
+    const stmt = this.db.prepare('SELECT * FROM projects ORDER BY updated_at DESC')
+    return stmt.all() as Project[]
+  }
+
+  updateProject(id: string, updates: UpdateProjectInput): Project | null {
+    const now = new Date().toISOString()
+    const fields: string[] = []
+    const values: unknown[] = []
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?')
+      values.push(updates.name)
+    }
+    if (updates.description !== undefined) {
+      fields.push('description = ?')
+      values.push(updates.description)
+    }
+    if (updates.config !== undefined) {
+      fields.push('config = ?')
+      values.push(JSON.stringify(updates.config))
+    }
+
+    if (fields.length === 0) return this.getProject(id)
+
+    fields.push('updated_at = ?')
+    values.push(now, id)
+
+    const stmt = this.db.prepare(`UPDATE projects SET ${fields.join(', ')} WHERE id = ?`)
+    stmt.run(...values)
+    return this.getProject(id)
+  }
+
+  deleteProject(id: string): boolean {
+    const stmt = this.db.prepare('DELETE FROM projects WHERE id = ?')
+    const result = stmt.run(id)
     return result.changes > 0
   }
 

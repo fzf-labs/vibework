@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { AgentMessage } from '@/hooks/useAgent';
 import { useLanguage } from '@/providers/language-provider';
 import {
@@ -10,13 +9,11 @@ import {
   Globe,
   Monitor,
   Search,
-  Settings,
   Terminal,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { SettingsModal } from '@/components/settings';
 import { Button } from '@/components/ui/button';
 
 interface AgentMessagesProps {
@@ -88,89 +85,40 @@ function isApiErrorText(content: string): boolean {
 // Error message component that handles special error codes
 function ErrorMessage({ message }: { message: string }) {
   const { t } = useLanguage();
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Check for Claude Code not found error
   if (message === '__CLAUDE_CODE_NOT_FOUND__') {
     return (
-      <>
-        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
-          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <span>{t.common.errors.claudeCodeNotFound}</span>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-fit"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="mr-2 size-4" />
-            {t.common.errors.configureModel}
-          </Button>
+      <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+        <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{t.common.errors.claudeCodeNotFound}</span>
         </div>
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialCategory="model"
-        />
-      </>
+      </div>
     );
   }
 
   // Check for API key error
   if (message === '__API_KEY_ERROR__') {
     return (
-      <>
-        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
-          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <span>{t.common.errors.apiKeyError}</span>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-fit"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="mr-2 size-4" />
-            {t.common.errors.configureApiKey}
-          </Button>
+      <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+        <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{t.common.errors.apiKeyError}</span>
         </div>
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialCategory="model"
-        />
-      </>
+      </div>
     );
   }
 
   // Check for agent process error (e.g., Claude Code process exited)
   if (message === '__AGENT_PROCESS_ERROR__' || message.includes('__AGENT_PROCESS_ERROR__')) {
     return (
-      <>
-        <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
-          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <span>{t.common.errors.agentProcessError}</span>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-fit"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="mr-2 size-4" />
-            {t.common.errors.configureApiKey}
-          </Button>
+      <div className="flex flex-col gap-3 rounded-lg bg-amber-50 p-4 dark:bg-amber-950">
+        <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{t.common.errors.agentProcessError}</span>
         </div>
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialCategory="model"
-        />
-      </>
+      </div>
     );
   }
 

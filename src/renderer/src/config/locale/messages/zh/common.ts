@@ -45,10 +45,8 @@ export default {
     internalError: '服务内部错误，详情请查看日志文件：{logPath}',
     openLogFile: '打开日志文件',
     claudeCodeNotFound:
-      'Claude Code 未安装或不可用。请在设置中配置自定义 AI 模型，或安装 Claude Code（npm install -g @anthropic-ai/claude-code）',
-    configureModel: '配置模型',
-    apiKeyError: 'AI 模型接口请求失败，请检查模型配置是否正确（API 地址、密钥、模型名称等）',
-    configureApiKey: '前往配置',
-    agentProcessError: 'Agent 运行遇到错误，请检查模型配置后重试',
+      'Claude Code 未安装或不可用。请安装 Claude Code（npm install -g @anthropic-ai/claude-code）。',
+    apiKeyError: 'AI 模型请求失败，请检查 API 密钥和服务配置。',
+    agentProcessError: 'Agent 运行遇到错误，请检查配置后重试',
   },
 };
