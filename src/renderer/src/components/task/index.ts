@@ -8,6 +8,7 @@ export { QuestionInput } from './QuestionInput';
 export { ToolSelectionContext, useToolSelection } from './context';
 export { UserMessage } from './UserMessage';
 export { MessageItem } from './MessageItem';
+export { MessageList } from './MessageList';
 export { ErrorMessage } from './ErrorMessage';
 export { RunningIndicator } from './RunningIndicator';
 export { TaskGroupComponent } from './TaskGroupComponent';

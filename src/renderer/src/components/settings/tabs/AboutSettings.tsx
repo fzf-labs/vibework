@@ -55,24 +55,14 @@ export function AboutSettings() {
         </button>
       </div>
 
-      {/* Version & Info */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="border-border bg-muted/20 rounded-lg border p-4">
-          <p className="text-muted-foreground text-xs tracking-wider uppercase">
-            {t.settings.version}
-          </p>
-          <p className="text-foreground mt-1 text-lg font-semibold">
-            {version}
-          </p>
-        </div>
-        <div className="border-border bg-muted/20 rounded-lg border p-4">
-          <p className="text-muted-foreground text-xs tracking-wider uppercase">
-            {t.settings.build}
-          </p>
-          <p className="text-foreground mt-1 text-lg font-semibold">
-            {__BUILD_DATE__}
-          </p>
-        </div>
+      {/* Version Info */}
+      <div className="border-border bg-muted/20 rounded-lg border p-4">
+        <p className="text-muted-foreground text-xs tracking-wider uppercase">
+          {t.settings.version}
+        </p>
+        <p className="text-foreground mt-1 text-lg font-semibold">
+          {version}
+        </p>
       </div>
 
       {/* Author & Copyright */}
