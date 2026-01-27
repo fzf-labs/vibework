@@ -1,11 +1,25 @@
-import './assets/styles/main.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { RouterProvider } from 'react-router-dom';
 
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import App from './App'
+import { router } from './app/router';
+import { initializeSettings } from './shared/db/settings';
+import { LanguageProvider } from './shared/providers/language-provider';
+import { ThemeProvider } from './shared/providers/theme-provider';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-)
+import '@/config/style/global.css';
+
+// Initialize settings from database on startup, then render app
+initializeSettings()
+  .catch(console.error)
+  .finally(() => {
+    ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+      <React.StrictMode>
+        <LanguageProvider>
+          <ThemeProvider>
+            <RouterProvider router={router} />
+          </ThemeProvider>
+        </LanguageProvider>
+      </React.StrictMode>
+    );
+  });
