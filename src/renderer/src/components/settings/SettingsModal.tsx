@@ -113,9 +113,9 @@ export function SettingsModal({
           <div className="border-border bg-muted/30 flex w-56 flex-col border-r">
             {/* Logo Header */}
             <div className="border-border flex items-center gap-2.5 border-b px-4 py-4">
-              <img src={ImageLogo} alt="WorkAny" className="size-7" />
+              <img src={ImageLogo} alt="VibeWork" className="size-7" />
               <span className="text-foreground text-base font-semibold">
-                WorkAny
+                VibeWork
               </span>
             </div>
 

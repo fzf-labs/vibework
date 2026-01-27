@@ -1,7 +1,7 @@
 /**
- * Path utilities for WorkAny
+ * Path utilities for VibeWork
  *
- * Uses ~/.workany/ as the standard data directory across all platforms.
+ * Uses ~/.VibeWork/ as the standard data directory across all platforms.
  * This follows the Unix dotfile convention used by developer tools like:
  * - ~/.claude/ (Claude Code)
  * - ~/.npm/ (npm)
@@ -21,7 +21,7 @@ function isElectron(): boolean {
 
 /**
  * Get the application data directory
- * Returns ~/.workany on all platforms
+ * Returns ~/.VibeWork on all platforms
  */
 export async function getAppDataDir(): Promise<string> {
   if (cachedAppDataDir) {
@@ -32,8 +32,8 @@ export async function getAppDataDir(): Promise<string> {
     try {
       const { path } = await import('./electron-api');
       const appData = await path.appDataDir();
-      // Use appData/workany as the data directory
-      cachedAppDataDir = `${appData}/workany`;
+      // Use appData/VibeWork as the data directory
+      cachedAppDataDir = `${appData}/VibeWork`;
       return cachedAppDataDir;
     } catch (error) {
       console.warn('[Paths] Failed to get app data dir:', error);
@@ -41,7 +41,7 @@ export async function getAppDataDir(): Promise<string> {
   }
 
   // Fallback for browser mode
-  cachedAppDataDir = '~/.workany';
+  cachedAppDataDir = '~/.VibeWork';
   return cachedAppDataDir;
 }
 

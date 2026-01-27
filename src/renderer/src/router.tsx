@@ -1,16 +1,52 @@
-import { createBrowserRouter } from 'react-router-dom';
-import { HomePage, LibraryPage, SetupPage, TaskDetailPage } from '@/pages';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+import {
+  HomePage,
+  LibraryPage,
+  SetupPage,
+  TaskDetailPage,
+  DashboardPage,
+  BoardPage,
+  SkillsPage,
+  McpPage,
+} from '@/pages';
 
 import { SetupGuard } from '@/components/shared/SetupGuard';
+import { MainLayout } from '@/components/layout';
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: (
       <SetupGuard>
-        <HomePage />
+        <MainLayout />
       </SetupGuard>
     ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/dashboard" replace />,
+      },
+      {
+        path: 'dashboard',
+        element: <DashboardPage />,
+      },
+      {
+        path: 'board',
+        element: <BoardPage />,
+      },
+      {
+        path: 'skills',
+        element: <SkillsPage />,
+      },
+      {
+        path: 'mcp',
+        element: <McpPage />,
+      },
+      {
+        path: 'home',
+        element: <HomePage />,
+      },
+    ],
   },
   {
     path: '/task/:taskId',

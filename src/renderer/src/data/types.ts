@@ -2,6 +2,22 @@
 
 export type TaskStatus = 'running' | 'completed' | 'error' | 'stopped';
 
+// Project represents a workspace/repository
+export interface Project {
+  id: string;
+  name: string;
+  path: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  path: string;
+  description?: string;
+}
+
 // Session represents a conversation context that can contain multiple tasks
 export interface Session {
   id: string; // Format: YYYYMMDDHHmmss_slug

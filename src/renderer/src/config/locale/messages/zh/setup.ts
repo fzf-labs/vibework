@@ -1,5 +1,5 @@
 export default {
-  title: '欢迎使用 WorkAny',
+  title: '欢迎使用 VibeWork',
   subtitle: '让我们先确保您已安装所有必需的工具',
   checking: '正在检查依赖...',
   checkingEnvironment: '正在检查环境...',
@@ -10,7 +10,7 @@ export default {
   oneClickInstall: '一键安装',
   installingClaudeCode: '正在安装 Claude Code，请稍候...',
   installFailed: '安装失败',
-  redirecting: '正在进入 WorkAny...',
+  redirecting: '正在进入 VibeWork...',
   recheck: '重新检测',
   docs: '文档',
   skip: '跳过',

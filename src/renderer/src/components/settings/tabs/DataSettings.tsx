@@ -80,7 +80,7 @@ export function DataSettings() {
       };
 
       const jsonString = JSON.stringify(exportData, null, 2);
-      const filename = `workany-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `VibeWork-backup-${new Date().toISOString().split('T')[0]}.json`;
 
       // Use Electron dialog
       const { dialog, fs } = await import('@/lib/electron-api');

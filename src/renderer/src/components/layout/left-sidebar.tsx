@@ -223,12 +223,12 @@ export function LeftSidebar({
                 <div className="flex size-9 items-center justify-center rounded-xl">
                   <img
                     src={ImageLogo}
-                    alt="WorkAny"
+                    alt="VibeWork"
                     className="text-primary size-9"
                   />
                 </div>
                 <span className="text-sidebar-foreground font-mono text-lg font-medium tracking-wide">
-                  WorkAny
+                  VibeWork
                 </span>
               </div>
               <button
@@ -440,9 +440,9 @@ export function LeftSidebar({
               >
                 {logoHovered ? (
                   // <PanelLeftOpen className="text-sidebar-foreground size-5" />
-                  <img src={ImageLogo} alt="WorkAny" className="size-9" />
+                  <img src={ImageLogo} alt="VibeWork" className="size-9" />
                 ) : (
-                  <img src={ImageLogo} alt="WorkAny" className="size-9" />
+                  <img src={ImageLogo} alt="VibeWork" className="size-9" />
                 )}
               </button>
             </div>

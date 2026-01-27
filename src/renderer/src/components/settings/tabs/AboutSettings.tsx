@@ -34,9 +34,9 @@ export function AboutSettings() {
       {/* Product Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={ImageLogo} alt="WorkAny" className="size-16 rounded-xl" />
+          <img src={ImageLogo} alt="VibeWork" className="size-16 rounded-xl" />
           <div>
-            <h2 className="text-foreground text-xl font-bold">WorkAny</h2>
+            <h2 className="text-foreground text-xl font-bold">VibeWork</h2>
             <p className="text-muted-foreground text-sm">
               {t.settings.aiPlatform}
             </p>
@@ -45,7 +45,7 @@ export function AboutSettings() {
         <button
           onClick={() =>
             openExternalUrl(
-              'https://workany.ai/download?utm_source=workany_desktop'
+              'https://VibeWork.ai/download?utm_source=VibeWork_desktop'
             )
           }
           className="bg-primary text-primary-foreground hover:bg-primary/90 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
@@ -73,7 +73,7 @@ export function AboutSettings() {
           </span>
           <button
             onClick={() =>
-              openExternalUrl('https://idoubi.ai?utm_source=workany_desktop')
+              openExternalUrl('https://idoubi.ai?utm_source=VibeWork_desktop')
             }
             className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
           >
@@ -87,7 +87,7 @@ export function AboutSettings() {
           </span>
           <button
             onClick={() =>
-              openExternalUrl('https://thinkany.ai?utm_source=workany_desktop')
+              openExternalUrl('https://thinkany.ai?utm_source=VibeWork_desktop')
             }
             className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
           >
@@ -102,12 +102,12 @@ export function AboutSettings() {
           <button
             onClick={() =>
               openExternalUrl(
-                'https://github.com/workany-ai/workany/blob/main/LICENSE'
+                'https://github.com/VibeWork-ai/VibeWork/blob/main/LICENSE'
               )
             }
             className="text-foreground hover:text-primary flex cursor-pointer items-center gap-1 text-sm font-medium transition-colors"
           >
-            WorkAny Community License
+            VibeWork Community License
             <ExternalLink className="size-3" />
           </button>
         </div>
@@ -117,7 +117,7 @@ export function AboutSettings() {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={() =>
-            openExternalUrl('https://workany.ai?utm_source=workany_desktop')
+            openExternalUrl('https://VibeWork.ai?utm_source=VibeWork_desktop')
           }
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
@@ -126,7 +126,7 @@ export function AboutSettings() {
         </button>
         <button
           onClick={() =>
-            openExternalUrl('https://github.com/workany-ai/workany')
+            openExternalUrl('https://github.com/VibeWork-ai/VibeWork')
           }
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
@@ -143,7 +143,7 @@ export function AboutSettings() {
           {t.settings.joinCommunity}
         </button>
         <button
-          onClick={() => openExternalUrl('https://x.com/workanyai')}
+          onClick={() => openExternalUrl('https://x.com/VibeWorkai')}
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
           <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
@@ -153,7 +153,7 @@ export function AboutSettings() {
         </button>
         <button
           onClick={() =>
-            openExternalUrl('https://github.com/workany-ai/workany/issues')
+            openExternalUrl('https://github.com/VibeWork-ai/VibeWork/issues')
           }
           className="border-border text-foreground hover:bg-accent flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
         >
@@ -166,7 +166,7 @@ export function AboutSettings() {
       <div className="border-border border-t pt-4">
         <button
           onClick={() =>
-            openExternalUrl('https://shipany.ai?utm_source=workany_desktop')
+            openExternalUrl('https://shipany.ai?utm_source=VibeWork_desktop')
           }
           className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-sm transition-colors"
         >

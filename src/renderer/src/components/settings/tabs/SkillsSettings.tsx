@@ -178,7 +178,7 @@ export function SkillsSettings({
   const loadSkillsFromPath = async (skillsPath: string) => {
     setLoading(true);
     try {
-      // Get all skills directories (workany and claude)
+      // Get all skills directories (VibeWork and claude)
       const dirsResponse = await fetch(`${API_BASE_URL}/files/skills-dir`);
       const dirsData = await dirsResponse.json();
 
@@ -194,7 +194,7 @@ export function SkillsSettings({
         }[]) {
           if (dir.name === 'claude') {
             dirs.user = dir.path;
-          } else if (dir.name === 'workany') {
+          } else if (dir.name === 'VibeWork') {
             dirs.app = dir.path;
           }
         }
@@ -208,7 +208,7 @@ export function SkillsSettings({
           path: string;
           exists: boolean;
         }[]) {
-          // Only load from user directory (claude), skip app directory (workany)
+          // Only load from user directory (claude), skip app directory (VibeWork)
           if (dir.name !== 'claude' || !dir.exists) continue;
 
           try {
@@ -254,7 +254,7 @@ export function SkillsSettings({
                   allSkills.push({
                     id: `${dir.name}-${folder.name}`,
                     name: skillName,
-                    source: dir.name as 'claude' | 'workany',
+                    source: dir.name as 'claude' | 'VibeWork',
                     path: folder.path,
                     files: folder.children || [],
                     enabled: true,
@@ -321,7 +321,7 @@ export function SkillsSettings({
                   allSkills.push({
                     id: `custom-${folder.name}`,
                     name: skillName,
-                    source: 'workany',
+                    source: 'VibeWork',
                     path: folder.path,
                     files: folder.children || [],
                     enabled: true,

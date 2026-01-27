@@ -5,11 +5,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { db, type LibraryFile, type Task } from '@/data';
 import {
   useAgent,
-  type AgentMessage,
   type MessageAttachment,
 } from '@/hooks/useAgent';
 import { useVitePreview } from '@/hooks/useVitePreview';
@@ -22,7 +21,6 @@ import {
   hasValidSearchResults,
   type Artifact,
 } from '@/components/artifacts';
-import { Logo } from '@/components/shared/Logo';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
 import {
@@ -30,10 +28,8 @@ import {
   RightSidebar,
   ToolSelectionContext,
   useToolSelection,
-  MessageItem,
   MessageList,
   RunningIndicator,
-  TaskGroupComponent,
   UserMessage,
   convertFileType,
   getArtifactTypeFromExt,
@@ -61,7 +57,6 @@ function TaskDetailContent() {
   const { t } = useLanguage();
   const { taskId } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const state = location.state as LocationState | null;
   const initialPrompt = state?.prompt || '';
   const initialSessionId = state?.sessionId;
@@ -84,13 +79,11 @@ function TaskDetailContent() {
     respondToQuestion,
     sessionFolder,
     filesVersion,
-    backgroundTasks,
   } = useAgent();
   const { toggleLeft, setLeftOpen } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
-  const isInitializingRef = useRef(false); // Prevent double initialization in Strict Mode
+  const isInitializingRef = useRef(false);
   const [task, setTask] = useState<Task | null>(null);
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -254,9 +247,6 @@ function TaskDetailContent() {
         const updatedTask = await db.updateTask(taskId, { prompt: trimmedTitle });
         if (updatedTask) {
           setTask(updatedTask);
-          // Refresh all tasks to update sidebar
-          const tasks = await db.getAllTasks();
-          setAllTasks(tasks);
         }
       } catch (error) {
         console.error('Failed to update task title:', error);
@@ -547,57 +537,6 @@ function TaskDetailContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Load all tasks for sidebar
-  useEffect(() => {
-    async function loadAllTasks() {
-      try {
-        const dbTasks = await db.getAllTasks();
-        setAllTasks((prev) => {
-          // Preserve current task if it exists in prev but not in database yet
-          // This handles the race condition where optimistic update added the task
-          // but database hasn't persisted it yet
-          const currentTaskInPrev = prev.find((t) => t.id === taskId);
-          const taskExistsInDb = dbTasks.some((t) => t.id === taskId);
-
-          if (currentTaskInPrev && !taskExistsInDb) {
-            // Keep the optimistic task at the beginning
-            return [currentTaskInPrev, ...dbTasks];
-          }
-          return dbTasks;
-        });
-      } catch (error) {
-        console.error('Failed to load tasks:', error);
-      }
-    }
-    loadAllTasks();
-  }, [task, taskId]);
-
-  // Handle task deletion from sidebar
-  const handleDeleteTask = async (id: string) => {
-    try {
-      await db.deleteTask(id);
-      setAllTasks((prev) => prev.filter((t) => t.id !== id));
-      // If deleting current task, navigate to home
-      if (id === taskId) {
-        navigate('/');
-      }
-    } catch (error) {
-      console.error('Failed to delete task:', error);
-    }
-  };
-
-  // Handle favorite toggle from sidebar
-  const handleToggleFavorite = async (id: string, favorite: boolean) => {
-    try {
-      await db.updateTask(id, { favorite });
-      setAllTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, favorite } : t))
-      );
-    } catch (error) {
-      console.error('Failed to update task:', error);
-    }
-  };
-
   // Reset UI state when taskId changes (but don't touch agent/task state - let loadTask handle that)
   useEffect(() => {
     if (prevTaskIdRef.current !== taskId) {
@@ -644,32 +583,12 @@ function TaskDetailContent() {
 
       if (existingTask) {
         setTask(existingTask);
-        // Ensure this task is in the sidebar immediately
-        setAllTasks((prev) => {
-          const exists = prev.some((t) => t.id === existingTask.id);
-          return exists ? prev : [existingTask, ...prev];
-        });
         await loadMessages(taskId);
         setHasStarted(true);
         setIsLoading(false);
       } else if (initialPrompt && !hasStarted) {
         setHasStarted(true);
         setIsLoading(false);
-
-        // Immediately add the new task to sidebar (optimistic update)
-        const newTaskPreview: Task = {
-          id: taskId,
-          session_id: initialSessionId || '',
-          task_index: initialTaskIndex,
-          prompt: initialPrompt,
-          status: 'running',
-          favorite: false,
-          cost: 0,
-          duration: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setAllTasks((prev) => [newTaskPreview, ...prev]);
 
         // Pass session info if available
         const sessionInfo = initialSessionId
@@ -744,17 +663,7 @@ function TaskDetailContent() {
     <ToolSelectionContext.Provider value={toolSelectionValue}>
       <div className="bg-sidebar flex h-screen overflow-hidden">
         {/* Left Sidebar */}
-        <LeftSidebar
-          tasks={allTasks}
-          currentTaskId={taskId}
-          onDeleteTask={handleDeleteTask}
-          onToggleFavorite={handleToggleFavorite}
-          runningTaskIds={[
-            ...backgroundTasks.filter((t) => t.isRunning).map((t) => t.taskId),
-            // Include current task if it's running
-            ...(isRunning && taskId ? [taskId] : []),
-          ]}
-        />
+        <LeftSidebar />
 
         {/* Main Content Area with Responsive Layout */}
         <div

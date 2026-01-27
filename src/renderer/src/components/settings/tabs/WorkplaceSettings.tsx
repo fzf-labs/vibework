@@ -143,10 +143,10 @@ export function WorkplaceSettings({
         </p>
         <div className="flex items-center gap-2">
           <div className="border-input bg-muted text-foreground flex h-10 max-w-md flex-1 items-center rounded-lg border px-3 text-sm">
-            {`${settings.workDir || defaultPaths.workDir}/logs/workany.log`}
+            {`${settings.workDir || defaultPaths.workDir}/logs/VibeWork.log`}
           </div>
           <button
-            onClick={() => openFolderInSystem(`${settings.workDir || defaultPaths.workDir}/logs/workany.log`)}
+            onClick={() => openFolderInSystem(`${settings.workDir || defaultPaths.workDir}/logs/VibeWork.log`)}
             className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
             title={t.settings.logFileOpen}
           >
