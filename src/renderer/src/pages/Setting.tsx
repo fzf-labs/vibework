@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { SimpleNotificationSettings } from '@/components/notification/SimpleNotificationSettings'
 
 const Settings: React.FC = () => {
   const [activeSection, setActiveSection] = useState('general')
@@ -101,6 +102,8 @@ const Settings: React.FC = () => {
               </div>
             </>
           )}
+
+          {activeSection === 'notifications' && <SimpleNotificationSettings />}
         </div>
       </div>
     </div>

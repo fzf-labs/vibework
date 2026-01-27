@@ -58,7 +58,7 @@ export class PreviewConfigManager {
   }
 
   getConfigsByProject(projectId: string): PreviewConfig[] {
-    return Array.from(this.configs.values()).filter(c => c.projectId === projectId)
+    return Array.from(this.configs.values()).filter((c) => c.projectId === projectId)
   }
 
   getConfig(id: string): PreviewConfig | undefined {

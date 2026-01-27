@@ -5,7 +5,7 @@ interface CheckboxProps {
   disabled?: boolean
 }
 
-export function Checkbox({ checked, onChange, onClick, disabled }: CheckboxProps) {
+export function Checkbox({ checked, onChange, onClick, disabled }: CheckboxProps): JSX.Element {
   return (
     <input
       type="checkbox"

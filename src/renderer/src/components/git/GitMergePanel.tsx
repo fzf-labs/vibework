@@ -1,22 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface GitMergePanelProps {
   repoPath: string
   onMergeComplete?: () => void
 }
 
-export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps) {
+export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps): JSX.Element {
   const [branches, setBranches] = useState<string[]>([])
   const [selectedBranch, setSelectedBranch] = useState<string>('')
   const [merging, setMerging] = useState(false)
   const [conflicts, setConflicts] = useState<string[]>([])
   const [error, setError] = useState<string>('')
 
-  useEffect(() => {
-    loadBranches()
-  }, [repoPath])
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async (): Promise<void> => {
     try {
       const result = await window.api.git.getBranches?.(repoPath)
       if (result?.success) {
@@ -25,9 +21,13 @@ export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps)
     } catch (error) {
       console.error('加载分支失败:', error)
     }
-  }
+  }, [repoPath])
 
-  const handleMerge = async () => {
+  useEffect(() => {
+    loadBranches()
+  }, [loadBranches])
+
+  const handleMerge = async (): Promise<void> => {
     if (!selectedBranch) return
 
     setMerging(true)
@@ -43,22 +43,22 @@ export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps)
       } else if (result.data.conflicts) {
         setConflicts(result.data.conflicts)
       }
-    } catch (error: any) {
-      setError(error.message || '合并失败')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '合并失败')
     } finally {
       setMerging(false)
     }
   }
 
-  const handleAbortMerge = async () => {
+  const handleAbortMerge = async (): Promise<void> => {
     try {
       const result = await window.api.git.abortMerge(repoPath)
       if (result.success) {
         setConflicts([])
         alert('已中止合并')
       }
-    } catch (error: any) {
-      setError(error.message || '中止合并失败')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '中止合并失败')
     }
   }
 
@@ -69,9 +69,7 @@ export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps)
       {conflicts.length === 0 ? (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">
-              选择要合并的分支
-            </label>
+            <label className="block text-sm font-medium mb-2">选择要合并的分支</label>
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
@@ -79,7 +77,7 @@ export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps)
               disabled={merging}
             >
               <option value="">请选择分支</option>
-              {branches.map(branch => (
+              {branches.map((branch) => (
                 <option key={branch} value={branch}>
                   {branch}
                 </option>
@@ -95,23 +93,15 @@ export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps)
             {merging ? '合并中...' : '开始合并'}
           </button>
 
-          {error && (
-            <div className="p-3 bg-red-50 text-red-700 rounded">
-              {error}
-            </div>
-          )}
+          {error && <div className="p-3 bg-red-50 text-red-700 rounded">{error}</div>}
         </div>
       ) : (
         <div className="space-y-4">
           <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-            <h3 className="font-semibold text-yellow-800 mb-2">
-              检测到合并冲突
-            </h3>
-            <p className="text-sm text-yellow-700 mb-3">
-              以下文件存在冲突,请解决后继续:
-            </p>
+            <h3 className="font-semibold text-yellow-800 mb-2">检测到合并冲突</h3>
+            <p className="text-sm text-yellow-700 mb-3">以下文件存在冲突,请解决后继续:</p>
             <ul className="space-y-1">
-              {conflicts.map(file => (
+              {conflicts.map((file) => (
                 <li key={file} className="text-sm font-mono text-yellow-800">
                   {file}
                 </li>
@@ -120,10 +110,7 @@ export function GitMergePanel({ repoPath, onMergeComplete }: GitMergePanelProps)
           </div>
 
           <div className="flex gap-2">
-            <button
-              onClick={handleAbortMerge}
-              className="px-4 py-2 bg-red-500 text-white rounded"
-            >
+            <button onClick={handleAbortMerge} className="px-4 py-2 bg-red-500 text-white rounded">
               中止合并
             </button>
           </div>

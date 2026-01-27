@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 
 interface GenericCLIToolConfigProps {
   toolId: string
@@ -6,16 +6,16 @@ interface GenericCLIToolConfigProps {
   onClose?: () => void
 }
 
-const GenericCLIToolConfig: React.FC<GenericCLIToolConfigProps> = ({ toolId, toolName, onClose }) => {
-  const [config, setConfig] = useState<any>({})
+const GenericCLIToolConfig: React.FC<GenericCLIToolConfigProps> = ({
+  toolId,
+  toolName,
+  onClose
+}): JSX.Element => {
+  const [config, setConfig] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    loadConfig()
-  }, [toolId])
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async (): Promise<void> => {
     try {
       const result = await window.api.cliToolConfig.get(toolId)
       setConfig(result)
@@ -24,9 +24,13 @@ const GenericCLIToolConfig: React.FC<GenericCLIToolConfigProps> = ({ toolId, too
     } finally {
       setLoading(false)
     }
-  }
+  }, [toolId])
 
-  const handleSave = async () => {
+  useEffect(() => {
+    loadConfig()
+  }, [loadConfig])
+
+  const handleSave = async (): Promise<void> => {
     setSaving(true)
     try {
       await window.api.cliToolConfig.save(toolId, config)
@@ -44,7 +48,7 @@ const GenericCLIToolConfig: React.FC<GenericCLIToolConfigProps> = ({ toolId, too
     return <div style={{ padding: 20 }}>加载中...</div>
   }
 
-  const renderConfigFields = () => {
+  const renderConfigFields = (): JSX.Element | null => {
     switch (toolId) {
       case 'claude-code':
         return (
@@ -203,9 +207,7 @@ const GenericCLIToolConfig: React.FC<GenericCLIToolConfigProps> = ({ toolId, too
 
   return (
     <div style={{ padding: 24, maxWidth: 600 }}>
-      <h2 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: '600' }}>
-        {toolName} 配置
-      </h2>
+      <h2 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: '600' }}>{toolName} 配置</h2>
 
       {renderConfigFields()}
 

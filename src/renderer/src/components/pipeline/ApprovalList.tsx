@@ -16,23 +16,27 @@ interface ApprovalListProps {
   onReject: (requestId: string) => void
 }
 
-const ApprovalList: React.FC<ApprovalListProps> = ({ requests, onApprove, onReject }) => {
+const ApprovalList: React.FC<ApprovalListProps> = ({
+  requests,
+  onApprove,
+  onReject
+}): JSX.Element | null => {
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null)
   const [showDialog, setShowDialog] = useState(false)
 
-  const handleApprove = (requestId: string) => {
+  const handleApprove = (requestId: string): void => {
     onApprove(requestId, 'current-user')
     setShowDialog(false)
     setSelectedRequest(null)
   }
 
-  const handleReject = (requestId: string) => {
+  const handleReject = (requestId: string): void => {
     onReject(requestId)
     setShowDialog(false)
     setSelectedRequest(null)
   }
 
-  const handleRequestClick = (request: ApprovalRequest) => {
+  const handleRequestClick = (request: ApprovalRequest): void => {
     setSelectedRequest(request)
     setShowDialog(true)
   }

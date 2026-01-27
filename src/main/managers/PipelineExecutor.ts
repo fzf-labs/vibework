@@ -185,12 +185,13 @@ export class PipelineExecutor extends EventEmitter {
         }
         stageExecution.exitCode = 0
         return
-      } catch (error: any) {
-        lastError = error
-        stageExecution.exitCode = error.code || 1
+      } catch (error) {
+        const execError = error as NodeJS.ErrnoException
+        lastError = execError instanceof Error ? execError : new Error(String(error))
+        stageExecution.exitCode = typeof execError.code === 'number' ? execError.code : 1
 
         if (attempt < retryCount) {
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          await new Promise((resolve) => setTimeout(resolve, 1000))
         }
       }
     }
@@ -212,7 +213,7 @@ export class PipelineExecutor extends EventEmitter {
       throw new Error('Execution not found')
     }
 
-    const stageExecution = execution.stageExecutions.find(s => s.id === stageExecutionId)
+    const stageExecution = execution.stageExecutions.find((s) => s.id === stageExecutionId)
     if (!stageExecution) {
       throw new Error('Stage execution not found')
     }

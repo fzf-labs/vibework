@@ -4,21 +4,23 @@ import { PipelineTemplate } from '../../types/pipeline'
 import { PipelineTemplateList } from './PipelineTemplateList'
 import { PipelineTemplateEditor } from './PipelineTemplateEditor'
 
-export function PipelineTemplateManager() {
+export function PipelineTemplateManager(): JSX.Element {
   const [view, setView] = useState<'list' | 'edit'>('list')
   const [editingTemplate, setEditingTemplate] = useState<PipelineTemplate | undefined>()
 
-  const handleCreate = () => {
+  const handleCreate = (): void => {
     setEditingTemplate(undefined)
     setView('edit')
   }
 
-  const handleEdit = (template: PipelineTemplate) => {
+  const handleEdit = (template: PipelineTemplate): void => {
     setEditingTemplate(template)
     setView('edit')
   }
 
-  const handleSave = (templateData: Omit<PipelineTemplate, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSave = (
+    templateData: Omit<PipelineTemplate, 'id' | 'createdAt' | 'updatedAt'>
+  ): void => {
     if (editingTemplate) {
       pipelineTemplateStore.update(editingTemplate.id, templateData)
     } else {
@@ -27,11 +29,11 @@ export function PipelineTemplateManager() {
     setView('list')
   }
 
-  const handleCancel = () => {
+  const handleCancel = (): void => {
     setView('list')
   }
 
-  const handleExecute = (template: PipelineTemplate) => {
+  const handleExecute = (template: PipelineTemplate): void => {
     // TODO: 实现流水线执行逻辑
     console.log('Execute pipeline:', template)
     alert(`执行流水线: ${template.name}`)

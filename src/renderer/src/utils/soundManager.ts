@@ -13,9 +13,15 @@ class SoundManager {
     this.initAudioContext()
   }
 
-  private initAudioContext() {
+  private initAudioContext(): void {
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
+      if (AudioContextClass) {
+        this.audioContext = new AudioContextClass()
+      }
     } catch (error) {
       console.error('Failed to initialize AudioContext:', error)
     }
@@ -43,18 +49,12 @@ class SoundManager {
       oscillator.frequency.setValueAtTime(frequencies[0], this.audioContext.currentTime)
 
       if (frequencies.length > 1) {
-        oscillator.frequency.setValueAtTime(
-          frequencies[1],
-          this.audioContext.currentTime + 0.1
-        )
+        oscillator.frequency.setValueAtTime(frequencies[1], this.audioContext.currentTime + 0.1)
       }
 
       // 设置音量渐变
       gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(
-        0.01,
-        this.audioContext.currentTime + 0.3
-      )
+      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3)
 
       oscillator.start(this.audioContext.currentTime)
       oscillator.stop(this.audioContext.currentTime + 0.3)

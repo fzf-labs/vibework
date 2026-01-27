@@ -116,7 +116,7 @@ export class PreviewExecutor extends EventEmitter {
 
   private handleOutput(instanceId: string, data: string): void {
     const buffer = this.outputBuffers.get(instanceId) || []
-    const lines = data.split('\n').filter(line => line.trim())
+    const lines = data.split('\n').filter((line) => line.trim())
     buffer.push(...lines)
 
     // 限制缓冲区大小

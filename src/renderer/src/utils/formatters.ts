@@ -3,7 +3,7 @@ export const formatDate = (date: Date | string): string => {
   return d.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
+    day: '2-digit'
   })
 }
 
@@ -14,7 +14,7 @@ export const formatDateTime = (date: Date | string): string => {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
-    minute: '2-digit',
+    minute: '2-digit'
   })
 }
 

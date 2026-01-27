@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface Commit {
   hash: string
@@ -20,7 +20,7 @@ export interface PRFormData {
   sourceBranch: string
 }
 
-export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
+export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps): JSX.Element {
   const [branches, setBranches] = useState<string[]>([])
   const [currentBranch, setCurrentBranch] = useState<string>('')
   const [commits, setCommits] = useState<Commit[]>([])
@@ -31,11 +31,7 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
     sourceBranch: ''
   })
 
-  useEffect(() => {
-    loadData()
-  }, [repoPath])
-
-  const loadData = async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     try {
       // 加载分支列表
       const branchResult = await window.api.git.getBranches?.(repoPath)
@@ -48,7 +44,7 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
       if (currentResult?.success) {
         const branch = currentResult.data
         setCurrentBranch(branch)
-        setFormData(prev => ({ ...prev, sourceBranch: branch }))
+        setFormData((prev) => ({ ...prev, sourceBranch: branch }))
       }
 
       // 加载提交历史
@@ -57,7 +53,7 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
         setCommits(commitResult.data || [])
         // 自动填充标题为最新提交消息
         if (commitResult.data?.length > 0) {
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
             title: commitResult.data[0].message
           }))
@@ -66,9 +62,16 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
     } catch (error) {
       console.error('加载数据失败:', error)
     }
-  }
+  }, [repoPath])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const initialLoad = setTimeout(() => {
+      void loadData()
+    }, 0)
+    return () => clearTimeout(initialLoad)
+  }, [loadData])
+
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
     if (!formData.title || !formData.targetBranch) {
       alert('请填写标题和目标分支')
@@ -80,9 +83,7 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
   return (
     <form onSubmit={handleSubmit} className="p-4 space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-2">
-          当前分支
-        </label>
+        <label className="block text-sm font-medium mb-2">当前分支</label>
         <input
           type="text"
           value={currentBranch}
@@ -92,9 +93,7 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">
-          目标分支 *
-        </label>
+        <label className="block text-sm font-medium mb-2">目标分支 *</label>
         <select
           value={formData.targetBranch}
           onChange={(e) => setFormData({ ...formData, targetBranch: e.target.value })}
@@ -102,18 +101,18 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
           required
         >
           <option value="">请选择目标分支</option>
-          {branches.filter(b => b !== currentBranch).map(branch => (
-            <option key={branch} value={branch}>
-              {branch}
-            </option>
-          ))}
+          {branches
+            .filter((b) => b !== currentBranch)
+            .map((branch) => (
+              <option key={branch} value={branch}>
+                {branch}
+              </option>
+            ))}
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">
-          PR标题 *
-        </label>
+        <label className="block text-sm font-medium mb-2">PR标题 *</label>
         <input
           type="text"
           value={formData.title}
@@ -125,9 +124,7 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">
-          描述
-        </label>
+        <label className="block text-sm font-medium mb-2">描述</label>
         <textarea
           value={formData.description}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -139,12 +136,13 @@ export function GitPRForm({ repoPath, onSubmit, onCancel }: GitPRFormProps) {
 
       {commits.length > 0 && (
         <div>
-          <label className="block text-sm font-medium mb-2">
-            最近提交 ({commits.length})
-          </label>
+          <label className="block text-sm font-medium mb-2">最近提交 ({commits.length})</label>
           <div className="border rounded max-h-48 overflow-auto">
-            {commits.map(commit => (
-              <div key={commit.hash} className="px-3 py-2 border-b last:border-b-0 hover:bg-gray-50">
+            {commits.map((commit) => (
+              <div
+                key={commit.hash}
+                className="px-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+              >
                 <div className="text-sm font-medium">{commit.message}</div>
                 <div className="text-xs text-gray-500 mt-1">
                   {commit.author} · {commit.date}

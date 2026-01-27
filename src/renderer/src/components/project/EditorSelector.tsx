@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 
 interface EditorInfo {
   type: 'vscode' | 'cursor' | 'webstorm' | 'idea' | 'other'
@@ -13,15 +13,11 @@ interface EditorSelectorProps {
   onChange: (command: string) => void
 }
 
-const EditorSelector: React.FC<EditorSelectorProps> = ({ value, onChange }) => {
+const EditorSelector: React.FC<EditorSelectorProps> = ({ value, onChange }): JSX.Element => {
   const [editors, setEditors] = useState<EditorInfo[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadEditors()
-  }, [])
-
-  const loadEditors = async () => {
+  const loadEditors = useCallback(async (): Promise<void> => {
     try {
       const availableEditors = await window.api.editor.getAvailable()
       setEditors(availableEditors)
@@ -30,18 +26,18 @@ const EditorSelector: React.FC<EditorSelectorProps> = ({ value, onChange }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadEditors()
+  }, [loadEditors])
 
   if (loading) {
     return <div style={{ padding: '8px', color: '#7A7A7A' }}>加载编辑器列表...</div>
   }
 
   if (editors.length === 0) {
-    return (
-      <div style={{ padding: '8px', color: '#7A7A7A' }}>
-        未检测到可用的编辑器
-      </div>
-    )
+    return <div style={{ padding: '8px', color: '#7A7A7A' }}>未检测到可用的编辑器</div>
   }
 
   return (

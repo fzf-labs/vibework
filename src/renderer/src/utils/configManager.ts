@@ -1,10 +1,18 @@
 import { pipelineTemplateStore } from '../stores/pipelineTemplateStore'
+import type { PipelineTemplate } from '../types/pipeline'
+
+interface NotificationSettings {
+  enabled?: boolean
+  taskComplete?: boolean
+  stageComplete?: boolean
+  error?: boolean
+}
 
 interface ExportConfig {
   version: string
   exportDate: number
-  pipelineTemplates: any[]
-  notificationSettings?: any
+  pipelineTemplates: PipelineTemplate[]
+  notificationSettings?: NotificationSettings
 }
 
 export const configManager = {
@@ -22,7 +30,7 @@ export const configManager = {
     try {
       const notificationSettings = localStorage.getItem('notificationSettings')
       if (notificationSettings) {
-        config.notificationSettings = JSON.parse(notificationSettings)
+        config.notificationSettings = JSON.parse(notificationSettings) as NotificationSettings
       }
     } catch (error) {
       console.error('Failed to export notification settings:', error)
@@ -38,7 +46,7 @@ export const configManager = {
     try {
       // 导入流水线模板
       if (config.pipelineTemplates && Array.isArray(config.pipelineTemplates)) {
-        config.pipelineTemplates.forEach(template => {
+        config.pipelineTemplates.forEach((template) => {
           pipelineTemplateStore.add({
             name: template.name,
             description: template.description,
@@ -54,14 +62,14 @@ export const configManager = {
 
       return { success: true, message: '配置导入成功' }
     } catch (error) {
-      return { success: false, message: `配置导入失败: ${error}` }
+      return { success: false, message: `配置导入失败: ${String(error)}` }
     }
   },
 
   /**
    * 下载配置文件
    */
-  downloadConfig: () => {
+  downloadConfig: (): void => {
     const config = configManager.exportConfig()
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)

@@ -1,41 +1,48 @@
-import React, { useEffect, useState } from 'react'
-import { Project } from '../../types/project'
+import React, { useEffect, useState, useCallback } from 'react'
+import { NewProjectInput, Project } from '../../types/project'
 import NewProjectDialog from './NewProjectDialog'
 
 interface ProjectSelectorProps {
   onProjectChange?: (project: Project | null) => void
 }
 
-const ProjectSelector: React.FC<ProjectSelectorProps> = ({ onProjectChange }) => {
+const ProjectSelector: React.FC<ProjectSelectorProps> = ({ onProjectChange }): JSX.Element => {
   const [projects, setProjects] = useState<Project[]>([])
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showNewDialog, setShowNewDialog] = useState(false)
 
-  useEffect(() => {
-    loadProjects()
-  }, [])
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async (): Promise<void> => {
     try {
       const data = await window.api.projects.getAll()
       setProjects(data)
-      if (data.length > 0 && !currentProject) {
-        setCurrentProject(data[0])
-        onProjectChange?.(data[0])
+      if (data.length > 0) {
+        setCurrentProject((prev) => {
+          if (prev) return prev
+          const nextProject = data[0]
+          onProjectChange?.(nextProject)
+          return nextProject
+        })
       }
     } catch (error) {
       console.error('Failed to load projects:', error)
     }
-  }
+  }, [onProjectChange])
 
-  const handleSelectProject = (project: Project) => {
+  useEffect(() => {
+    const initialLoad = setTimeout(() => {
+      void loadProjects()
+    }, 0)
+    return () => clearTimeout(initialLoad)
+  }, [loadProjects])
+
+  const handleSelectProject = (project: Project): void => {
     setCurrentProject(project)
     setShowDropdown(false)
     onProjectChange?.(project)
   }
 
-  const handleCreateProject = async (projectData: any) => {
+  const handleCreateProject = async (projectData: NewProjectInput): Promise<void> => {
     try {
       const newProject = await window.api.projects.add(projectData)
       setShowNewDialog(false)
@@ -98,8 +105,7 @@ const ProjectSelector: React.FC<ProjectSelectorProps> = ({ onProjectChange }) =>
                   padding: '12px',
                   borderRadius: '6px',
                   cursor: 'pointer',
-                  backgroundColor:
-                    currentProject?.id === project.id ? '#F5F5F5' : 'transparent'
+                  backgroundColor: currentProject?.id === project.id ? '#F5F5F5' : 'transparent'
                 }}
               >
                 <div
@@ -158,10 +164,7 @@ const ProjectSelector: React.FC<ProjectSelectorProps> = ({ onProjectChange }) =>
       )}
 
       {showNewDialog && (
-        <NewProjectDialog
-          onClose={() => setShowNewDialog(false)}
-          onSubmit={handleCreateProject}
-        />
+        <NewProjectDialog onClose={() => setShowNewDialog(false)} onSubmit={handleCreateProject} />
       )}
     </div>
   )

@@ -6,10 +6,10 @@ import Task from '../../pages/Task'
 import Skill from '../../pages/Skill'
 import MCP from '../../pages/MCP'
 
-const MainLayout: React.FC = () => {
+const MainLayout: React.FC = (): JSX.Element => {
   const [activeNav, setActiveNav] = useState('overview')
 
-  const renderContent = () => {
+  const renderContent = (): JSX.Element => {
     switch (activeNav) {
       case 'overview':
         return <Overview />

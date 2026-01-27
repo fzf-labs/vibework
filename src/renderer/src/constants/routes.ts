@@ -5,7 +5,7 @@ export const routes = {
   SKILLS: 'skills',
   MCPS: 'mcps',
   CLI_TOOLS: 'cli-tools',
-  SETTINGS: 'settings',
+  SETTINGS: 'settings'
 } as const
 
-export type Route = typeof routes[keyof typeof routes]
+export type Route = (typeof routes)[keyof typeof routes]

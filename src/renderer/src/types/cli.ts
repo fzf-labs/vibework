@@ -39,5 +39,5 @@ export interface CLIToolConfig {
   model?: string
   temperature?: number
   maxTokens?: number
-  [key: string]: any
+  [key: string]: unknown
 }

@@ -8,8 +8,12 @@ interface NotificationItemProps {
   onDelete: (id: string) => void
 }
 
-export function NotificationItem({ notification, onMarkAsRead, onDelete }: NotificationItemProps) {
-  const getTypeColor = (type: string) => {
+export function NotificationItem({
+  notification,
+  onMarkAsRead,
+  onDelete
+}: NotificationItemProps): JSX.Element {
+  const getTypeColor = (type: string): string => {
     switch (type) {
       case 'success':
         return 'bg-green-100 text-green-800 border-green-200'
@@ -23,7 +27,7 @@ export function NotificationItem({ notification, onMarkAsRead, onDelete }: Notif
     }
   }
 
-  const getTypeIcon = (type: string) => {
+  const getTypeIcon = (type: string): string => {
     switch (type) {
       case 'success':
         return '✓'

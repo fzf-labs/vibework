@@ -9,7 +9,7 @@ class NotificationStore {
     this.loadFromStorage()
   }
 
-  private loadFromStorage() {
+  private loadFromStorage(): void {
     try {
       const stored = localStorage.getItem('notifications')
       if (stored) {
@@ -20,7 +20,7 @@ class NotificationStore {
     }
   }
 
-  private saveToStorage() {
+  private saveToStorage(): void {
     try {
       localStorage.setItem('notifications', JSON.stringify(this.notifications))
     } catch (error) {
@@ -28,16 +28,16 @@ class NotificationStore {
     }
   }
 
-  private notify() {
-    this.listeners.forEach(listener => listener())
+  private notify(): void {
+    this.listeners.forEach((listener) => listener())
   }
 
-  subscribe(listener: () => void) {
+  subscribe(listener: () => void): () => boolean {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
 
-  add(notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) {
+  add(notification: Omit<Notification, 'id' | 'timestamp' | 'read'>): Notification {
     const newNotification: Notification = {
       ...notification,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
@@ -62,16 +62,16 @@ class NotificationStore {
 
     if (filter) {
       if (filter.type) {
-        filtered = filtered.filter(n => n.type === filter.type)
+        filtered = filtered.filter((n) => n.type === filter.type)
       }
       if (filter.read !== undefined) {
-        filtered = filtered.filter(n => n.read === filter.read)
+        filtered = filtered.filter((n) => n.read === filter.read)
       }
       if (filter.startDate) {
-        filtered = filtered.filter(n => n.timestamp >= filter.startDate!)
+        filtered = filtered.filter((n) => n.timestamp >= filter.startDate!)
       }
       if (filter.endDate) {
-        filtered = filtered.filter(n => n.timestamp <= filter.endDate!)
+        filtered = filtered.filter((n) => n.timestamp <= filter.endDate!)
       }
     }
 
@@ -79,11 +79,11 @@ class NotificationStore {
   }
 
   getUnreadCount(): number {
-    return this.notifications.filter(n => !n.read).length
+    return this.notifications.filter((n) => !n.read).length
   }
 
-  markAsRead(id: string) {
-    const notification = this.notifications.find(n => n.id === id)
+  markAsRead(id: string): void {
+    const notification = this.notifications.find((n) => n.id === id)
     if (notification) {
       notification.read = true
       this.saveToStorage()
@@ -91,19 +91,19 @@ class NotificationStore {
     }
   }
 
-  markAllAsRead() {
-    this.notifications.forEach(n => n.read = true)
+  markAllAsRead(): void {
+    this.notifications.forEach((n) => (n.read = true))
     this.saveToStorage()
     this.notify()
   }
 
-  delete(id: string) {
-    this.notifications = this.notifications.filter(n => n.id !== id)
+  delete(id: string): void {
+    this.notifications = this.notifications.filter((n) => n.id !== id)
     this.saveToStorage()
     this.notify()
   }
 
-  clear() {
+  clear(): void {
     this.notifications = []
     this.saveToStorage()
     this.notify()

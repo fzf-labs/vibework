@@ -26,6 +26,15 @@ let previewConfigManager: PreviewConfigManager
 let previewExecutor: PreviewExecutor
 let notificationManager: NotificationManager
 
+type CLIToolConfigInput = Parameters<CLIToolConfigManager['saveConfig']>[1]
+type ClaudeCodeConfigUpdate = Parameters<ClaudeCodeManager['saveConfig']>[0]
+type ClaudeCodeSessionOptions = Parameters<ClaudeCodeManager['startSession']>[2]
+type NotificationOptions = Parameters<NotificationManager['showNotification']>[0]
+type NotificationSoundSettings = Parameters<NotificationManager['setSoundSettings']>[0]
+type PipelineStages = Parameters<PipelineExecutor['executePipeline']>[1]
+type PreviewConfigInput = Parameters<PreviewConfigManager['addConfig']>[0]
+type PreviewConfigUpdates = Parameters<PreviewConfigManager['updateConfig']>[1]
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -134,23 +143,35 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:addWorktree', async (_, repoPath: string, worktreePath: string, branchName: string, createBranch: boolean) => {
-    try {
-      await gitManager.addWorktree(repoPath, worktreePath, branchName, createBranch)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'git:addWorktree',
+    async (
+      _,
+      repoPath: string,
+      worktreePath: string,
+      branchName: string,
+      createBranch: boolean
+    ) => {
+      try {
+        await gitManager.addWorktree(repoPath, worktreePath, branchName, createBranch)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
-  ipcMain.handle('git:removeWorktree', async (_, repoPath: string, worktreePath: string, force: boolean) => {
-    try {
-      await gitManager.removeWorktree(repoPath, worktreePath, force)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'git:removeWorktree',
+    async (_, repoPath: string, worktreePath: string, force: boolean) => {
+      try {
+        await gitManager.removeWorktree(repoPath, worktreePath, force)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('git:pruneWorktrees', async (_, repoPath: string) => {
     try {
@@ -260,14 +281,17 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:resolveConflict', async (_, repoPath: string, filePath: string, strategy: 'ours' | 'theirs') => {
-    try {
-      await gitManager.resolveConflict(repoPath, filePath, strategy)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'git:resolveConflict',
+    async (_, repoPath: string, filePath: string, strategy: 'ours' | 'theirs') => {
+      try {
+        await gitManager.resolveConflict(repoPath, filePath, strategy)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('git:rebaseBranch', async (_, repoPath: string, targetBranch: string) => {
     try {
@@ -314,14 +338,17 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('git:pushBranch', async (_, repoPath: string, branchName: string, remoteName?: string, force?: boolean) => {
-    try {
-      await gitManager.pushBranch(repoPath, branchName, remoteName, force)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'git:pushBranch',
+    async (_, repoPath: string, branchName: string, remoteName?: string, force?: boolean) => {
+      try {
+        await gitManager.pushBranch(repoPath, branchName, remoteName, force)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('git:getCommitLog', async (_, repoPath: string, limit?: number) => {
     try {
@@ -333,14 +360,17 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for CLI process management
-  ipcMain.handle('cli:startSession', (_, sessionId: string, command: string, args: string[], cwd?: string) => {
-    try {
-      cliProcessManager.startSession(sessionId, command, args, cwd)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'cli:startSession',
+    (_, sessionId: string, command: string, args: string[], cwd?: string) => {
+      try {
+        cliProcessManager.startSession(sessionId, command, args, cwd)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('cli:stopSession', (_, sessionId: string) => {
     try {
@@ -355,6 +385,7 @@ app.whenReady().then(() => {
     try {
       return cliProcessManager.getSessionOutput(sessionId)
     } catch (error) {
+      console.error('Failed to get CLI output:', error)
       return []
     }
   })
@@ -364,7 +395,7 @@ app.whenReady().then(() => {
     return claudeCodeManager.getConfig()
   })
 
-  ipcMain.handle('claudeCode:saveConfig', (_, config) => {
+  ipcMain.handle('claudeCode:saveConfig', (_, config: ClaudeCodeConfigUpdate) => {
     try {
       claudeCodeManager.saveConfig(config)
       return { success: true }
@@ -373,14 +404,17 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('claudeCode:startSession', (_, sessionId: string, workdir: string, options) => {
-    try {
-      claudeCodeManager.startSession(sessionId, workdir, options)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'claudeCode:startSession',
+    (_, sessionId: string, workdir: string, options?: ClaudeCodeSessionOptions) => {
+      try {
+        claudeCodeManager.startSession(sessionId, workdir, options)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('claudeCode:stopSession', (_, sessionId: string) => {
     try {
@@ -404,6 +438,7 @@ app.whenReady().then(() => {
     try {
       return claudeCodeManager.getSessionOutput(sessionId)
     } catch (error) {
+      console.error('Failed to get Claude Code output:', error)
       return []
     }
   })
@@ -430,7 +465,7 @@ app.whenReady().then(() => {
     return cliToolConfigManager.getConfig(toolId)
   })
 
-  ipcMain.handle('cliToolConfig:save', (_, toolId: string, config: any) => {
+  ipcMain.handle('cliToolConfig:save', (_, toolId: string, config: CLIToolConfigInput) => {
     try {
       cliToolConfigManager.saveConfig(toolId, config)
       return { success: true }
@@ -454,14 +489,21 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for pipeline execution
-  ipcMain.handle('pipeline:execute', async (_, pipelineId: string, stages: any[], workingDirectory?: string) => {
-    try {
-      const executionId = await pipelineExecutor.executePipeline(pipelineId, stages, workingDirectory)
-      return { success: true, executionId }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'pipeline:execute',
+    async (_, pipelineId: string, stages: PipelineStages, workingDirectory?: string) => {
+      try {
+        const executionId = await pipelineExecutor.executePipeline(
+          pipelineId,
+          stages,
+          workingDirectory
+        )
+        return { success: true, executionId }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('pipeline:getExecution', (_, executionId: string) => {
     return pipelineExecutor.getExecution(executionId)
@@ -502,7 +544,7 @@ app.whenReady().then(() => {
     return previewConfigManager.getConfig(id)
   })
 
-  ipcMain.handle('previewConfig:add', (_, config: any) => {
+  ipcMain.handle('previewConfig:add', (_, config: PreviewConfigInput) => {
     try {
       const newConfig = previewConfigManager.addConfig(config)
       return { success: true, data: newConfig }
@@ -511,7 +553,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('previewConfig:update', (_, id: string, updates: any) => {
+  ipcMain.handle('previewConfig:update', (_, id: string, updates: PreviewConfigUpdates) => {
     try {
       const updatedConfig = previewConfigManager.updateConfig(id, updates)
       return { success: true, data: updatedConfig }
@@ -530,14 +572,25 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for preview execution
-  ipcMain.handle('preview:start', (_, instanceId: string, configId: string, command: string, args: string[], cwd?: string, env?: Record<string, string>) => {
-    try {
-      previewExecutor.startPreview(instanceId, configId, command, args, cwd, env)
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+  ipcMain.handle(
+    'preview:start',
+    (
+      _,
+      instanceId: string,
+      configId: string,
+      command: string,
+      args: string[],
+      cwd?: string,
+      env?: Record<string, string>
+    ) => {
+      try {
+        previewExecutor.startPreview(instanceId, configId, command, args, cwd, env)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
     }
-  })
+  )
 
   ipcMain.handle('preview:stop', (_, instanceId: string) => {
     try {
@@ -570,7 +623,7 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for notifications
-  ipcMain.handle('notification:show', (_, options: any) => {
+  ipcMain.handle('notification:show', (_, options: NotificationOptions) => {
     try {
       notificationManager.showNotification(options)
       return { success: true }
@@ -597,7 +650,7 @@ app.whenReady().then(() => {
     return notificationManager.isSoundEnabled()
   })
 
-  ipcMain.handle('notification:setSoundSettings', (_, settings: any) => {
+  ipcMain.handle('notification:setSoundSettings', (_, settings: NotificationSoundSettings) => {
     notificationManager.setSoundSettings(settings)
     return { success: true }
   })

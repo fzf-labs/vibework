@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface GitConflictViewerProps {
   repoPath: string
@@ -6,15 +6,15 @@ interface GitConflictViewerProps {
   onResolve?: () => void
 }
 
-export function GitConflictViewer({ repoPath, filePath, onResolve }: GitConflictViewerProps) {
+export function GitConflictViewer({
+  repoPath,
+  filePath,
+  onResolve
+}: GitConflictViewerProps): JSX.Element {
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadConflictContent()
-  }, [repoPath, filePath])
-
-  const loadConflictContent = async () => {
+  const loadConflictContent = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       const result = await window.api.git.getConflictContent(repoPath, filePath)
@@ -26,21 +26,26 @@ export function GitConflictViewer({ repoPath, filePath, onResolve }: GitConflict
     } finally {
       setLoading(false)
     }
-  }
+  }, [filePath, repoPath])
 
-  const handleResolve = async (strategy: 'ours' | 'theirs') => {
+  useEffect(() => {
+    loadConflictContent()
+  }, [loadConflictContent])
+
+  const handleResolve = async (strategy: 'ours' | 'theirs'): Promise<void> => {
     try {
       const result = await window.api.git.resolveConflict(repoPath, filePath, strategy)
       if (result.success) {
         alert(`已使用${strategy === 'ours' ? '当前分支' : '目标分支'}的版本解决冲突`)
         onResolve?.()
       }
-    } catch (error: any) {
-      alert(`解决冲突失败: ${error.message}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      alert(`解决冲突失败: ${message}`)
     }
   }
 
-  const parseConflictContent = (text: string) => {
+  const parseConflictContent = (text: string): Array<{ type: string; content: string }> => {
     const lines = text.split('\n')
     const parsed: Array<{ type: string; content: string }> = []
     let currentSection: 'ours' | 'theirs' | 'normal' = 'normal'

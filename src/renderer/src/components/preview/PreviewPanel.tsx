@@ -9,7 +9,7 @@ interface PreviewPanelProps {
   onEdit?: () => void
 }
 
-export function PreviewPanel({ config, onEdit }: PreviewPanelProps) {
+export function PreviewPanel({ config, onEdit }: PreviewPanelProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<'logs' | 'browser'>('logs')
 
   const previewUrl = config.port ? `http://localhost:${config.port}` : ''
@@ -23,9 +23,7 @@ export function PreviewPanel({ config, onEdit }: PreviewPanelProps) {
           <button
             onClick={() => setActiveTab('logs')}
             className={`px-4 py-2 ${
-              activeTab === 'logs'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-600'
+              activeTab === 'logs' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600'
             }`}
           >
             日志输出
@@ -45,12 +43,8 @@ export function PreviewPanel({ config, onEdit }: PreviewPanelProps) {
         </div>
 
         <div className="flex-1 overflow-hidden">
-          {activeTab === 'logs' && (
-            <PreviewLogViewer instanceId={config.id} />
-          )}
-          {activeTab === 'browser' && previewUrl && (
-            <PreviewBrowser url={previewUrl} />
-          )}
+          {activeTab === 'logs' && <PreviewLogViewer instanceId={config.id} />}
+          {activeTab === 'browser' && previewUrl && <PreviewBrowser url={previewUrl} />}
         </div>
       </div>
     </div>

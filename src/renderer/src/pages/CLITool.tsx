@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { CLIToolInfo, CLISession } from '../types/cli'
 import CLIOutputViewer from '../components/cli/CLIOutputViewer'
+import { notificationStore } from '@/stores/notificationStore'
 
 const CLITools: React.FC = () => {
   const [tools, setTools] = useState<CLIToolInfo[]>([])
@@ -8,11 +9,19 @@ const CLITools: React.FC = () => {
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
   const [detecting, setDetecting] = useState(false)
 
-  useEffect(() => {
-    loadTools()
+  const detectAllTools = useCallback(async (): Promise<void> => {
+    setDetecting(true)
+    try {
+      const detectedTools = await window.api.cliTools.detectAll()
+      setTools(detectedTools)
+    } catch (error) {
+      console.error('Failed to detect tools:', error)
+    } finally {
+      setDetecting(false)
+    }
   }, [])
 
-  const loadTools = async () => {
+  const loadTools = useCallback(async (): Promise<void> => {
     try {
       const allTools = await window.api.cliTools.getAll()
       setTools(allTools)
@@ -23,28 +32,28 @@ const CLITools: React.FC = () => {
     } catch (error) {
       console.error('Failed to load tools:', error)
     }
-  }
+  }, [detectAllTools])
 
-  const detectAllTools = async () => {
-    setDetecting(true)
-    try {
-      const detectedTools = await window.api.cliTools.detectAll()
-      setTools(detectedTools)
-    } catch (error) {
-      console.error('Failed to detect tools:', error)
-    } finally {
-      setDetecting(false)
-    }
-  }
+  useEffect(() => {
+    loadTools()
+  }, [loadTools])
 
-  const handleStartSession = async (tool: CLIToolInfo) => {
+  const handleStartSession = async (tool: CLIToolInfo): Promise<void> => {
     if (!tool.installed) {
-      alert(`${tool.displayName} 未安装`)
+      notificationStore.add({
+        type: 'warning',
+        title: '工具未安装',
+        body: `${tool.displayName} 未安装，请先安装后再使用`
+      })
       return
     }
 
     if (!tool.configValid) {
-      alert(`${tool.displayName} 配置无效，请先配置`)
+      notificationStore.add({
+        type: 'warning',
+        title: '配置无效',
+        body: `${tool.displayName} 配置无效，请先配置`
+      })
       return
     }
 
@@ -67,22 +76,40 @@ const CLITools: React.FC = () => {
         output: []
       }
 
-      setSessions([...sessions, newSession])
+      setSessions((prevSessions) => [...prevSessions, newSession])
       setSelectedSession(sessionId)
+
+      // 发送成功通知
+      notificationStore.add({
+        type: 'success',
+        title: 'CLI 会话已启动',
+        body: `${tool.displayName} 会话已成功启动`
+      })
     } catch (error) {
       console.error('Failed to start session:', error)
+
+      // 发送错误通知
+      notificationStore.add({
+        type: 'error',
+        title: 'CLI 会话启动失败',
+        body: error instanceof Error ? error.message : '启动会话时发生错误'
+      })
     }
   }
-
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Page Header */}
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div
+        style={{
+          marginBottom: 24,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}
+      >
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: '700', color: '#0D0D0D' }}>
-            CLI 工具
-          </h1>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: '700', color: '#0D0D0D' }}>CLI 工具</h1>
           <p style={{ margin: '8px 0 0 0', fontSize: 14, color: '#7A7A7A' }}>
             支持 Claude Code、Codex、Gemini CLI、Cursor Agent
           </p>
@@ -112,7 +139,13 @@ const CLITools: React.FC = () => {
         <h2 style={{ margin: '0 0 16px 0', fontSize: 16, fontWeight: '600', color: '#0D0D0D' }}>
           可用工具
         </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: 16
+          }}
+        >
           {tools.map((tool) => (
             <div
               key={tool.id}
@@ -138,23 +171,27 @@ const CLITools: React.FC = () => {
 
               {/* Status badges */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                <span style={{
-                  padding: '2px 8px',
-                  fontSize: 11,
-                  borderRadius: 4,
-                  backgroundColor: tool.installed ? '#E8F5E9' : '#FFEBEE',
-                  color: tool.installed ? '#2E7D32' : '#C62828'
-                }}>
-                  {tool.installed ? `已安装 ${tool.version || ''}` : '未安装'}
-                </span>
-                {tool.installed && (
-                  <span style={{
+                <span
+                  style={{
                     padding: '2px 8px',
                     fontSize: 11,
                     borderRadius: 4,
-                    backgroundColor: tool.configValid ? '#E3F2FD' : '#FFF3E0',
-                    color: tool.configValid ? '#1565C0' : '#E65100'
-                  }}>
+                    backgroundColor: tool.installed ? '#E8F5E9' : '#FFEBEE',
+                    color: tool.installed ? '#2E7D32' : '#C62828'
+                  }}
+                >
+                  {tool.installed ? `已安装 ${tool.version || ''}` : '未安装'}
+                </span>
+                {tool.installed && (
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: 11,
+                      borderRadius: 4,
+                      backgroundColor: tool.configValid ? '#E3F2FD' : '#FFF3E0',
+                      color: tool.configValid ? '#1565C0' : '#E65100'
+                    }}
+                  >
                     {tool.configValid ? '配置正常' : '配置缺失'}
                   </span>
                 )}
@@ -171,8 +208,8 @@ const CLITools: React.FC = () => {
                   backgroundColor: '#E42313',
                   border: 'none',
                   borderRadius: 4,
-                  cursor: (!tool.installed || !tool.configValid) ? 'not-allowed' : 'pointer',
-                  opacity: (!tool.installed || !tool.configValid) ? 0.5 : 1
+                  cursor: !tool.installed || !tool.configValid ? 'not-allowed' : 'pointer',
+                  opacity: !tool.installed || !tool.configValid ? 0.5 : 1
                 }}
               >
                 启动会话
@@ -208,7 +245,7 @@ const CLITools: React.FC = () => {
                   cursor: 'pointer'
                 }}
               >
-                {tools.find(t => t.id === session.toolId)?.name} - {session.id.slice(-8)}
+                {tools.find((t) => t.id === session.toolId)?.name} - {session.id.slice(-8)}
               </button>
             ))}
           </div>
@@ -219,7 +256,6 @@ const CLITools: React.FC = () => {
           )}
         </div>
       )}
-
     </div>
   )
 }

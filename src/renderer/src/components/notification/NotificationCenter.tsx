@@ -1,45 +1,50 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { notificationStore } from '../../stores/notificationStore'
 import { Notification, NotificationFilter } from '../../types/notification'
 import { NotificationItem } from './NotificationItem'
 
-export function NotificationCenter() {
+export function NotificationCenter(): JSX.Element {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [filter, setFilter] = useState<NotificationFilter>({})
   const [unreadCount, setUnreadCount] = useState(0)
 
+  const loadNotifications = useCallback((): void => {
+    setNotifications(notificationStore.getAll(filter))
+    setUnreadCount(notificationStore.getUnreadCount())
+  }, [filter])
+
   useEffect(() => {
-    loadNotifications()
+    const initialLoad = setTimeout(() => {
+      loadNotifications()
+    }, 0)
     const unsubscribe = notificationStore.subscribe(() => {
       loadNotifications()
     })
-    return unsubscribe
-  }, [filter])
+    return () => {
+      clearTimeout(initialLoad)
+      unsubscribe()
+    }
+  }, [loadNotifications])
 
-  const loadNotifications = () => {
-    setNotifications(notificationStore.getAll(filter))
-    setUnreadCount(notificationStore.getUnreadCount())
-  }
-
-  const handleMarkAsRead = (id: string) => {
+  const handleMarkAsRead = (id: string): void => {
     notificationStore.markAsRead(id)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string): void => {
     notificationStore.delete(id)
   }
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = (): void => {
     notificationStore.markAllAsRead()
   }
 
-  const handleClearAll = () => {
+  const handleClearAll = (): void => {
     if (confirm('确定要清空所有通知吗？')) {
       notificationStore.clear()
     }
   }
 
-  const handleFilterChange = (newFilter: NotificationFilter) => {
+  const handleFilterChange = (newFilter: NotificationFilter): void => {
     setFilter(newFilter)
   }
 
@@ -92,12 +97,10 @@ export function NotificationCenter() {
       {/* 通知列表 */}
       <div className="flex-1 overflow-y-auto p-4">
         {notifications.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            暂无通知
-          </div>
+          <div className="text-center text-gray-500 py-8">暂无通知</div>
         ) : (
           <div className="space-y-3">
-            {notifications.map(notification => (
+            {notifications.map((notification) => (
               <NotificationItem
                 key={notification.id}
                 notification={notification}

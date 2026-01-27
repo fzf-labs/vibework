@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface GitDiffViewerProps {
   repoPath: string
@@ -6,15 +6,15 @@ interface GitDiffViewerProps {
   staged?: boolean
 }
 
-export function GitDiffViewer({ repoPath, filePath, staged = false }: GitDiffViewerProps) {
+export function GitDiffViewer({
+  repoPath,
+  filePath,
+  staged = false
+}: GitDiffViewerProps): JSX.Element {
   const [diff, setDiff] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadDiff()
-  }, [repoPath, filePath, staged])
-
-  const loadDiff = async () => {
+  const loadDiff = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       const result = staged
@@ -29,9 +29,13 @@ export function GitDiffViewer({ repoPath, filePath, staged = false }: GitDiffVie
     } finally {
       setLoading(false)
     }
-  }
+  }, [filePath, repoPath, staged])
 
-  const parseDiff = (diffText: string) => {
+  useEffect(() => {
+    loadDiff()
+  }, [loadDiff])
+
+  const parseDiff = (diffText: string): JSX.Element[] => {
     const lines = diffText.split('\n')
     return lines.map((line, index) => {
       let className = 'font-mono text-sm px-4 py-0.5'
@@ -64,9 +68,7 @@ export function GitDiffViewer({ repoPath, filePath, staged = false }: GitDiffVie
 
   return (
     <div className="h-full overflow-auto bg-white">
-      <div className="min-w-max">
-        {parseDiff(diff)}
-      </div>
+      <div className="min-w-max">{parseDiff(diff)}</div>
     </div>
   )
 }

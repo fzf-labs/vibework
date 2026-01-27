@@ -1,5 +1,5 @@
 import { ApiService } from './api'
-import type { Project, ProjectConfig } from '@/types'
+import type { NewProjectInput, Project, ProjectConfig } from '@/types'
 
 export class ProjectService extends ApiService {
   async getAll(): Promise<Project[]> {
@@ -10,8 +10,8 @@ export class ProjectService extends ApiService {
     return this.call('projects:get', id)
   }
 
-  async add(config: ProjectConfig): Promise<Project> {
-    return this.call('projects:add', config)
+  async add(project: NewProjectInput): Promise<Project> {
+    return this.call('projects:add', project)
   }
 
   async update(id: string, updates: Partial<ProjectConfig>): Promise<void> {

@@ -1,44 +1,49 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 interface CLIOutputViewerProps {
   sessionId: string
   onClose?: () => void
 }
 
-const CLIOutputViewer: React.FC<CLIOutputViewerProps> = ({ sessionId, onClose }) => {
+const CLIOutputViewer: React.FC<CLIOutputViewerProps> = ({ sessionId, onClose }): JSX.Element => {
   const [output, setOutput] = useState<string[]>([])
   const [isRunning, setIsRunning] = useState(true)
   const outputEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    // 初始加载输出
-    loadOutput()
-
-    // 定时刷新输出
-    const interval = setInterval(() => {
-      if (isRunning) {
-        loadOutput()
-      }
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [sessionId, isRunning])
-
-  useEffect(() => {
-    // 自动滚动到底部
-    outputEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [output])
-
-  const loadOutput = async () => {
+  const loadOutput = useCallback(async (): Promise<void> => {
     try {
       const result = await window.api.cli.getOutput(sessionId)
       setOutput(result)
     } catch (error) {
       console.error('Failed to load output:', error)
     }
-  }
+  }, [sessionId])
 
-  const handleStop = async () => {
+  useEffect(() => {
+    // 初始加载输出
+    const initialLoad = setTimeout(() => {
+      void loadOutput()
+    }, 0)
+
+    // 定时刷新输出
+    const interval = setInterval(() => {
+      if (isRunning) {
+        void loadOutput()
+      }
+    }, 1000)
+
+    return () => {
+      clearTimeout(initialLoad)
+      clearInterval(interval)
+    }
+  }, [isRunning, loadOutput])
+
+  useEffect(() => {
+    // 自动滚动到底部
+    outputEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [output])
+
+  const handleStop = async (): Promise<void> => {
     try {
       await window.api.cli.stopSession(sessionId)
       setIsRunning(false)

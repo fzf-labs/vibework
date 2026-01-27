@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PreviewConfig, PreviewInstance } from '../../types/preview'
 
 interface PreviewControlPanelProps {
@@ -6,26 +6,26 @@ interface PreviewControlPanelProps {
   onEdit?: () => void
 }
 
-export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps) {
+export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps): JSX.Element {
   const [instance, setInstance] = useState<PreviewInstance | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadInstance()
-    const interval = setInterval(loadInstance, 2000)
-    return () => clearInterval(interval)
-  }, [config.id])
-
-  const loadInstance = async () => {
+  const loadInstance = useCallback(async (): Promise<void> => {
     try {
       const result = await window.api.preview.getInstance(config.id)
       setInstance(result)
     } catch (error) {
       console.error('加载实例失败:', error)
     }
-  }
+  }, [config.id])
 
-  const handleStart = async () => {
+  useEffect(() => {
+    loadInstance()
+    const interval = setInterval(loadInstance, 2000)
+    return () => clearInterval(interval)
+  }, [loadInstance])
+
+  const handleStart = async (): Promise<void> => {
     setLoading(true)
     try {
       await window.api.preview.start(
@@ -37,31 +37,33 @@ export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps
         config.env
       )
       await loadInstance()
-    } catch (error: any) {
-      alert(`启动失败: ${error.message}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      alert(`启动失败: ${message}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleStop = async () => {
+  const handleStop = async (): Promise<void> => {
     setLoading(true)
     try {
       await window.api.preview.stop(config.id)
       await loadInstance()
-    } catch (error: any) {
-      alert(`停止失败: ${error.message}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '未知错误'
+      alert(`停止失败: ${message}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleRestart = async () => {
+  const handleRestart = async (): Promise<void> => {
     await handleStop()
     setTimeout(handleStart, 1000)
   }
 
-  const getStatusColor = (status?: string) => {
+  const getStatusColor = (status?: string): string => {
     switch (status) {
       case 'running':
         return 'bg-green-500'
@@ -76,7 +78,7 @@ export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps
     }
   }
 
-  const getStatusText = (status?: string) => {
+  const getStatusText = (status?: string): string => {
     switch (status) {
       case 'running':
         return '运行中'
@@ -101,7 +103,9 @@ export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold">{config.name}</h3>
-          <p className="text-sm text-gray-600">{config.type === 'frontend' ? '前端项目' : '后端项目'}</p>
+          <p className="text-sm text-gray-600">
+            {config.type === 'frontend' ? '前端项目' : '后端项目'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${getStatusColor(instance?.status)}`} />
@@ -110,7 +114,9 @@ export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps
       </div>
 
       <div className="mb-4 text-sm text-gray-600">
-        <div>命令: {config.command} {config.args.join(' ')}</div>
+        <div>
+          命令: {config.command} {config.args.join(' ')}
+        </div>
         {config.port && <div>端口: {config.port}</div>}
         {config.cwd && <div>工作目录: {config.cwd}</div>}
       </div>
@@ -138,10 +144,7 @@ export function PreviewControlPanel({ config, onEdit }: PreviewControlPanelProps
           重启
         </button>
         {onEdit && (
-          <button
-            onClick={onEdit}
-            className="px-4 py-2 bg-blue-500 text-white rounded"
-          >
+          <button onClick={onEdit} className="px-4 py-2 bg-blue-500 text-white rounded">
             编辑配置
           </button>
         )}

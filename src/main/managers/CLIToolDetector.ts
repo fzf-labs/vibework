@@ -64,7 +64,7 @@ export class CLIToolDetector {
   ]
 
   async detectTool(toolId: string): Promise<CLIToolInfo | null> {
-    const tool = this.tools.find(t => t.id === toolId)
+    const tool = this.tools.find((t) => t.id === toolId)
     if (!tool) return null
 
     try {
@@ -72,7 +72,7 @@ export class CLIToolDetector {
       tool.installed = true
       tool.version = stdout.trim()
       tool.configValid = await this.checkConfig(tool)
-    } catch (error) {
+    } catch {
       tool.installed = false
       tool.version = undefined
       tool.configValid = false
@@ -107,18 +107,16 @@ export class CLIToolDetector {
   }
 
   async detectAllTools(): Promise<CLIToolInfo[]> {
-    const results = await Promise.all(
-      this.tools.map(tool => this.detectTool(tool.id))
-    )
+    const results = await Promise.all(this.tools.map((tool) => this.detectTool(tool.id)))
     return results.filter((tool): tool is CLIToolInfo => tool !== null)
   }
 
   getAllTools(): CLIToolInfo[] {
-    return this.tools.map(tool => ({ ...tool }))
+    return this.tools.map((tool) => ({ ...tool }))
   }
 
   getTool(toolId: string): CLIToolInfo | undefined {
-    const tool = this.tools.find(t => t.id === toolId)
+    const tool = this.tools.find((t) => t.id === toolId)
     return tool ? { ...tool } : undefined
   }
 }

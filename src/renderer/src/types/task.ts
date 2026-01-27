@@ -44,7 +44,13 @@ export type StageType = 'command' | 'manual' | 'approval' | 'notification'
 /**
  * 流水线环节状态
  */
-export type StageStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped' | 'waiting_approval'
+export type StageStatus =
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'skipped'
+  | 'waiting_approval'
 
 /**
  * 流水线环节

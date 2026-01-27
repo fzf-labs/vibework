@@ -1,40 +1,50 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface PreviewLogViewerProps {
   instanceId: string
   autoScroll?: boolean
 }
 
-export function PreviewLogViewer({ instanceId, autoScroll = true }: PreviewLogViewerProps) {
+export function PreviewLogViewer({
+  instanceId,
+  autoScroll = true
+}: PreviewLogViewerProps): JSX.Element {
   const [logs, setLogs] = useState<string[]>([])
   const [filter, setFilter] = useState<string>('')
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(autoScroll)
   const logEndRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    loadLogs()
-    const interval = setInterval(loadLogs, 1000)
-    return () => clearInterval(interval)
-  }, [instanceId])
-
-  useEffect(() => {
-    if (autoScrollEnabled) {
-      scrollToBottom()
-    }
-  }, [logs, autoScrollEnabled])
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async (): Promise<void> => {
     try {
       const output = await window.api.preview.getOutput(instanceId, 100)
       setLogs(output)
     } catch (error) {
       console.error('加载日志失败:', error)
     }
-  }
+  }, [instanceId])
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback((): void => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  }, [])
+
+  useEffect(() => {
+    const initialLoad = setTimeout(() => {
+      void loadLogs()
+    }, 0)
+    const interval = setInterval(() => {
+      void loadLogs()
+    }, 1000)
+    return () => {
+      clearTimeout(initialLoad)
+      clearInterval(interval)
+    }
+  }, [loadLogs])
+
+  useEffect(() => {
+    if (autoScrollEnabled) {
+      scrollToBottom()
+    }
+  }, [autoScrollEnabled, logs, scrollToBottom])
 
   const getLogLevel = (line: string): string => {
     const lowerLine = line.toLowerCase()
@@ -62,7 +72,7 @@ export function PreviewLogViewer({ instanceId, autoScroll = true }: PreviewLogVi
   }
 
   const filteredLogs = filter
-    ? logs.filter(log => log.toLowerCase().includes(filter.toLowerCase()))
+    ? logs.filter((log) => log.toLowerCase().includes(filter.toLowerCase()))
     : logs
 
   return (
@@ -83,16 +93,10 @@ export function PreviewLogViewer({ instanceId, autoScroll = true }: PreviewLogVi
         >
           {autoScrollEnabled ? '自动滚动' : '固定'}
         </button>
-        <button
-          onClick={scrollToBottom}
-          className="px-3 py-1 text-sm bg-gray-200 rounded"
-        >
+        <button onClick={scrollToBottom} className="px-3 py-1 text-sm bg-gray-200 rounded">
           滚动到底部
         </button>
-        <button
-          onClick={() => setLogs([])}
-          className="px-3 py-1 text-sm bg-gray-200 rounded"
-        >
+        <button onClick={() => setLogs([])} className="px-3 py-1 text-sm bg-gray-200 rounded">
           清空
         </button>
       </div>

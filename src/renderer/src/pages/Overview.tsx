@@ -1,4 +1,5 @@
 import React from 'react'
+import { NotificationTestButton } from '@/components/notification/NotificationTestButton'
 
 interface StatCardProps {
   label: string
@@ -61,6 +62,9 @@ const Overview: React.FC = () => {
         <StatCard label="Skills" value="8" />
         <StatCard label="MCPs" value="5" />
       </div>
+
+      {/* 开发环境测试按钮 */}
+      {import.meta.env.DEV && <NotificationTestButton />}
     </div>
   )
 }

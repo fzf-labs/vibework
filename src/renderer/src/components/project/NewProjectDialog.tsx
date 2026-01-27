@@ -1,16 +1,17 @@
 import React, { useState } from 'react'
+import type { NewProjectInput } from '../../types/project'
 
 interface NewProjectDialogProps {
   onClose: () => void
-  onSubmit: (project: any) => void
+  onSubmit: (project: NewProjectInput) => void
 }
 
-const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ onClose, onSubmit }) => {
+const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ onClose, onSubmit }): JSX.Element => {
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
   const [description, setDescription] = useState('')
 
-  const handleSubmit = () => {
+  const handleSubmit = (): void => {
     if (!name || !path) {
       alert('Please fill in all required fields')
       return

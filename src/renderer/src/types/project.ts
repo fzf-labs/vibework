@@ -12,6 +12,8 @@ export interface Project {
   config: ProjectConfig
 }
 
+export type NewProjectInput = Omit<Project, 'id' | 'createdAt' | 'lastOpened'>
+
 export interface ProjectConfig {
   mcpServers?: MCPServer[]
   skills?: Skill[]

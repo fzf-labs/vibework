@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 
 interface ClaudeCodeConfigProps {
   onClose?: () => void
 }
 
-const ClaudeCodeConfig: React.FC<ClaudeCodeConfigProps> = ({ onClose }) => {
+const ClaudeCodeConfig: React.FC<ClaudeCodeConfigProps> = ({ onClose }): JSX.Element => {
   const [config, setConfig] = useState({
     executablePath: 'claude',
     defaultModel: 'sonnet'
@@ -12,11 +12,7 @@ const ClaudeCodeConfig: React.FC<ClaudeCodeConfigProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    loadConfig()
-  }, [])
-
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async (): Promise<void> => {
     try {
       const result = await window.api.claudeCode.getConfig()
       setConfig(result)
@@ -25,9 +21,13 @@ const ClaudeCodeConfig: React.FC<ClaudeCodeConfigProps> = ({ onClose }) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const handleSave = async () => {
+  useEffect(() => {
+    loadConfig()
+  }, [loadConfig])
+
+  const handleSave = async (): Promise<void> => {
     setSaving(true)
     try {
       await window.api.claudeCode.saveConfig(config)
@@ -47,9 +47,7 @@ const ClaudeCodeConfig: React.FC<ClaudeCodeConfigProps> = ({ onClose }) => {
 
   return (
     <div style={{ padding: 24, maxWidth: 600 }}>
-      <h2 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: '600' }}>
-        Claude Code 配置
-      </h2>
+      <h2 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: '600' }}>Claude Code 配置</h2>
 
       <div style={{ marginBottom: 20 }}>
         <label style={{ display: 'block', marginBottom: 8, fontSize: 14, fontWeight: '500' }}>

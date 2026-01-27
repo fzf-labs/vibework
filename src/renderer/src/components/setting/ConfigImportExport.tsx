@@ -1,23 +1,23 @@
 import { useRef } from 'react'
 import { configManager } from '../../utils/configManager'
 
-export function ConfigImportExport() {
+export function ConfigImportExport(): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleExport = () => {
+  const handleExport = (): void => {
     try {
       configManager.downloadConfig()
       alert('配置导出成功')
     } catch (error) {
-      alert(`配置导出失败: ${error}`)
+      alert(`配置导出失败: ${String(error)}`)
     }
   }
 
-  const handleImportClick = () => {
+  const handleImportClick = (): void => {
     fileInputRef.current?.click()
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -34,9 +34,7 @@ export function ConfigImportExport() {
     <div className="p-4 space-y-4">
       <div>
         <h3 className="text-lg font-medium mb-2">配置管理</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          导出或导入应用配置，包括流水线模板、通知设置等
-        </p>
+        <p className="text-sm text-gray-500 mb-4">导出或导入应用配置，包括流水线模板、通知设置等</p>
       </div>
 
       <div className="flex gap-3">

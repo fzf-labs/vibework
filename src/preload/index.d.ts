@@ -1,97 +1,129 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
+type UnknownRecord = Record<string, unknown>
+
 interface ProjectAPI {
-  getAll: () => Promise<any[]>
-  get: (id: string) => Promise<any>
-  add: (project: any) => Promise<any>
-  update: (id: string, updates: any) => Promise<any>
+  getAll: () => Promise<unknown[]>
+  get: (id: string) => Promise<unknown>
+  add: (project: UnknownRecord) => Promise<unknown>
+  update: (id: string, updates: UnknownRecord) => Promise<unknown>
   delete: (id: string) => Promise<boolean>
 }
 
 interface GitAPI {
-  clone: (remoteUrl: string, targetPath: string) => Promise<any>
-  init: (path: string) => Promise<any>
-  listWorktrees: (repoPath: string) => Promise<any>
-  addWorktree: (repoPath: string, worktreePath: string, branchName: string, createBranch: boolean) => Promise<any>
-  removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<any>
-  pruneWorktrees: (repoPath: string) => Promise<any>
-  getDiff: (repoPath: string, filePath?: string) => Promise<any>
-  getStagedDiff: (repoPath: string, filePath?: string) => Promise<any>
-  getBranches: (repoPath: string) => Promise<any>
-  getCurrentBranch: (repoPath: string) => Promise<any>
-  getChangedFiles: (repoPath: string) => Promise<any>
-  stageFiles: (repoPath: string, filePaths: string[]) => Promise<any>
-  unstageFiles: (repoPath: string, filePaths: string[]) => Promise<any>
-  mergeBranch: (repoPath: string, branchName: string) => Promise<any>
-  getConflictFiles: (repoPath: string) => Promise<any>
-  abortMerge: (repoPath: string) => Promise<any>
-  getConflictContent: (repoPath: string, filePath: string) => Promise<any>
-  resolveConflict: (repoPath: string, filePath: string, strategy: 'ours' | 'theirs') => Promise<any>
-  rebaseBranch: (repoPath: string, targetBranch: string) => Promise<any>
-  rebaseContinue: (repoPath: string) => Promise<any>
-  rebaseAbort: (repoPath: string) => Promise<any>
-  rebaseSkip: (repoPath: string) => Promise<any>
-  getRemoteUrl: (repoPath: string, remoteName?: string) => Promise<any>
-  pushBranch: (repoPath: string, branchName: string, remoteName?: string, force?: boolean) => Promise<any>
-  getCommitLog: (repoPath: string, limit?: number) => Promise<any>
+  clone: (remoteUrl: string, targetPath: string) => Promise<unknown>
+  init: (path: string) => Promise<unknown>
+  listWorktrees: (repoPath: string) => Promise<unknown>
+  addWorktree: (
+    repoPath: string,
+    worktreePath: string,
+    branchName: string,
+    createBranch: boolean
+  ) => Promise<unknown>
+  removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<unknown>
+  pruneWorktrees: (repoPath: string) => Promise<unknown>
+  getDiff: (repoPath: string, filePath?: string) => Promise<unknown>
+  getStagedDiff: (repoPath: string, filePath?: string) => Promise<unknown>
+  getBranches: (repoPath: string) => Promise<unknown>
+  getCurrentBranch: (repoPath: string) => Promise<unknown>
+  getChangedFiles: (repoPath: string) => Promise<unknown>
+  stageFiles: (repoPath: string, filePaths: string[]) => Promise<unknown>
+  unstageFiles: (repoPath: string, filePaths: string[]) => Promise<unknown>
+  mergeBranch: (repoPath: string, branchName: string) => Promise<unknown>
+  getConflictFiles: (repoPath: string) => Promise<unknown>
+  abortMerge: (repoPath: string) => Promise<unknown>
+  getConflictContent: (repoPath: string, filePath: string) => Promise<unknown>
+  resolveConflict: (
+    repoPath: string,
+    filePath: string,
+    strategy: 'ours' | 'theirs'
+  ) => Promise<unknown>
+  rebaseBranch: (repoPath: string, targetBranch: string) => Promise<unknown>
+  rebaseContinue: (repoPath: string) => Promise<unknown>
+  rebaseAbort: (repoPath: string) => Promise<unknown>
+  rebaseSkip: (repoPath: string) => Promise<unknown>
+  getRemoteUrl: (repoPath: string, remoteName?: string) => Promise<unknown>
+  pushBranch: (
+    repoPath: string,
+    branchName: string,
+    remoteName?: string,
+    force?: boolean
+  ) => Promise<unknown>
+  getCommitLog: (repoPath: string, limit?: number) => Promise<unknown>
 }
 
 interface CLIAPI {
-  startSession: (sessionId: string, command: string, args: string[], cwd?: string) => Promise<any>
-  stopSession: (sessionId: string) => Promise<any>
+  startSession: (
+    sessionId: string,
+    command: string,
+    args: string[],
+    cwd?: string
+  ) => Promise<unknown>
+  stopSession: (sessionId: string) => Promise<unknown>
   getOutput: (sessionId: string) => Promise<string[]>
 }
 
 interface ClaudeCodeAPI {
-  getConfig: () => Promise<any>
-  saveConfig: (config: any) => Promise<any>
-  startSession: (sessionId: string, workdir: string, options?: any) => Promise<any>
-  stopSession: (sessionId: string) => Promise<any>
-  sendInput: (sessionId: string, input: string) => Promise<any>
+  getConfig: () => Promise<UnknownRecord>
+  saveConfig: (config: UnknownRecord) => Promise<unknown>
+  startSession: (
+    sessionId: string,
+    workdir: string,
+    options?: { model?: string }
+  ) => Promise<unknown>
+  stopSession: (sessionId: string) => Promise<unknown>
+  sendInput: (sessionId: string, input: string) => Promise<unknown>
   getOutput: (sessionId: string) => Promise<string[]>
-  getSessions: () => Promise<any[]>
+  getSessions: () => Promise<unknown[]>
 }
 
 interface CLIToolsAPI {
-  getAll: () => Promise<any[]>
-  detect: (toolId: string) => Promise<any>
-  detectAll: () => Promise<any[]>
+  getAll: () => Promise<unknown[]>
+  detect: (toolId: string) => Promise<unknown>
+  detectAll: () => Promise<unknown[]>
 }
 
 interface CLIToolConfigAPI {
-  get: (toolId: string) => Promise<any>
-  save: (toolId: string, config: any) => Promise<any>
+  get: (toolId: string) => Promise<UnknownRecord>
+  save: (toolId: string, config: UnknownRecord) => Promise<unknown>
 }
 
 interface EditorAPI {
-  getAvailable: () => Promise<any[]>
-  openProject: (projectPath: string, editorCommand: string) => Promise<any>
+  getAvailable: () => Promise<unknown[]>
+  openProject: (projectPath: string, editorCommand: string) => Promise<unknown>
 }
 
 interface PipelineAPI {
-  execute: (pipelineId: string, stages: any[], workingDirectory?: string) => Promise<any>
-  getExecution: (executionId: string) => Promise<any>
-  getAllExecutions: () => Promise<any[]>
-  approveStage: (stageExecutionId: string, approvedBy: string) => Promise<any>
-  cancel: (executionId: string) => Promise<any>
+  execute: (pipelineId: string, stages: unknown[], workingDirectory?: string) => Promise<unknown>
+  getExecution: (executionId: string) => Promise<unknown>
+  getAllExecutions: () => Promise<unknown[]>
+  approveStage: (stageExecutionId: string, approvedBy: string) => Promise<unknown>
+  cancel: (executionId: string) => Promise<unknown>
 }
 
 interface PreviewConfigAPI {
-  getAll: () => Promise<any[]>
-  getByProject: (projectId: string) => Promise<any[]>
-  get: (id: string) => Promise<any>
-  add: (config: any) => Promise<any>
-  update: (id: string, updates: any) => Promise<any>
-  delete: (id: string) => Promise<any>
+  getAll: () => Promise<unknown[]>
+  getByProject: (projectId: string) => Promise<unknown[]>
+  get: (id: string) => Promise<unknown>
+  add: (config: UnknownRecord) => Promise<unknown>
+  update: (id: string, updates: UnknownRecord) => Promise<unknown>
+  delete: (id: string) => Promise<unknown>
 }
 
 interface PreviewAPI {
-  start: (instanceId: string, configId: string, command: string, args: string[], cwd?: string, env?: Record<string, string>) => Promise<any>
-  stop: (instanceId: string) => Promise<any>
-  getInstance: (instanceId: string) => Promise<any>
-  getAllInstances: () => Promise<any[]>
+  start: (
+    instanceId: string,
+    configId: string,
+    command: string,
+    args: string[],
+    cwd?: string,
+    env?: Record<string, string>
+  ) => Promise<unknown>
+  stop: (instanceId: string) => Promise<unknown>
+  getInstance: (instanceId: string) => Promise<unknown>
+  getAllInstances: () => Promise<unknown[]>
   getOutput: (instanceId: string, limit?: number) => Promise<string[]>
-  clearInstance: (instanceId: string) => Promise<any>
+  clearInstance: (instanceId: string) => Promise<unknown>
 }
 
 interface NotificationAPI {
@@ -101,17 +133,17 @@ interface NotificationAPI {
     icon?: string
     silent?: boolean
     urgency?: 'normal' | 'critical' | 'low'
-  }) => Promise<any>
-  setEnabled: (enabled: boolean) => Promise<any>
+  }) => Promise<unknown>
+  setEnabled: (enabled: boolean) => Promise<unknown>
   isEnabled: () => Promise<boolean>
-  setSoundEnabled: (enabled: boolean) => Promise<any>
+  setSoundEnabled: (enabled: boolean) => Promise<unknown>
   isSoundEnabled: () => Promise<boolean>
   setSoundSettings: (settings: {
     enabled?: boolean
     taskComplete?: boolean
     stageComplete?: boolean
     error?: boolean
-  }) => Promise<any>
+  }) => Promise<unknown>
   getSoundSettings: () => Promise<{
     enabled: boolean
     taskComplete: boolean

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Project } from '../../types/project'
 import EditorSelector from './EditorSelector'
 
@@ -14,16 +14,12 @@ const EditorConfigDialog: React.FC<EditorConfigDialogProps> = ({
   open,
   onClose,
   onSave
-}) => {
-  const [selectedEditor, setSelectedEditor] = useState<string>('')
+}): JSX.Element | null => {
+  const [selectedEditor, setSelectedEditor] = useState<string>(
+    () => project.config.editor?.path || ''
+  )
 
-  useEffect(() => {
-    if (open && project.config.editor) {
-      setSelectedEditor(project.config.editor.path)
-    }
-  }, [open, project])
-
-  const handleSave = () => {
+  const handleSave = (): void => {
     if (selectedEditor) {
       onSave(selectedEditor)
       onClose()

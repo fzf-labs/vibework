@@ -1,5 +1,6 @@
 import React from 'react'
 import ProjectSelector from '@/components/project/ProjectSelector'
+import { NotificationButton } from '@/components/notification/NotificationButton'
 
 const TopBar: React.FC = () => {
   return (
@@ -28,7 +29,10 @@ const TopBar: React.FC = () => {
         </span>
       </div>
 
-      <ProjectSelector />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <NotificationButton />
+        <ProjectSelector />
+      </div>
     </div>
   )
 }

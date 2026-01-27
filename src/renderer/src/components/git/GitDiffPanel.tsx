@@ -12,7 +12,7 @@ interface GitDiffPanelProps {
   repoPath: string
 }
 
-export function GitDiffPanel({ repoPath }: GitDiffPanelProps) {
+export function GitDiffPanel({ repoPath }: GitDiffPanelProps): JSX.Element {
   const [selectedFile, setSelectedFile] = useState<ChangedFile | undefined>()
 
   return (

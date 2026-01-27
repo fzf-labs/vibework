@@ -8,7 +8,7 @@ class PipelineTemplateStore {
     this.loadFromStorage()
   }
 
-  private loadFromStorage() {
+  private loadFromStorage(): void {
     try {
       const stored = localStorage.getItem('pipelineTemplates')
       if (stored) {
@@ -19,7 +19,7 @@ class PipelineTemplateStore {
     }
   }
 
-  private saveToStorage() {
+  private saveToStorage(): void {
     try {
       localStorage.setItem('pipelineTemplates', JSON.stringify(this.templates))
     } catch (error) {
@@ -27,11 +27,11 @@ class PipelineTemplateStore {
     }
   }
 
-  private notify() {
-    this.listeners.forEach(listener => listener())
+  private notify(): void {
+    this.listeners.forEach((listener) => listener())
   }
 
-  subscribe(listener: () => void) {
+  subscribe(listener: () => void): () => boolean {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
@@ -41,7 +41,7 @@ class PipelineTemplateStore {
   }
 
   get(id: string): PipelineTemplate | undefined {
-    return this.templates.find(t => t.id === id)
+    return this.templates.find((t) => t.id === id)
   }
 
   add(template: Omit<PipelineTemplate, 'id' | 'createdAt' | 'updatedAt'>): PipelineTemplate {
@@ -57,8 +57,11 @@ class PipelineTemplateStore {
     return newTemplate
   }
 
-  update(id: string, updates: Partial<Omit<PipelineTemplate, 'id' | 'createdAt'>>): PipelineTemplate | null {
-    const index = this.templates.findIndex(t => t.id === id)
+  update(
+    id: string,
+    updates: Partial<Omit<PipelineTemplate, 'id' | 'createdAt'>>
+  ): PipelineTemplate | null {
+    const index = this.templates.findIndex((t) => t.id === id)
     if (index === -1) return null
 
     this.templates[index] = {
@@ -72,7 +75,7 @@ class PipelineTemplateStore {
   }
 
   delete(id: string): boolean {
-    const index = this.templates.findIndex(t => t.id === id)
+    const index = this.templates.findIndex((t) => t.id === id)
     if (index === -1) return false
 
     this.templates.splice(index, 1)
@@ -88,7 +91,7 @@ class PipelineTemplateStore {
     const duplicated = this.add({
       name: `${template.name} (副本)`,
       description: template.description,
-      stages: template.stages.map(stage => ({ ...stage }))
+      stages: template.stages.map((stage) => ({ ...stage }))
     })
     return duplicated
   }

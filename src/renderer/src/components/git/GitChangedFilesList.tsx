@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Checkbox } from '../common/Checkbox'
 
 interface ChangedFile {
@@ -13,16 +13,16 @@ interface GitChangedFilesListProps {
   selectedFile?: ChangedFile
 }
 
-export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: GitChangedFilesListProps) {
+export function GitChangedFilesList({
+  repoPath,
+  onFileSelect,
+  selectedFile
+}: GitChangedFilesListProps): JSX.Element {
   const [files, setFiles] = useState<ChangedFile[]>([])
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadChangedFiles()
-  }, [repoPath])
-
-  const loadChangedFiles = async () => {
+  const loadChangedFiles = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       const result = await window.api.git.getChangedFiles(repoPath)
@@ -34,9 +34,13 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
     } finally {
       setLoading(false)
     }
-  }
+  }, [repoPath])
 
-  const handleStageFiles = async () => {
+  useEffect(() => {
+    loadChangedFiles()
+  }, [loadChangedFiles])
+
+  const handleStageFiles = async (): Promise<void> => {
     const filesToStage = Array.from(selectedFiles)
     try {
       const result = await window.api.git.stageFiles(repoPath, filesToStage)
@@ -49,7 +53,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
     }
   }
 
-  const handleUnstageFiles = async () => {
+  const handleUnstageFiles = async (): Promise<void> => {
     const filesToUnstage = Array.from(selectedFiles)
     try {
       const result = await window.api.git.unstageFiles(repoPath, filesToUnstage)
@@ -62,7 +66,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
     }
   }
 
-  const toggleFileSelection = (filePath: string) => {
+  const toggleFileSelection = (filePath: string): void => {
     const newSelection = new Set(selectedFiles)
     if (newSelection.has(filePath)) {
       newSelection.delete(filePath)
@@ -72,7 +76,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
     setSelectedFiles(newSelection)
   }
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string): string => {
     const statusMap: Record<string, string> = {
       'M ': '已修改',
       ' M': '已修改',
@@ -84,8 +88,8 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
     return statusMap[status] || status
   }
 
-  const unstagedFiles = files.filter(f => !f.staged)
-  const stagedFiles = files.filter(f => f.staged)
+  const unstagedFiles = files.filter((f) => !f.staged)
+  const stagedFiles = files.filter((f) => f.staged)
 
   if (loading) {
     return <div className="p-4">加载中...</div>
@@ -108,10 +112,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
         >
           取消暂存
         </button>
-        <button
-          onClick={loadChangedFiles}
-          className="px-3 py-1 text-sm bg-gray-200 rounded"
-        >
+        <button onClick={loadChangedFiles} className="px-3 py-1 text-sm bg-gray-200 rounded">
           刷新
         </button>
       </div>
@@ -122,7 +123,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
             <div className="px-4 py-2 bg-gray-100 font-semibold text-sm">
               已暂存的变更 ({stagedFiles.length})
             </div>
-            {stagedFiles.map(file => (
+            {stagedFiles.map((file) => (
               <div
                 key={file.path}
                 className={`flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer ${
@@ -149,7 +150,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
             <div className="px-4 py-2 bg-gray-100 font-semibold text-sm">
               未暂存的变更 ({unstagedFiles.length})
             </div>
-            {unstagedFiles.map(file => (
+            {unstagedFiles.map((file) => (
               <div
                 key={file.path}
                 className={`flex items-center gap-2 px-4 py-2 hover:bg-gray-50 cursor-pointer ${
@@ -171,11 +172,7 @@ export function GitChangedFilesList({ repoPath, onFileSelect, selectedFile }: Gi
           </div>
         )}
 
-        {files.length === 0 && (
-          <div className="p-4 text-center text-gray-500">
-            没有变更文件
-          </div>
-        )}
+        {files.length === 0 && <div className="p-4 text-center text-gray-500">没有变更文件</div>}
       </div>
     </div>
   )

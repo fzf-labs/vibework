@@ -2,17 +2,33 @@ import React, { useState } from 'react'
 import { useProjects } from '@/hooks'
 import ProjectCard from '@/components/project/ProjectCard'
 import NewProjectDialog from '@/components/project/NewProjectDialog'
+import type { NewProjectInput } from '@/types'
+import { notificationStore } from '@/stores/notificationStore'
 
 const Projects: React.FC = () => {
   const { projects, loading, addProject } = useProjects()
   const [showNewDialog, setShowNewDialog] = useState(false)
 
-  const handleCreateProject = async (projectData: any) => {
+  const handleCreateProject = async (projectData: NewProjectInput): Promise<void> => {
     try {
       await addProject(projectData)
       setShowNewDialog(false)
+
+      // 发送成功通知
+      notificationStore.add({
+        type: 'success',
+        title: '项目创建成功',
+        body: `项目 "${projectData.name}" 已成功创建`
+      })
     } catch (error) {
       console.error('Failed to create project:', error)
+
+      // 发送错误通知
+      notificationStore.add({
+        type: 'error',
+        title: '项目创建失败',
+        body: error instanceof Error ? error.message : '创建项目时发生错误，请稍后重试'
+      })
     }
   }
 
@@ -95,10 +111,7 @@ const Projects: React.FC = () => {
       )}
 
       {showNewDialog && (
-        <NewProjectDialog
-          onClose={() => setShowNewDialog(false)}
-          onSubmit={handleCreateProject}
-        />
+        <NewProjectDialog onClose={() => setShowNewDialog(false)} onSubmit={handleCreateProject} />
       )}
     </div>
   )

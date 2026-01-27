@@ -7,12 +7,16 @@ interface PipelineTemplateEditorProps {
   onCancel: () => void
 }
 
-export function PipelineTemplateEditor({ template, onSave, onCancel }: PipelineTemplateEditorProps) {
+export function PipelineTemplateEditor({
+  template,
+  onSave,
+  onCancel
+}: PipelineTemplateEditorProps): JSX.Element {
   const [name, setName] = useState(template?.name || '')
   const [description, setDescription] = useState(template?.description || '')
   const [stages, setStages] = useState<PipelineStage[]>(template?.stages || [])
 
-  const handleAddStage = () => {
+  const handleAddStage = (): void => {
     const newStage: PipelineStage = {
       id: Date.now().toString(),
       name: '新环节',
@@ -23,17 +27,17 @@ export function PipelineTemplateEditor({ template, onSave, onCancel }: PipelineT
     setStages([...stages, newStage])
   }
 
-  const handleRemoveStage = (index: number) => {
+  const handleRemoveStage = (index: number): void => {
     setStages(stages.filter((_, i) => i !== index))
   }
 
-  const handleUpdateStage = (index: number, updates: Partial<PipelineStage>) => {
+  const handleUpdateStage = (index: number, updates: Partial<PipelineStage>): void => {
     const newStages = [...stages]
     newStages[index] = { ...newStages[index], ...updates }
     setStages(newStages)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = (): void => {
     if (!name.trim()) {
       alert('请输入模板名称')
       return
@@ -115,10 +119,7 @@ export function PipelineTemplateEditor({ template, onSave, onCancel }: PipelineT
 
       {/* 操作按钮 */}
       <div className="flex gap-3 justify-end">
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 border rounded hover:bg-gray-50"
-        >
+        <button onClick={onCancel} className="px-4 py-2 border rounded hover:bg-gray-50">
           取消
         </button>
         <button

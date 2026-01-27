@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { GitConflictResolutionPanel } from './GitConflictResolutionPanel'
 
 interface GitRebasePanelProps {
@@ -6,7 +6,7 @@ interface GitRebasePanelProps {
   onRebaseComplete?: () => void
 }
 
-export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelProps) {
+export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelProps): JSX.Element {
   const [branches, setBranches] = useState<string[]>([])
   const [selectedBranch, setSelectedBranch] = useState<string>('')
   const [rebasing, setRebasing] = useState(false)
@@ -14,11 +14,7 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
   const [error, setError] = useState<string>('')
   const [inProgress, setInProgress] = useState(false)
 
-  useEffect(() => {
-    loadBranches()
-  }, [repoPath])
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async (): Promise<void> => {
     try {
       const result = await window.api.git.getBranches?.(repoPath)
       if (result?.success) {
@@ -27,9 +23,13 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
     } catch (error) {
       console.error('加载分支失败:', error)
     }
-  }
+  }, [repoPath])
 
-  const handleRebase = async () => {
+  useEffect(() => {
+    loadBranches()
+  }, [loadBranches])
+
+  const handleRebase = async (): Promise<void> => {
     if (!selectedBranch) return
 
     setRebasing(true)
@@ -46,14 +46,14 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
         setConflicts(result.data.conflicts)
         setInProgress(true)
       }
-    } catch (error: any) {
-      setError(error.message || 'Rebase失败')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Rebase失败')
     } finally {
       setRebasing(false)
     }
   }
 
-  const handleContinue = async () => {
+  const handleContinue = async (): Promise<void> => {
     setRebasing(true)
     setError('')
 
@@ -68,14 +68,14 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
       } else if (result.data.conflicts) {
         setConflicts(result.data.conflicts)
       }
-    } catch (error: any) {
-      setError(error.message || '继续rebase失败')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '继续rebase失败')
     } finally {
       setRebasing(false)
     }
   }
 
-  const handleAbort = async () => {
+  const handleAbort = async (): Promise<void> => {
     try {
       const result = await window.api.git.rebaseAbort(repoPath)
       if (result.success) {
@@ -83,12 +83,12 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
         setConflicts([])
         alert('已中止rebase')
       }
-    } catch (error: any) {
-      setError(error.message || '中止rebase失败')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '中止rebase失败')
     }
   }
 
-  const handleSkip = async () => {
+  const handleSkip = async (): Promise<void> => {
     setRebasing(true)
     setError('')
 
@@ -103,8 +103,8 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
       } else if (result.data.conflicts) {
         setConflicts(result.data.conflicts)
       }
-    } catch (error: any) {
-      setError(error.message || '跳过提交失败')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '跳过提交失败')
     } finally {
       setRebasing(false)
     }
@@ -114,12 +114,8 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
     return (
       <div className="flex flex-col h-full">
         <div className="p-4 bg-yellow-50 border-b">
-          <h3 className="font-semibold text-yellow-800 mb-2">
-            Rebase冲突
-          </h3>
-          <p className="text-sm text-yellow-700 mb-3">
-            请解决冲突后继续rebase
-          </p>
+          <h3 className="font-semibold text-yellow-800 mb-2">Rebase冲突</h3>
+          <p className="text-sm text-yellow-700 mb-3">请解决冲突后继续rebase</p>
           <div className="flex gap-2">
             <button
               onClick={handleContinue}
@@ -135,20 +131,14 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
             >
               跳过当前提交
             </button>
-            <button
-              onClick={handleAbort}
-              className="px-4 py-2 bg-red-500 text-white rounded"
-            >
+            <button onClick={handleAbort} className="px-4 py-2 bg-red-500 text-white rounded">
               中止Rebase
             </button>
           </div>
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <GitConflictResolutionPanel
-            repoPath={repoPath}
-            onAllResolved={() => setConflicts([])}
-          />
+          <GitConflictResolutionPanel repoPath={repoPath} onAllResolved={() => setConflicts([])} />
         </div>
       </div>
     )
@@ -160,9 +150,7 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">
-            选择目标分支(将当前分支rebase到)
-          </label>
+          <label className="block text-sm font-medium mb-2">选择目标分支(将当前分支rebase到)</label>
           <select
             value={selectedBranch}
             onChange={(e) => setSelectedBranch(e.target.value)}
@@ -170,7 +158,7 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
             disabled={rebasing || inProgress}
           >
             <option value="">请选择分支</option>
-            {branches.map(branch => (
+            {branches.map((branch) => (
               <option key={branch} value={branch}>
                 {branch}
               </option>
@@ -186,11 +174,7 @@ export function GitRebasePanel({ repoPath, onRebaseComplete }: GitRebasePanelPro
           {rebasing ? 'Rebase中...' : '开始Rebase'}
         </button>
 
-        {error && (
-          <div className="p-3 bg-red-50 text-red-700 rounded">
-            {error}
-          </div>
-        )}
+        {error && <div className="p-3 bg-red-50 text-red-700 rounded">{error}</div>}
 
         <div className="mt-4 p-3 bg-blue-50 rounded">
           <h3 className="font-semibold text-blue-800 mb-2">提示</h3>

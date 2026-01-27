@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { GitConflictViewer } from './GitConflictViewer'
 
 interface GitConflictResolutionPanelProps {
@@ -6,25 +6,22 @@ interface GitConflictResolutionPanelProps {
   onAllResolved?: () => void
 }
 
-export function GitConflictResolutionPanel({ repoPath, onAllResolved }: GitConflictResolutionPanelProps) {
+export function GitConflictResolutionPanel({
+  repoPath,
+  onAllResolved
+}: GitConflictResolutionPanelProps): JSX.Element {
   const [conflictFiles, setConflictFiles] = useState<string[]>([])
   const [selectedFile, setSelectedFile] = useState<string>('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadConflictFiles()
-  }, [repoPath])
-
-  const loadConflictFiles = async () => {
+  const loadConflictFiles = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       const result = await window.api.git.getConflictFiles(repoPath)
       if (result.success) {
         const files = result.data || []
         setConflictFiles(files)
-        if (files.length > 0 && !selectedFile) {
-          setSelectedFile(files[0])
-        }
+        setSelectedFile((prev) => (files.length > 0 ? prev || files[0] : ''))
         if (files.length === 0) {
           onAllResolved?.()
         }
@@ -34,9 +31,13 @@ export function GitConflictResolutionPanel({ repoPath, onAllResolved }: GitConfl
     } finally {
       setLoading(false)
     }
-  }
+  }, [onAllResolved, repoPath])
 
-  const handleFileResolve = () => {
+  useEffect(() => {
+    loadConflictFiles()
+  }, [loadConflictFiles])
+
+  const handleFileResolve = (): void => {
     loadConflictFiles()
   }
 
@@ -47,12 +48,8 @@ export function GitConflictResolutionPanel({ repoPath, onAllResolved }: GitConfl
   if (conflictFiles.length === 0) {
     return (
       <div className="p-4 text-center">
-        <div className="text-green-600 font-semibold mb-2">
-          所有冲突已解决
-        </div>
-        <p className="text-sm text-gray-600">
-          可以继续提交变更
-        </p>
+        <div className="text-green-600 font-semibold mb-2">所有冲突已解决</div>
+        <p className="text-sm text-gray-600">可以继续提交变更</p>
       </div>
     )
   }
@@ -61,12 +58,10 @@ export function GitConflictResolutionPanel({ repoPath, onAllResolved }: GitConfl
     <div className="flex h-full">
       <div className="w-64 border-r bg-gray-50">
         <div className="p-3 border-b bg-yellow-50">
-          <h3 className="font-semibold text-yellow-800">
-            冲突文件 ({conflictFiles.length})
-          </h3>
+          <h3 className="font-semibold text-yellow-800">冲突文件 ({conflictFiles.length})</h3>
         </div>
         <div className="overflow-auto">
-          {conflictFiles.map(file => (
+          {conflictFiles.map((file) => (
             <div
               key={file}
               className={`px-3 py-2 cursor-pointer hover:bg-gray-100 ${

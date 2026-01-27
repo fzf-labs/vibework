@@ -15,10 +15,10 @@ interface Project {
 }
 
 interface ProjectConfig {
-  mcpServers?: any[]
-  skills?: any[]
-  pipelines?: any[]
-  editor?: any
+  mcpServers?: unknown[]
+  skills?: unknown[]
+  pipelines?: unknown[]
+  editor?: unknown
 }
 
 export class ProjectManager {
@@ -62,7 +62,7 @@ export class ProjectManager {
   }
 
   getProject(id: string): Project | undefined {
-    return this.projects.find(p => p.id === id)
+    return this.projects.find((p) => p.id === id)
   }
 
   addProject(project: Omit<Project, 'id' | 'createdAt'>): Project {
@@ -78,7 +78,7 @@ export class ProjectManager {
   }
 
   updateProject(id: string, updates: Partial<Project>): Project | null {
-    const index = this.projects.findIndex(p => p.id === id)
+    const index = this.projects.findIndex((p) => p.id === id)
     if (index === -1) return null
 
     this.projects[index] = { ...this.projects[index], ...updates }
@@ -87,7 +87,7 @@ export class ProjectManager {
   }
 
   deleteProject(id: string): boolean {
-    const index = this.projects.findIndex(p => p.id === id)
+    const index = this.projects.findIndex((p) => p.id === id)
     if (index === -1) return false
 
     this.projects.splice(index, 1)

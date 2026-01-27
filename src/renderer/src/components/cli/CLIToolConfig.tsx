@@ -5,7 +5,7 @@ interface CLIToolConfigProps {
   onClose: () => void
 }
 
-const CLIToolConfig: React.FC<CLIToolConfigProps> = ({ onClose }) => {
+const CLIToolConfig: React.FC<CLIToolConfigProps> = ({ onClose }): JSX.Element => {
   const [tools, setTools] = useState<CLITool[]>([
     {
       id: '1',
@@ -28,22 +28,20 @@ const CLIToolConfig: React.FC<CLIToolConfigProps> = ({ onClose }) => {
   const [editingTool, setEditingTool] = useState<CLITool | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
 
-  const handleToggleTool = (toolId: string) => {
-    setTools(
-      tools.map((tool) => (tool.id === toolId ? { ...tool, enabled: !tool.enabled } : tool))
-    )
+  const handleToggleTool = (toolId: string): void => {
+    setTools(tools.map((tool) => (tool.id === toolId ? { ...tool, enabled: !tool.enabled } : tool)))
   }
 
-  const handleEditTool = (tool: CLITool) => {
+  const handleEditTool = (tool: CLITool): void => {
     setEditingTool(tool)
   }
 
-  const handleSaveTool = (updatedTool: CLITool) => {
+  const handleSaveTool = (updatedTool: CLITool): void => {
     setTools(tools.map((tool) => (tool.id === updatedTool.id ? updatedTool : tool)))
     setEditingTool(null)
   }
 
-  const handleAddTool = (newTool: Omit<CLITool, 'id'>) => {
+  const handleAddTool = (newTool: Omit<CLITool, 'id'>): void => {
     const tool: CLITool = {
       ...newTool,
       id: Date.now().toString()
@@ -52,7 +50,7 @@ const CLIToolConfig: React.FC<CLIToolConfigProps> = ({ onClose }) => {
     setShowAddDialog(false)
   }
 
-  const handleDeleteTool = (toolId: string) => {
+  const handleDeleteTool = (toolId: string): void => {
     setTools(tools.filter((tool) => tool.id !== toolId))
   }
 
@@ -245,10 +243,14 @@ interface CLIToolEditDialogProps {
   onCancel: () => void
 }
 
-const CLIToolEditDialog: React.FC<CLIToolEditDialogProps> = ({ tool, onSave, onCancel }) => {
+const CLIToolEditDialog: React.FC<CLIToolEditDialogProps> = ({
+  tool,
+  onSave,
+  onCancel
+}): JSX.Element => {
   const [formData, setFormData] = useState(tool)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
     onSave(formData)
   }
@@ -407,7 +409,7 @@ interface CLIToolAddDialogProps {
   onCancel: () => void
 }
 
-const CLIToolAddDialog: React.FC<CLIToolAddDialogProps> = ({ onAdd, onCancel }) => {
+const CLIToolAddDialog: React.FC<CLIToolAddDialogProps> = ({ onAdd, onCancel }): JSX.Element => {
   const [formData, setFormData] = useState({
     name: '',
     command: '',
@@ -416,7 +418,7 @@ const CLIToolAddDialog: React.FC<CLIToolAddDialogProps> = ({ onAdd, onCancel }) 
     type: 'other' as CLITool['type']
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
     onAdd(formData)
   }
@@ -547,7 +549,9 @@ const CLIToolAddDialog: React.FC<CLIToolAddDialogProps> = ({ onAdd, onCancel }) 
             </label>
             <select
               value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value as CLITool['type'] })}
+              onChange={(e) =>
+                setFormData({ ...formData, type: e.target.value as CLITool['type'] })
+              }
               style={{
                 width: '100%',
                 padding: '8px 12px',

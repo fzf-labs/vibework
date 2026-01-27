@@ -6,7 +6,7 @@ interface ToolConfig {
   executablePath?: string
   apiKey?: string
   defaultModel?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export class CLIToolConfigManager {
