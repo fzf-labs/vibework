@@ -1,5 +1,5 @@
-import type { LibraryFile } from '@/shared/db';
-import { cn } from '@/shared/lib/utils';
+import type { LibraryFile } from '@/data';
+import { cn } from '@/lib/utils';
 import {
   Code,
   File,

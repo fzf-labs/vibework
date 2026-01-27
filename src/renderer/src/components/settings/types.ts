@@ -1,7 +1,7 @@
 import type {
   AIProvider,
   Settings as SettingsType,
-} from '@/shared/db/settings';
+} from '@/data/settings';
 
 export type { SettingsType, AIProvider };
 
@@ -84,6 +84,7 @@ export interface SkillFile {
 export interface SkillInfo {
   id: string;
   name: string;
+  description?: string;
   source: 'claude' | 'workany';
   path: string;
   files: SkillFile[];

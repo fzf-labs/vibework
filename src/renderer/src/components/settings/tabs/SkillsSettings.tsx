@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import {
   ArrowLeftRight,
   ChevronDown,
   FolderOpen,
   Github,
+  Layers,
   Loader2,
   MoreHorizontal,
   Plus,

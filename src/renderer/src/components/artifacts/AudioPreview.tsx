@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { cn } from '@/shared/lib/utils';
-import { readFile } from '@tauri-apps/plugin-fs';
+import { fs } from '@/lib/electron-api';
+import { cn } from '@/lib/utils';
 import { Loader2, Music, Pause, Play } from 'lucide-react';
 
 import type { PreviewComponentProps } from './types';
@@ -52,7 +52,7 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
           const ext = artifact.path.split('.').pop()?.toLowerCase() || '';
           const mimeType = getAudioMimeType(ext);
 
-          const data = await readFile(artifact.path);
+          const data = await fs.readFile(artifact.path);
           const blob = new Blob([data], { type: mimeType });
           console.log('[Audio Preview] Loaded', blob.size, 'bytes');
 

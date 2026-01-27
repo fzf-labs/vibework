@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { useAgent, type MessageAttachment } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import { useAgent, type MessageAttachment } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import { FileText, Globe, Palette, Smartphone } from 'lucide-react';
 import { nanoid } from 'nanoid';
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { cn } from '@/shared/lib/utils';
-import { readFile, stat } from '@tauri-apps/plugin-fs';
+import { cn } from '@/lib/utils';
+import { fs } from '@/lib/electron-api';
 import JSZip from 'jszip';
 import {
   ChevronLeft,
@@ -42,7 +42,7 @@ export function PptxPreview({ artifact }: PreviewComponentProps) {
       try {
         // Check file size first
         if (!isRemoteUrl(artifact.path)) {
-          const fileInfo = await stat(artifact.path);
+        const fileInfo = await fs.stat(artifact.path);
           if (fileInfo.size > MAX_PREVIEW_SIZE) {
             console.log('[PPTX Preview] File too large:', fileInfo.size);
             setFileTooLarge(fileInfo.size);
@@ -65,7 +65,7 @@ export function PptxPreview({ artifact }: PreviewComponentProps) {
           }
           arrayBuffer = await response.arrayBuffer();
         } else {
-          const data = await readFile(artifact.path);
+        const data = await fs.readFile(artifact.path);
           arrayBuffer = data.buffer;
         }
 

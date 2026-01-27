@@ -1,7 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom';
-import { HomePage, LibraryPage, SetupPage, TaskDetailPage } from '@/app/pages';
+import { HomePage, LibraryPage, SetupPage, TaskDetailPage } from '@/pages';
 
-import { SetupGuard } from '@/components/setup-guard';
+import { SetupGuard } from '@/components/shared/SetupGuard';
 
 export const router = createBrowserRouter([
   {

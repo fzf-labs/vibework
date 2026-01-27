@@ -1,6 +1,6 @@
-import type { TaskPlan } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import type { TaskPlan } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import { Check, ListTodo, Play, X } from 'lucide-react';
 
 interface PlanApprovalProps {

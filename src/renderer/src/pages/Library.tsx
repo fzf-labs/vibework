@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { deleteTask, getAllTasks, updateTask, type Task } from '@/shared/db';
+import { db, type Task } from '@/data';
 import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
-} from '@/shared/lib/background-tasks';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+} from '@/lib/background-tasks';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import { Search } from 'lucide-react';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
@@ -79,7 +79,7 @@ function LibraryContent() {
     async function loadTasks() {
       setIsLoading(true);
       try {
-        const allTasks = await getAllTasks();
+        const allTasks = await db.getAllTasks();
         setTasks(allTasks);
       } catch (error) {
         console.error('Failed to load tasks:', error);
@@ -125,7 +125,7 @@ function LibraryContent() {
   // Handle task deletion
   const handleDeleteTask = async (taskId: string) => {
     try {
-      await deleteTask(taskId);
+      await db.deleteTask(taskId);
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -135,7 +135,7 @@ function LibraryContent() {
   // Handle favorite toggle
   const handleToggleFavorite = async (taskId: string, favorite: boolean) => {
     try {
-      await updateTask(taskId, { favorite });
+      await db.updateTask(taskId, { favorite });
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, favorite } : t))
       );

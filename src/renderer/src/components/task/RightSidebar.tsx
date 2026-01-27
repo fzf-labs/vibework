@@ -1,8 +1,8 @@
 import { startTransition, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '@/config';
-import type { AgentMessage } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import type { AgentMessage } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import {
   ChevronDown,
   ChevronRight,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { AgentMessage } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
+import type { AgentMessage } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
 
 interface ToolExecutionItemProps {

@@ -4,5 +4,16 @@ export { RightSidebar, type Artifact } from './RightSidebar';
 export { PlanApproval } from './PlanApproval';
 export { QuestionInput } from './QuestionInput';
 
+// Components moved from pages/task-detail
+export { ToolSelectionContext, useToolSelection } from './context';
+export { UserMessage } from './UserMessage';
+export { MessageItem } from './MessageItem';
+export { ErrorMessage } from './ErrorMessage';
+export { RunningIndicator } from './RunningIndicator';
+export { TaskGroupComponent } from './TaskGroupComponent';
+
+// Utils
+export { convertFileType, getArtifactTypeFromExt } from './utils';
+
 // Re-export ArtifactPreview from its new location for backwards compatibility
 export { ArtifactPreview } from '@/components/artifacts';

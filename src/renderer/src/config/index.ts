@@ -27,9 +27,9 @@ export const API_BASE_URL = `http://localhost:${API_PORT}`;
 /**
  * App name
  */
-export const APP_NAME = 'WorkAny';
+export const APP_NAME = 'VibeWork';
 
 /**
- * App identifier (must match tauri.conf.json)
+ * App identifier (must match package.json)
  */
-export const APP_IDENTIFIER = 'ai.thinkany.workany';
+export const APP_IDENTIFIER = 'com.fzf-labs.vibework';

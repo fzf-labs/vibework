@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import type { Task } from '@/shared/db';
-import type { AgentMessage } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
+import type { Task } from '@/data';
+import type { AgentMessage } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
 import {
   BarChart3,
   ChevronDown,

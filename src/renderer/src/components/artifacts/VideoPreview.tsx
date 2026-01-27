@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { readFile, stat } from '@tauri-apps/plugin-fs';
+import { fs } from '@/lib/electron-api';
 import { ExternalLink, Loader2, Video } from 'lucide-react';
 
 import { FileTooLarge } from './FileTooLarge';
@@ -50,7 +50,7 @@ export function VideoPreview({ artifact }: PreviewComponentProps) {
       try {
         // Check file size first for local files
         if (!isRemoteUrl(artifact.path)) {
-          const fileInfo = await stat(artifact.path);
+          const fileInfo = await fs.stat(artifact.path);
           if (fileInfo.size > MAX_PREVIEW_SIZE) {
             console.log('[Video Preview] File too large:', fileInfo.size);
             setFileTooLarge(fileInfo.size);
@@ -72,7 +72,7 @@ export function VideoPreview({ artifact }: PreviewComponentProps) {
           const ext = artifact.path.split('.').pop()?.toLowerCase() || '';
           const mimeType = getVideoMimeType(ext);
 
-          const data = await readFile(artifact.path);
+          const data = await fs.readFile(artifact.path);
           const blob = new Blob([data], { type: mimeType });
           console.log('[Video Preview] Loaded', blob.size, 'bytes');
 

@@ -6,10 +6,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PreviewStatus } from '@/shared/hooks/useVitePreview';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import type { PreviewStatus } from '@/hooks/useVitePreview';
+import { cn } from '@/lib/utils';
+import { shell } from '@/lib/electron-api';
+import { useLanguage } from '@/providers/language-provider';
 import {
   AlertCircle,
   ExternalLink,
@@ -50,13 +50,13 @@ export function VitePreview({
     setIframeKey((k) => k + 1);
   }, []);
 
-  // Handle open in new tab (use Tauri opener plugin)
+  // Handle open in new tab (use Electron shell)
   const handleOpenExternal = useCallback(async () => {
     if (previewUrl) {
       try {
-        await openUrl(previewUrl);
+        await shell.openUrl(previewUrl);
       } catch {
-        // Fallback to window.open if Tauri plugin fails
+        // Fallback to window.open if Electron API fails
         window.open(previewUrl, '_blank');
       }
     }

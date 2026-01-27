@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { AgentQuestion, PendingQuestion } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
+import type { AgentQuestion, PendingQuestion } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
 import { Check, Send } from 'lucide-react';
 
 interface QuestionInputProps {

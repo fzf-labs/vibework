@@ -5,15 +5,15 @@ import {
   saveSettings,
   syncSettingsWithBackend,
   type Settings as SettingsType,
-} from '@/shared/db/settings';
+} from '@/data/settings';
 import {
   getAppDataDir,
   getDisplayPath,
   getMcpConfigPath,
   getSkillsDir,
-} from '@/shared/lib/paths';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+} from '@/lib/paths';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 

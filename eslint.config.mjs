@@ -1,32 +1,91 @@
-import { defineConfig } from 'eslint/config'
-import tseslint from '@electron-toolkit/eslint-config-ts'
-import eslintConfigPrettier from '@electron-toolkit/eslint-config-prettier'
-import eslintPluginReact from 'eslint-plugin-react'
-import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
-import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
+import eslint from '@eslint/js';
+import tseslint from '@typescript-eslint/eslint-plugin';
+import tsparser from '@typescript-eslint/parser';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
+import unusedImports from 'eslint-plugin-unused-imports';
+import prettier from 'eslint-plugin-prettier';
+import prettierConfig from 'eslint-config-prettier';
+import globals from 'globals';
 
-export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out'] },
-  tseslint.configs.recommended,
-  eslintPluginReact.configs.flat.recommended,
-  eslintPluginReact.configs.flat['jsx-runtime'],
+export default [
+  eslint.configs.recommended,
+  prettierConfig,
   {
+    files: ['src/**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tsparser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: {
+          jsx: true,
+        },
+        project: './tsconfig.json',
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+        React: 'readonly',
+        __BUILD_DATE__: 'readonly',
+        NodeJS: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tseslint,
+      react,
+      'react-hooks': reactHooks,
+      'unused-imports': unusedImports,
+      prettier,
+    },
     settings: {
       react: {
-        version: 'detect'
-      }
-    }
-  },
-  {
-    files: ['**/*.{ts,tsx}'],
-    plugins: {
-      'react-hooks': eslintPluginReactHooks,
-      'react-refresh': eslintPluginReactRefresh
+        version: 'detect',
+      },
     },
     rules: {
-      ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
-    }
+      // TypeScript
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-unused-vars': 'off',
+
+      // Unused imports - auto-fix
+      'unused-imports/no-unused-imports': 'error',
+      'unused-imports/no-unused-vars': [
+        'warn',
+        {
+          vars: 'all',
+          varsIgnorePattern: '^_',
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+        },
+      ],
+
+      // React
+      'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
+      'react/jsx-uses-react': 'off',
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+
+      // Prettier
+      'prettier/prettier': 'error',
+
+      // General
+      'no-console': 'off', // Too noisy for now
+      'no-debugger': 'error',
+      'no-case-declarations': 'off', // Allow declarations in case blocks
+      'no-self-assign': 'warn', // Warn instead of error
+      'no-useless-escape': 'warn', // Warn instead of error
+    },
   },
-  eslintConfigPrettier
-)
+  {
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      'src-api/**',
+      'src-tauri/**',
+      '*.config.js',
+      '*.config.ts',
+    ],
+  },
+];

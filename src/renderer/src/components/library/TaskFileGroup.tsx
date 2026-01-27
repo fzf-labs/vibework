@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { LibraryFile, Task } from '@/shared/db';
-import { cn } from '@/shared/lib/utils';
+import type { LibraryFile, Task } from '@/data';
+import { cn } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 
 import { FileCard } from './FileCard';

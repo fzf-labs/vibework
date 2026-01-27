@@ -1,5 +1,5 @@
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import { FileText, FolderOpen, Shield, ShieldOff } from 'lucide-react';
 
 import { API_BASE_URL } from '../constants';

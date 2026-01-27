@@ -2,10 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
-import { router } from './app/router';
-import { initializeSettings } from './shared/db/settings';
-import { LanguageProvider } from './shared/providers/language-provider';
-import { ThemeProvider } from './shared/providers/theme-provider';
+import { router } from './router';
+import { initializeSettings } from './data/settings';
+import { LanguageProvider } from './providers/language-provider';
+import { ThemeProvider } from './providers/theme-provider';
 
 import '@/config/style/global.css';
 

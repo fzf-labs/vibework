@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   ChevronDown,
   FileJson,
-  FolderOpen,
   Loader2,
   MoreHorizontal,
   Plus,

@@ -1,0 +1,198 @@
+/**
+ * Electron API 封装
+ * 替换 Tauri API，提供统一的接口
+ */
+
+// 检查是否在 Electron 环境中
+export function isElectron(): boolean {
+  return typeof window !== 'undefined' && 'api' in window
+}
+
+// 文件系统操作
+export const fs = {
+  /**
+   * 读取文件内容
+   */
+  async readFile(path: string): Promise<Uint8Array> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.readFile(path)
+  },
+
+  /**
+   * 读取文本文件
+   */
+  async readTextFile(path: string): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.readTextFile(path)
+  },
+
+  /**
+   * 写入文件
+   */
+  async writeFile(path: string, data: Uint8Array | string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.writeFile(path, data)
+  },
+
+  /**
+   * 写入文本文件
+   */
+  async writeTextFile(path: string, content: string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.writeTextFile(path, content)
+  },
+
+  /**
+   * 获取文件信息
+   */
+  async stat(path: string): Promise<{ size: number; isFile: boolean; isDirectory: boolean }> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.stat(path)
+  },
+
+  /**
+   * 检查文件/目录是否存在
+   */
+  async exists(path: string): Promise<boolean> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.exists(path)
+  },
+
+  /**
+   * 删除文件/目录
+   */
+  async remove(path: string, options?: { recursive?: boolean }): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.remove(path, options)
+  }
+}
+
+// 对话框操作
+export const dialog = {
+  /**
+   * 保存文件对话框
+   */
+  async save(options: {
+    defaultPath?: string
+    filters?: Array<{ name: string; extensions: string[] }>
+  }): Promise<string | null> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.dialog.save(options)
+  },
+
+  /**
+   * 打开文件对话框
+   */
+  async open(options: {
+    multiple?: boolean
+    directory?: boolean
+    filters?: Array<{ name: string; extensions: string[] }>
+  }): Promise<string | string[] | null> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.dialog.open(options)
+  }
+}
+
+// Shell 操作
+export const shell = {
+  /**
+   * 在默认浏览器中打开 URL
+   */
+  async openUrl(url: string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.shell.openUrl(url)
+  },
+
+  /**
+   * Open a file or folder with the default application
+   */
+  async openPath(path: string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.shell.openPath(path)
+  },
+
+  /**
+   * 在文件管理器中显示文件
+   */
+  async showItemInFolder(path: string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.shell.showItemInFolder(path)
+  }
+}
+
+// 路径操作
+export const path = {
+  /**
+   * 获取应用数据目录
+   */
+  async appDataDir(): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.path.appDataDir()
+  },
+
+  /**
+   * 获取应用配置目录
+   */
+  async appConfigDir(): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.path.appConfigDir()
+  },
+
+  /**
+   * 获取临时目录
+   */
+  async tempDir(): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.path.tempDir()
+  },
+
+  /**
+   * 拼接路径
+   */
+  join(...paths: string[]): string {
+    return paths.join('/')
+  }
+}
+
+// 应用信息
+export const app = {
+  /**
+   * 获取应用版本
+   */
+  async getVersion(): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.app.getVersion()
+  }
+}

@@ -6,7 +6,8 @@
  */
 
 import { useState } from 'react';
-import { cn } from '@/shared/lib/utils';
+import { shell } from '@/lib/electron-api';
+import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronUp, ExternalLink, Globe } from 'lucide-react';
 
 import type { Artifact } from './types';
@@ -202,8 +203,7 @@ function getDomain(url: string): string {
 // Open URL in external browser
 async function openUrl(url: string) {
   try {
-    const { openUrl: tauriOpenUrl } = await import('@tauri-apps/plugin-opener');
-    await tauriOpenUrl(url);
+    await shell.openUrl(url);
   } catch {
     window.open(url, '_blank');
   }

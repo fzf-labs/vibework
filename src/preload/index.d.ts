@@ -152,6 +152,37 @@ interface NotificationAPI {
   }>
 }
 
+interface FSAPI {
+  readFile: (path: string) => Promise<Uint8Array>
+  readTextFile: (path: string) => Promise<string>
+  writeFile: (path: string, data: Uint8Array | string) => Promise<void>
+  writeTextFile: (path: string, content: string) => Promise<void>
+  stat: (path: string) => Promise<{ size: number; isFile: boolean; isDirectory: boolean }>
+  exists: (path: string) => Promise<boolean>
+  remove: (path: string, options?: { recursive?: boolean }) => Promise<void>
+}
+
+interface DialogAPI {
+  save: (options: UnknownRecord) => Promise<string | null>
+  open: (options: UnknownRecord) => Promise<string | string[] | null>
+}
+
+interface ShellAPI {
+  openUrl: (url: string) => Promise<void>
+  openPath: (path: string) => Promise<void>
+  showItemInFolder: (path: string) => Promise<void>
+}
+
+interface PathAPI {
+  appDataDir: () => Promise<string>
+  appConfigDir: () => Promise<string>
+  tempDir: () => Promise<string>
+}
+
+interface AppAPI {
+  getVersion: () => Promise<string>
+}
+
 interface API {
   projects: ProjectAPI
   git: GitAPI
@@ -164,6 +195,11 @@ interface API {
   previewConfig: PreviewConfigAPI
   preview: PreviewAPI
   notification: NotificationAPI
+  fs: FSAPI
+  dialog: DialogAPI
+  shell: ShellAPI
+  path: PathAPI
+  app: AppAPI
 }
 
 declare global {

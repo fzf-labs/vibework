@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { AgentMessage } from '@/shared/hooks/useAgent';
-import { useLanguage } from '@/shared/providers/language-provider';
+import type { AgentMessage } from '@/hooks/useAgent';
+import { useLanguage } from '@/providers/language-provider';
 import {
   AlertCircle,
   Box,
@@ -181,19 +181,10 @@ function ErrorMessage({ message }: { message: string }) {
     const openLogFile = async () => {
       try {
         // Try to open the log file with the system's default application
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(logPath);
+        const { shell } = await import('@/lib/electron-api');
+        await shell.showItemInFolder(logPath);
       } catch {
-        // Fallback: try to open the containing folder
-        try {
-          const { openPath } = await import('@tauri-apps/plugin-opener');
-          // Get the directory containing the log file
-          const logDir = logPath.substring(0, logPath.lastIndexOf('/')) ||
-                        logPath.substring(0, logPath.lastIndexOf('\\'));
-          await openPath(logDir);
-        } catch {
-          console.error('Failed to open log file');
-        }
+        console.error('Failed to open log file');
       }
     };
 
@@ -262,9 +253,9 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
                           e.preventDefault();
                           if (href) {
                             try {
-                              const { openUrl } =
-                                await import('@tauri-apps/plugin-opener');
-                              await openUrl(href);
+                              const { shell } =
+                                await import('@/lib/electron-api');
+                              await shell.openUrl(href);
                             } catch {
                               window.open(href, '_blank');
                             }

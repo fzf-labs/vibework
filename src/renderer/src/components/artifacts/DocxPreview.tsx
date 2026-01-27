@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { cn } from '@/shared/lib/utils';
-import { readFile, stat } from '@tauri-apps/plugin-fs';
+import { fs } from '@/lib/electron-api';
+import { cn } from '@/lib/utils';
 import JSZip from 'jszip';
 import { ExternalLink, FileText, Loader2 } from 'lucide-react';
 
@@ -33,7 +33,7 @@ export function DocxPreview({ artifact }: PreviewComponentProps) {
       try {
         // Check file size first
         if (!isRemoteUrl(artifact.path)) {
-          const fileInfo = await stat(artifact.path);
+          const fileInfo = await fs.stat(artifact.path);
           if (fileInfo.size > MAX_PREVIEW_SIZE) {
             console.log('[DOCX Preview] File too large:', fileInfo.size);
             setFileTooLarge(fileInfo.size);
@@ -56,7 +56,7 @@ export function DocxPreview({ artifact }: PreviewComponentProps) {
           }
           arrayBuffer = await response.arrayBuffer();
         } else {
-          const data = await readFile(artifact.path);
+          const data = await fs.readFile(artifact.path);
           arrayBuffer = data.buffer;
         }
 

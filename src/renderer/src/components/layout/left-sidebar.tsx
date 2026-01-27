@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ImageLogo from '@/assets/logo.png';
-import type { Task } from '@/shared/db';
-import { getSettings, type UserProfile } from '@/shared/db/settings';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import type { Task } from '@/data';
+import { getSettings, type UserProfile } from '@/data/settings';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import {
   Calendar,
   ChevronsUpDown,
@@ -14,7 +14,6 @@ import {
   Loader2,
   MoreHorizontal,
   PanelLeft,
-  PanelLeftOpen,
   Settings,
   Smartphone,
   Sparkles,

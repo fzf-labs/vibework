@@ -1,4 +1,4 @@
-import { useTheme } from '@/shared/providers/theme-provider';
+import { useTheme } from '@/providers/theme-provider';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import {
   oneDark,

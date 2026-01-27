@@ -4,7 +4,7 @@ import {
   defaultProviderIds,
   defaultProviders,
   providerDefaultModels,
-} from '@/shared/db/settings';
+} from '@/data/settings';
 import {
   Cpu,
   Database,

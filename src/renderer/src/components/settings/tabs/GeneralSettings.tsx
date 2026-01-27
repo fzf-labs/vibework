@@ -1,13 +1,13 @@
-import type { Language } from '@/core/i18n/translations';
+import type { Language } from '@/config/locale';
 import {
   accentColors,
   backgroundStyles,
   type AccentColor,
   type BackgroundStyle,
-} from '@/shared/db/settings';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
-import { useTheme } from '@/shared/providers/theme-provider';
+} from '@/data/settings';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
+import { useTheme } from '@/providers/theme-provider';
 
 import type { SettingsTabProps } from '../types';
 

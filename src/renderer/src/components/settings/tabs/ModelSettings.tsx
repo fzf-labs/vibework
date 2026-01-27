@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { cn } from '@/lib/utils';
+import { shell } from '@/lib/electron-api';
+import { useLanguage } from '@/providers/language-provider';
 import { Check, ExternalLink, Plus, Settings, Trash2, X } from 'lucide-react';
 
 import { Switch } from '../components/Switch';
@@ -36,7 +36,7 @@ function getSuggestedModels(provider: AIProvider): string[] {
 // Helper function to open external URLs
 const openExternalUrl = async (url: string) => {
   try {
-    await openUrl(url);
+    await shell.openUrl(url);
   } catch {
     window.open(url, '_blank');
   }

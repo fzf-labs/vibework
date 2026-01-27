@@ -1,19 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  createSession,
-  deleteTask,
-  getAllTasks,
-  updateTask,
-  type Task,
-} from '@/shared/db';
-import type { MessageAttachment } from '@/shared/hooks/useAgent';
+import { db, type Task } from '@/data';
+import type { MessageAttachment } from '@/hooks/useAgent';
 import {
   subscribeToBackgroundTasks,
   type BackgroundTask,
-} from '@/shared/lib/background-tasks';
-import { generateSessionId } from '@/shared/lib/session';
-import { useLanguage } from '@/shared/providers/language-provider';
+} from '@/lib/background-tasks';
+import { generateSessionId } from '@/lib/session';
+import { useLanguage } from '@/providers/language-provider';
 
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
@@ -42,7 +36,7 @@ function HomeContent() {
   useEffect(() => {
     async function loadTasks() {
       try {
-        const allTasks = await getAllTasks();
+        const allTasks = await db.getAllTasks();
         setTasks(allTasks);
       } catch (error) {
         console.error('Failed to load tasks:', error);
@@ -54,7 +48,7 @@ function HomeContent() {
   // Handle task deletion
   const handleDeleteTask = async (taskId: string) => {
     try {
-      await deleteTask(taskId);
+      await db.deleteTask(taskId);
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -64,7 +58,7 @@ function HomeContent() {
   // Handle favorite toggle
   const handleToggleFavorite = async (taskId: string, favorite: boolean) => {
     try {
-      await updateTask(taskId, { favorite });
+      await db.updateTask(taskId, { favorite });
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, favorite } : t))
       );
@@ -84,7 +78,7 @@ function HomeContent() {
     // Create a new session
     const sessionId = generateSessionId(prompt);
     try {
-      await createSession({ id: sessionId, prompt });
+      await db.createSession({ id: sessionId, prompt });
       console.log('[Home] Created new session:', sessionId);
     } catch (error) {
       console.error('[Home] Failed to create session:', error);

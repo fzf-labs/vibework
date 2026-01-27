@@ -3,23 +3,16 @@
  */
 
 import { useState } from 'react';
-import {
-  deleteMessagesByTaskId,
-  deleteTask,
-  getAllFiles,
-  getAllSessions,
-  getAllTasks,
-  getMessagesByTaskId,
-} from '@/shared/db/database';
+import { db } from '@/data';
 import {
   clearAllSettings,
   getSettings,
   saveSettings,
   type Settings,
-} from '@/shared/db/settings';
-import { getSessionsDir } from '@/shared/lib/paths';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+} from '@/data/settings';
+import { getSessionsDir } from '@/lib/paths';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -64,15 +57,15 @@ export function DataSettings() {
 
     try {
       // Gather all data
-      const sessions = await getAllSessions();
-      const tasks = await getAllTasks();
-      const files = await getAllFiles();
+      const sessions = await db.getAllSessions();
+      const tasks = await db.getAllTasks();
+      const files = await db.getAllFiles();
       const settings = getSettings();
 
       // Get messages for each task
       const allMessages: unknown[] = [];
       for (const task of tasks) {
-        const messages = await getMessagesByTaskId(task.id);
+        const messages = await db.getMessagesByTaskId(task.id);
         allMessages.push(...messages);
       }
 
@@ -89,17 +82,16 @@ export function DataSettings() {
       const jsonString = JSON.stringify(exportData, null, 2);
       const filename = `workany-backup-${new Date().toISOString().split('T')[0]}.json`;
 
-      // Use Tauri native dialog
-      const { save } = await import('@tauri-apps/plugin-dialog');
-      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      // Use Electron dialog
+      const { dialog, fs } = await import('@/lib/electron-api');
 
-      const filePath = await save({
+      const filePath = await dialog.save({
         filters: [{ name: 'JSON', extensions: ['json'] }],
         defaultPath: filename,
       });
 
       if (filePath) {
-        await writeTextFile(filePath, jsonString);
+        await fs.writeTextFile(filePath, jsonString);
         setExportStatus('success');
         setTimeout(() => setExportStatus('idle'), 2000);
       } else {
@@ -120,11 +112,10 @@ export function DataSettings() {
     setErrorMessage('');
 
     try {
-      // Use Tauri native dialog
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const { readTextFile } = await import('@tauri-apps/plugin-fs');
+      // Use Electron dialog
+      const { dialog, fs } = await import('@/lib/electron-api');
 
-      const filePath = await open({
+      const filePath = await dialog.open({
         filters: [{ name: 'JSON', extensions: ['json'] }],
         multiple: false,
       });
@@ -135,7 +126,7 @@ export function DataSettings() {
         return;
       }
 
-      const content = await readTextFile(filePath as string);
+      const content = await fs.readTextFile(filePath as string);
       const data = JSON.parse(content) as ExportData;
 
       // Validate data format
@@ -172,13 +163,13 @@ export function DataSettings() {
 
     try {
       const sessionsDir = await getSessionsDir();
-      const { remove, exists } = await import('@tauri-apps/plugin-fs');
+      const { fs } = await import('@/lib/electron-api');
 
       // Check if sessions directory exists
-      const dirExists = await exists(sessionsDir);
+      const dirExists = await fs.exists(sessionsDir);
       if (dirExists) {
         // Remove the entire sessions directory recursively
-        await remove(sessionsDir, { recursive: true });
+        await fs.remove(sessionsDir, { recursive: true });
         console.log('[DataSettings] Cleared workspace files:', sessionsDir);
       }
     } catch (error) {
@@ -205,20 +196,20 @@ export function DataSettings() {
         await clearWorkspaceFiles();
 
         // Get all tasks and delete them with their messages
-        const tasks = await getAllTasks();
+        const tasks = await db.getAllTasks();
         for (const task of tasks) {
-          await deleteMessagesByTaskId(task.id);
-          await deleteTask(task.id);
+          await db.deleteMessagesByTaskId(task.id);
+          await db.deleteTask(task.id);
         }
       } else if (type === 'all') {
         // Clear workspace files first
         await clearWorkspaceFiles();
 
         // Get all tasks and delete them with their messages
-        const tasks = await getAllTasks();
+        const tasks = await db.getAllTasks();
         for (const task of tasks) {
-          await deleteMessagesByTaskId(task.id);
-          await deleteTask(task.id);
+          await db.deleteMessagesByTaskId(task.id);
+          await db.deleteTask(task.id);
         }
 
         // Clear settings

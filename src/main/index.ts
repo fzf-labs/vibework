@@ -1,39 +1,42 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
+import { readFile, writeFile, stat, rm, access } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { ProjectManager } from './managers/ProjectManager'
-import { GitManager } from './managers/GitManager'
-import { CLIProcessManager } from './managers/CLIProcessManager'
-import { ClaudeCodeManager } from './managers/ClaudeCodeManager'
-import { CLIToolDetector } from './managers/CLIToolDetector'
-import { CLIToolConfigManager } from './managers/CLIToolConfigManager'
-import { EditorManager } from './managers/EditorManager'
-import { PipelineExecutor } from './managers/PipelineExecutor'
-import { PreviewConfigManager } from './managers/PreviewConfigManager'
-import { PreviewExecutor } from './managers/PreviewExecutor'
-import { NotificationManager } from './managers/NotificationManager'
+import { ProjectService } from './services/ProjectService'
+import { GitService } from './services/GitService'
+import { CLIProcessService } from './services/CLIProcessService'
+import { ClaudeCodeService } from './services/ClaudeCodeService'
+import { CLIToolDetectorService } from './services/CLIToolDetectorService'
+import { CLIToolConfigService } from './services/CLIToolConfigService'
+import { EditorService } from './services/EditorService'
+import { PipelineService } from './services/PipelineService'
+import { PreviewConfigService } from './services/PreviewConfigService'
+import { PreviewService } from './services/PreviewService'
+import { NotificationService } from './services/NotificationService'
+import { DatabaseService } from './services/DatabaseService'
 
-let projectManager: ProjectManager
-let gitManager: GitManager
-let cliProcessManager: CLIProcessManager
-let claudeCodeManager: ClaudeCodeManager
-let cliToolDetector: CLIToolDetector
-let cliToolConfigManager: CLIToolConfigManager
-let editorManager: EditorManager
-let pipelineExecutor: PipelineExecutor
-let previewConfigManager: PreviewConfigManager
-let previewExecutor: PreviewExecutor
-let notificationManager: NotificationManager
+let projectService: ProjectService
+let gitService: GitService
+let cliProcessService: CLIProcessService
+let claudeCodeService: ClaudeCodeService
+let cliToolDetectorService: CLIToolDetectorService
+let cliToolConfigService: CLIToolConfigService
+let editorService: EditorService
+let pipelineService: PipelineService
+let previewConfigService: PreviewConfigService
+let previewService: PreviewService
+let notificationService: NotificationService
+let databaseService: DatabaseService
 
-type CLIToolConfigInput = Parameters<CLIToolConfigManager['saveConfig']>[1]
-type ClaudeCodeConfigUpdate = Parameters<ClaudeCodeManager['saveConfig']>[0]
-type ClaudeCodeSessionOptions = Parameters<ClaudeCodeManager['startSession']>[2]
-type NotificationOptions = Parameters<NotificationManager['showNotification']>[0]
-type NotificationSoundSettings = Parameters<NotificationManager['setSoundSettings']>[0]
-type PipelineStages = Parameters<PipelineExecutor['executePipeline']>[1]
-type PreviewConfigInput = Parameters<PreviewConfigManager['addConfig']>[0]
-type PreviewConfigUpdates = Parameters<PreviewConfigManager['updateConfig']>[1]
+type CLIToolConfigInput = Parameters<CLIToolConfigService['saveConfig']>[1]
+type ClaudeCodeConfigUpdate = Parameters<ClaudeCodeService['saveConfig']>[0]
+type ClaudeCodeSessionOptions = Parameters<ClaudeCodeService['startSession']>[2]
+type NotificationOptions = Parameters<NotificationService['showNotification']>[0]
+type NotificationSoundSettings = Parameters<NotificationService['setSoundSettings']>[0]
+type PipelineStages = Parameters<PipelineService['executePipeline']>[1]
+type PreviewConfigInput = Parameters<PreviewConfigService['addConfig']>[0]
+type PreviewConfigUpdates = Parameters<PreviewConfigService['updateConfig']>[1]
 
 function createWindow(): void {
   // Create the browser window.
@@ -81,44 +84,45 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Initialize managers
-  projectManager = new ProjectManager()
-  gitManager = new GitManager()
-  cliProcessManager = new CLIProcessManager()
-  claudeCodeManager = new ClaudeCodeManager()
-  cliToolDetector = new CLIToolDetector()
-  cliToolConfigManager = new CLIToolConfigManager()
-  editorManager = new EditorManager()
-  pipelineExecutor = new PipelineExecutor()
-  previewConfigManager = new PreviewConfigManager()
-  previewExecutor = new PreviewExecutor()
-  notificationManager = new NotificationManager()
+  // Initialize services
+  projectService = new ProjectService()
+  gitService = new GitService()
+  cliProcessService = new CLIProcessService()
+  claudeCodeService = new ClaudeCodeService()
+  cliToolDetectorService = new CLIToolDetectorService()
+  cliToolConfigService = new CLIToolConfigService()
+  editorService = new EditorService()
+  pipelineService = new PipelineService()
+  previewConfigService = new PreviewConfigService()
+  previewService = new PreviewService()
+  notificationService = new NotificationService()
+  databaseService = new DatabaseService()
 
   // IPC handlers for project management
   ipcMain.handle('projects:getAll', () => {
-    return projectManager.getAllProjects()
+    return projectService.getAllProjects()
   })
 
   ipcMain.handle('projects:get', (_, id: string) => {
-    return projectManager.getProject(id)
+    return projectService.getProject(id)
   })
 
   ipcMain.handle('projects:add', (_, project) => {
-    return projectManager.addProject(project)
+    return projectService.addProject(project)
   })
 
   ipcMain.handle('projects:update', (_, id: string, updates) => {
-    return projectManager.updateProject(id, updates)
+    return projectService.updateProject(id, updates)
   })
 
   ipcMain.handle('projects:delete', (_, id: string) => {
-    return projectManager.deleteProject(id)
+    return projectService.deleteProject(id)
   })
 
   // IPC handlers for Git operations
   ipcMain.handle('git:clone', async (_, remoteUrl: string, targetPath: string) => {
     try {
-      await gitManager.clone(remoteUrl, targetPath)
+      await gitService.clone(remoteUrl, targetPath)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -127,7 +131,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:init', async (_, path: string) => {
     try {
-      await gitManager.init(path)
+      await gitService.init(path)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -136,7 +140,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:listWorktrees', async (_, repoPath: string) => {
     try {
-      const worktrees = await gitManager.listWorktrees(repoPath)
+      const worktrees = await gitService.listWorktrees(repoPath)
       return { success: true, data: worktrees }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -153,7 +157,7 @@ app.whenReady().then(() => {
       createBranch: boolean
     ) => {
       try {
-        await gitManager.addWorktree(repoPath, worktreePath, branchName, createBranch)
+        await gitService.addWorktree(repoPath, worktreePath, branchName, createBranch)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -165,7 +169,7 @@ app.whenReady().then(() => {
     'git:removeWorktree',
     async (_, repoPath: string, worktreePath: string, force: boolean) => {
       try {
-        await gitManager.removeWorktree(repoPath, worktreePath, force)
+        await gitService.removeWorktree(repoPath, worktreePath, force)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -175,7 +179,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:pruneWorktrees', async (_, repoPath: string) => {
     try {
-      await gitManager.pruneWorktrees(repoPath)
+      await gitService.pruneWorktrees(repoPath)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -184,7 +188,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getDiff', async (_, repoPath: string, filePath?: string) => {
     try {
-      const diff = await gitManager.getDiff(repoPath, filePath)
+      const diff = await gitService.getDiff(repoPath, filePath)
       return { success: true, data: diff }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -193,7 +197,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getStagedDiff', async (_, repoPath: string, filePath?: string) => {
     try {
-      const diff = await gitManager.getStagedDiff(repoPath, filePath)
+      const diff = await gitService.getStagedDiff(repoPath, filePath)
       return { success: true, data: diff }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -202,7 +206,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getBranches', async (_, repoPath: string) => {
     try {
-      const branches = await gitManager.getBranches(repoPath)
+      const branches = await gitService.getBranches(repoPath)
       return { success: true, data: branches }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -211,7 +215,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getCurrentBranch', async (_, repoPath: string) => {
     try {
-      const branch = await gitManager.getCurrentBranch(repoPath)
+      const branch = await gitService.getCurrentBranch(repoPath)
       return { success: true, data: branch }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -220,7 +224,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getChangedFiles', async (_, repoPath: string) => {
     try {
-      const files = await gitManager.getChangedFiles(repoPath)
+      const files = await gitService.getChangedFiles(repoPath)
       return { success: true, data: files }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -229,7 +233,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:stageFiles', async (_, repoPath: string, filePaths: string[]) => {
     try {
-      await gitManager.stageFiles(repoPath, filePaths)
+      await gitService.stageFiles(repoPath, filePaths)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -238,7 +242,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:unstageFiles', async (_, repoPath: string, filePaths: string[]) => {
     try {
-      await gitManager.unstageFiles(repoPath, filePaths)
+      await gitService.unstageFiles(repoPath, filePaths)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -247,7 +251,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:mergeBranch', async (_, repoPath: string, branchName: string) => {
     try {
-      const result = await gitManager.mergeBranch(repoPath, branchName)
+      const result = await gitService.mergeBranch(repoPath, branchName)
       return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -256,7 +260,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getConflictFiles', async (_, repoPath: string) => {
     try {
-      const conflicts = await gitManager.getConflictFiles(repoPath)
+      const conflicts = await gitService.getConflictFiles(repoPath)
       return { success: true, data: conflicts }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -265,7 +269,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:abortMerge', async (_, repoPath: string) => {
     try {
-      await gitManager.abortMerge(repoPath)
+      await gitService.abortMerge(repoPath)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -274,7 +278,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getConflictContent', async (_, repoPath: string, filePath: string) => {
     try {
-      const content = await gitManager.getConflictContent(repoPath, filePath)
+      const content = await gitService.getConflictContent(repoPath, filePath)
       return { success: true, data: content }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -285,7 +289,7 @@ app.whenReady().then(() => {
     'git:resolveConflict',
     async (_, repoPath: string, filePath: string, strategy: 'ours' | 'theirs') => {
       try {
-        await gitManager.resolveConflict(repoPath, filePath, strategy)
+        await gitService.resolveConflict(repoPath, filePath, strategy)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -295,7 +299,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:rebaseBranch', async (_, repoPath: string, targetBranch: string) => {
     try {
-      const result = await gitManager.rebaseBranch(repoPath, targetBranch)
+      const result = await gitService.rebaseBranch(repoPath, targetBranch)
       return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -304,7 +308,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:rebaseContinue', async (_, repoPath: string) => {
     try {
-      const result = await gitManager.rebaseContinue(repoPath)
+      const result = await gitService.rebaseContinue(repoPath)
       return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -313,7 +317,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:rebaseAbort', async (_, repoPath: string) => {
     try {
-      await gitManager.rebaseAbort(repoPath)
+      await gitService.rebaseAbort(repoPath)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -322,7 +326,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:rebaseSkip', async (_, repoPath: string) => {
     try {
-      const result = await gitManager.rebaseSkip(repoPath)
+      const result = await gitService.rebaseSkip(repoPath)
       return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -331,7 +335,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getRemoteUrl', async (_, repoPath: string, remoteName?: string) => {
     try {
-      const url = await gitManager.getRemoteUrl(repoPath, remoteName)
+      const url = await gitService.getRemoteUrl(repoPath, remoteName)
       return { success: true, data: url }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -342,7 +346,7 @@ app.whenReady().then(() => {
     'git:pushBranch',
     async (_, repoPath: string, branchName: string, remoteName?: string, force?: boolean) => {
       try {
-        await gitManager.pushBranch(repoPath, branchName, remoteName, force)
+        await gitService.pushBranch(repoPath, branchName, remoteName, force)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -352,7 +356,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('git:getCommitLog', async (_, repoPath: string, limit?: number) => {
     try {
-      const commits = await gitManager.getCommitLog(repoPath, limit)
+      const commits = await gitService.getCommitLog(repoPath, limit)
       return { success: true, data: commits }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -364,7 +368,7 @@ app.whenReady().then(() => {
     'cli:startSession',
     (_, sessionId: string, command: string, args: string[], cwd?: string) => {
       try {
-        cliProcessManager.startSession(sessionId, command, args, cwd)
+        cliProcessService.startSession(sessionId, command, args, cwd)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -374,7 +378,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('cli:stopSession', (_, sessionId: string) => {
     try {
-      cliProcessManager.stopSession(sessionId)
+      cliProcessService.stopSession(sessionId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -383,7 +387,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('cli:getOutput', (_, sessionId: string) => {
     try {
-      return cliProcessManager.getSessionOutput(sessionId)
+      return cliProcessService.getSessionOutput(sessionId)
     } catch (error) {
       console.error('Failed to get CLI output:', error)
       return []
@@ -392,12 +396,12 @@ app.whenReady().then(() => {
 
   // IPC handlers for Claude Code
   ipcMain.handle('claudeCode:getConfig', () => {
-    return claudeCodeManager.getConfig()
+    return claudeCodeService.getConfig()
   })
 
   ipcMain.handle('claudeCode:saveConfig', (_, config: ClaudeCodeConfigUpdate) => {
     try {
-      claudeCodeManager.saveConfig(config)
+      claudeCodeService.saveConfig(config)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -408,7 +412,7 @@ app.whenReady().then(() => {
     'claudeCode:startSession',
     (_, sessionId: string, workdir: string, options?: ClaudeCodeSessionOptions) => {
       try {
-        claudeCodeManager.startSession(sessionId, workdir, options)
+        claudeCodeService.startSession(sessionId, workdir, options)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -418,7 +422,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claudeCode:stopSession', (_, sessionId: string) => {
     try {
-      claudeCodeManager.stopSession(sessionId)
+      claudeCodeService.stopSession(sessionId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -427,7 +431,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claudeCode:sendInput', (_, sessionId: string, input: string) => {
     try {
-      claudeCodeManager.sendInput(sessionId, input)
+      claudeCodeService.sendInput(sessionId, input)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -436,7 +440,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claudeCode:getOutput', (_, sessionId: string) => {
     try {
-      return claudeCodeManager.getSessionOutput(sessionId)
+      return claudeCodeService.getSessionOutput(sessionId)
     } catch (error) {
       console.error('Failed to get Claude Code output:', error)
       return []
@@ -444,30 +448,30 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('claudeCode:getSessions', () => {
-    return claudeCodeManager.getAllSessions()
+    return claudeCodeService.getAllSessions()
   })
 
   // IPC handlers for CLI tool detection
   ipcMain.handle('cliTools:getAll', () => {
-    return cliToolDetector.getAllTools()
+    return cliToolDetectorService.getAllTools()
   })
 
   ipcMain.handle('cliTools:detect', async (_, toolId: string) => {
-    return await cliToolDetector.detectTool(toolId)
+    return await cliToolDetectorService.detectTool(toolId)
   })
 
   ipcMain.handle('cliTools:detectAll', async () => {
-    return await cliToolDetector.detectAllTools()
+    return await cliToolDetectorService.detectAllTools()
   })
 
   // IPC handlers for CLI tool config
   ipcMain.handle('cliToolConfig:get', (_, toolId: string) => {
-    return cliToolConfigManager.getConfig(toolId)
+    return cliToolConfigService.getConfig(toolId)
   })
 
   ipcMain.handle('cliToolConfig:save', (_, toolId: string, config: CLIToolConfigInput) => {
     try {
-      cliToolConfigManager.saveConfig(toolId, config)
+      cliToolConfigService.saveConfig(toolId, config)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -476,12 +480,12 @@ app.whenReady().then(() => {
 
   // IPC handlers for editor management
   ipcMain.handle('editor:getAvailable', () => {
-    return editorManager.getAvailableEditors()
+    return editorService.getAvailableEditors()
   })
 
   ipcMain.handle('editor:openProject', async (_, projectPath: string, editorCommand: string) => {
     try {
-      await editorManager.openProject(projectPath, editorCommand)
+      await editorService.openProject(projectPath, editorCommand)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -493,7 +497,7 @@ app.whenReady().then(() => {
     'pipeline:execute',
     async (_, pipelineId: string, stages: PipelineStages, workingDirectory?: string) => {
       try {
-        const executionId = await pipelineExecutor.executePipeline(
+        const executionId = await pipelineService.executePipeline(
           pipelineId,
           stages,
           workingDirectory
@@ -506,16 +510,16 @@ app.whenReady().then(() => {
   )
 
   ipcMain.handle('pipeline:getExecution', (_, executionId: string) => {
-    return pipelineExecutor.getExecution(executionId)
+    return pipelineService.getExecution(executionId)
   })
 
   ipcMain.handle('pipeline:getAllExecutions', () => {
-    return pipelineExecutor.getAllExecutions()
+    return pipelineService.getAllExecutions()
   })
 
   ipcMain.handle('pipeline:approveStage', (_, stageExecutionId: string, approvedBy: string) => {
     try {
-      pipelineExecutor.approveStage(stageExecutionId, approvedBy)
+      pipelineService.approveStage(stageExecutionId, approvedBy)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -524,7 +528,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('pipeline:cancel', (_, executionId: string) => {
     try {
-      pipelineExecutor.cancelExecution(executionId)
+      pipelineService.cancelExecution(executionId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -533,20 +537,20 @@ app.whenReady().then(() => {
 
   // IPC handlers for preview config management
   ipcMain.handle('previewConfig:getAll', () => {
-    return previewConfigManager.getAllConfigs()
+    return previewConfigService.getAllConfigs()
   })
 
   ipcMain.handle('previewConfig:getByProject', (_, projectId: string) => {
-    return previewConfigManager.getConfigsByProject(projectId)
+    return previewConfigService.getConfigsByProject(projectId)
   })
 
   ipcMain.handle('previewConfig:get', (_, id: string) => {
-    return previewConfigManager.getConfig(id)
+    return previewConfigService.getConfig(id)
   })
 
   ipcMain.handle('previewConfig:add', (_, config: PreviewConfigInput) => {
     try {
-      const newConfig = previewConfigManager.addConfig(config)
+      const newConfig = previewConfigService.addConfig(config)
       return { success: true, data: newConfig }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -555,7 +559,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('previewConfig:update', (_, id: string, updates: PreviewConfigUpdates) => {
     try {
-      const updatedConfig = previewConfigManager.updateConfig(id, updates)
+      const updatedConfig = previewConfigService.updateConfig(id, updates)
       return { success: true, data: updatedConfig }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -564,7 +568,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('previewConfig:delete', (_, id: string) => {
     try {
-      const deleted = previewConfigManager.deleteConfig(id)
+      const deleted = previewConfigService.deleteConfig(id)
       return { success: true, data: deleted }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -584,7 +588,7 @@ app.whenReady().then(() => {
       env?: Record<string, string>
     ) => {
       try {
-        previewExecutor.startPreview(instanceId, configId, command, args, cwd, env)
+        previewService.startPreview(instanceId, configId, command, args, cwd, env)
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -594,7 +598,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('preview:stop', (_, instanceId: string) => {
     try {
-      previewExecutor.stopPreview(instanceId)
+      previewService.stopPreview(instanceId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -602,20 +606,20 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('preview:getInstance', (_, instanceId: string) => {
-    return previewExecutor.getInstance(instanceId)
+    return previewService.getInstance(instanceId)
   })
 
   ipcMain.handle('preview:getAllInstances', () => {
-    return previewExecutor.getAllInstances()
+    return previewService.getAllInstances()
   })
 
   ipcMain.handle('preview:getOutput', (_, instanceId: string, limit?: number) => {
-    return previewExecutor.getOutput(instanceId, limit)
+    return previewService.getOutput(instanceId, limit)
   })
 
   ipcMain.handle('preview:clearInstance', (_, instanceId: string) => {
     try {
-      previewExecutor.clearInstance(instanceId)
+      previewService.clearInstance(instanceId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -625,7 +629,7 @@ app.whenReady().then(() => {
   // IPC handlers for notifications
   ipcMain.handle('notification:show', (_, options: NotificationOptions) => {
     try {
-      notificationManager.showNotification(options)
+      notificationService.showNotification(options)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -633,30 +637,339 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('notification:setEnabled', (_, enabled: boolean) => {
-    notificationManager.setEnabled(enabled)
+    notificationService.setEnabled(enabled)
     return { success: true }
   })
 
   ipcMain.handle('notification:isEnabled', () => {
-    return notificationManager.isEnabled()
+    return notificationService.isEnabled()
   })
 
   ipcMain.handle('notification:setSoundEnabled', (_, enabled: boolean) => {
-    notificationManager.setSoundEnabled(enabled)
+    notificationService.setSoundEnabled(enabled)
     return { success: true }
   })
 
   ipcMain.handle('notification:isSoundEnabled', () => {
-    return notificationManager.isSoundEnabled()
+    return notificationService.isSoundEnabled()
   })
 
   ipcMain.handle('notification:setSoundSettings', (_, settings: NotificationSoundSettings) => {
-    notificationManager.setSoundSettings(settings)
+    notificationService.setSoundSettings(settings)
     return { success: true }
   })
 
   ipcMain.handle('notification:getSoundSettings', () => {
-    return notificationManager.getSoundSettings()
+    return notificationService.getSoundSettings()
+  })
+
+  // IPC handlers for database operations
+  // Session operations
+  ipcMain.handle('db:createSession', (_, input) => {
+    try {
+      return databaseService.createSession(input)
+    } catch (error) {
+      console.error('Failed to create session:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getSession', (_, id: string) => {
+    try {
+      return databaseService.getSession(id)
+    } catch (error) {
+      console.error('Failed to get session:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getAllSessions', () => {
+    try {
+      return databaseService.getAllSessions()
+    } catch (error) {
+      console.error('Failed to get all sessions:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:updateSessionTaskCount', (_, sessionId: string, count: number) => {
+    try {
+      databaseService.updateSessionTaskCount(sessionId, count)
+      return { success: true }
+    } catch (error) {
+      console.error('Failed to update session task count:', error)
+      throw error
+    }
+  })
+
+  // Task operations
+  ipcMain.handle('db:createTask', (_, input) => {
+    try {
+      return databaseService.createTask(input)
+    } catch (error) {
+      console.error('Failed to create task:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getTask', (_, id: string) => {
+    try {
+      return databaseService.getTask(id)
+    } catch (error) {
+      console.error('Failed to get task:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getAllTasks', () => {
+    try {
+      return databaseService.getAllTasks()
+    } catch (error) {
+      console.error('Failed to get all tasks:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:updateTask', (_, id: string, updates) => {
+    try {
+      return databaseService.updateTask(id, updates)
+    } catch (error) {
+      console.error('Failed to update task:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:deleteTask', (_, id: string) => {
+    try {
+      return databaseService.deleteTask(id)
+    } catch (error) {
+      console.error('Failed to delete task:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getTasksBySessionId', (_, sessionId: string) => {
+    try {
+      return databaseService.getTasksBySessionId(sessionId)
+    } catch (error) {
+      console.error('Failed to get tasks by session:', error)
+      throw error
+    }
+  })
+
+  // Message operations
+  ipcMain.handle('db:createMessage', (_, input) => {
+    try {
+      return databaseService.createMessage(input)
+    } catch (error) {
+      console.error('Failed to create message:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getMessagesByTaskId', (_, taskId: string) => {
+    try {
+      return databaseService.getMessagesByTaskId(taskId)
+    } catch (error) {
+      console.error('Failed to get messages:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:deleteMessagesByTaskId', (_, taskId: string) => {
+    try {
+      return databaseService.deleteMessagesByTaskId(taskId)
+    } catch (error) {
+      console.error('Failed to delete messages:', error)
+      throw error
+    }
+  })
+
+  // File operations
+  ipcMain.handle('db:createFile', (_, input) => {
+    try {
+      return databaseService.createFile(input)
+    } catch (error) {
+      console.error('Failed to create file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getFilesByTaskId', (_, taskId: string) => {
+    try {
+      return databaseService.getFilesByTaskId(taskId)
+    } catch (error) {
+      console.error('Failed to get files:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getAllFiles', () => {
+    try {
+      return databaseService.getAllFiles()
+    } catch (error) {
+      console.error('Failed to get all files:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:toggleFileFavorite', (_, fileId: number) => {
+    try {
+      return databaseService.toggleFileFavorite(fileId)
+    } catch (error) {
+      console.error('Failed to toggle file favorite:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:deleteFile', (_, fileId: number) => {
+    try {
+      return databaseService.deleteFile(fileId)
+    } catch (error) {
+      console.error('Failed to delete file:', error)
+      throw error
+    }
+  })
+
+  // IPC handlers for file system operations
+  ipcMain.handle('fs:readFile', async (_, path: string) => {
+    try {
+      const buffer = await readFile(path)
+      return new Uint8Array(buffer)
+    } catch (error) {
+      console.error('Failed to read file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:readTextFile', async (_, path: string) => {
+    try {
+      return await readFile(path, 'utf-8')
+    } catch (error) {
+      console.error('Failed to read text file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:writeFile', async (_, path: string, data: Uint8Array | string) => {
+    try {
+      await writeFile(path, data)
+    } catch (error) {
+      console.error('Failed to write file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:writeTextFile', async (_, path: string, content: string) => {
+    try {
+      await writeFile(path, content, 'utf-8')
+    } catch (error) {
+      console.error('Failed to write text file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:stat', async (_, path: string) => {
+    try {
+      const stats = await stat(path)
+      return {
+        size: stats.size,
+        isFile: stats.isFile(),
+        isDirectory: stats.isDirectory()
+      }
+    } catch (error) {
+      console.error('Failed to stat file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:exists', async (_, path: string) => {
+    try {
+      await access(path)
+      return true
+    } catch {
+      return false
+    }
+  })
+
+  ipcMain.handle('fs:remove', async (_, path: string, options?: { recursive?: boolean }) => {
+    try {
+      await rm(path, { recursive: options?.recursive || false })
+    } catch (error) {
+      console.error('Failed to remove file:', error)
+      throw error
+    }
+  })
+
+  // IPC handlers for dialog operations
+  ipcMain.handle('dialog:save', async (_, options) => {
+    try {
+      const result = await dialog.showSaveDialog(options)
+      return result.canceled ? null : result.filePath
+    } catch (error) {
+      console.error('Failed to show save dialog:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('dialog:open', async (_, options) => {
+    try {
+      const result = await dialog.showOpenDialog(options)
+      if (result.canceled) return null
+      return options.multiple ? result.filePaths : result.filePaths[0]
+    } catch (error) {
+      console.error('Failed to show open dialog:', error)
+      throw error
+    }
+  })
+
+  // IPC handlers for shell operations
+  ipcMain.handle('shell:openUrl', async (_, url: string) => {
+    try {
+      await shell.openExternal(url)
+    } catch (error) {
+      console.error('Failed to open URL:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('shell:openPath', async (_, path: string) => {
+    try {
+      const result = await shell.openPath(path)
+      if (result) {
+        throw new Error(result)
+      }
+    } catch (error) {
+      console.error('Failed to open path:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('shell:showItemInFolder', async (_, path: string) => {
+    try {
+      shell.showItemInFolder(path)
+    } catch (error) {
+      console.error('Failed to show item in folder:', error)
+      throw error
+    }
+  })
+
+  // IPC handlers for path operations
+  ipcMain.handle('path:appDataDir', () => {
+    return app.getPath('appData')
+  })
+
+  ipcMain.handle('path:appConfigDir', () => {
+    return app.getPath('userData')
+  })
+
+  ipcMain.handle('path:tempDir', () => {
+    return app.getPath('temp')
+  })
+
+  // IPC handlers for app operations
+  ipcMain.handle('app:getVersion', () => {
+    return app.getVersion()
   })
 
   createWindow()
@@ -674,6 +987,13 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+// Close database connection before app quits
+app.on('before-quit', () => {
+  if (databaseService) {
+    databaseService.close()
   }
 })
 

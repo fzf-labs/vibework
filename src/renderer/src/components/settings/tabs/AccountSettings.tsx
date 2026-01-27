@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { useLanguage } from '@/shared/providers/language-provider';
+import { useLanguage } from '@/providers/language-provider';
 import { Camera, User } from 'lucide-react';
 
 import type { SettingsTabProps } from '../types';

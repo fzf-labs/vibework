@@ -8,9 +8,9 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '@/config';
-import { saveSettingItem } from '@/shared/db/settings';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import { saveSettingItem } from '@/data/settings';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import {
   AlertCircle,
   ArrowRight,
@@ -25,7 +25,7 @@ import {
   Terminal,
 } from 'lucide-react';
 
-import { clearDependencyCache } from '@/components/setup-guard';
+import { clearDependencyCache } from '@/components/shared/SetupGuard';
 
 // Helper function to copy text to clipboard
 const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -50,9 +50,9 @@ const openTerminalWithCommand = async (command: string) => {
   await copyToClipboard(command);
 
   try {
-    // Open Terminal.app
-    const { openPath } = await import('@tauri-apps/plugin-opener');
-    await openPath('/System/Applications/Utilities/Terminal.app');
+    // Open Terminal.app using Electron shell
+    const { shell } = await import('@/lib/electron-api');
+    await shell.openUrl('file:///System/Applications/Utilities/Terminal.app');
   } catch (error) {
     console.error('Failed to open terminal:', error);
   }
@@ -238,7 +238,7 @@ export function SetupPage({ onSkip }: SetupPageProps = {}) {
         {/* Header */}
         <div className="border-border border-b py-6">
           <h1 className="text-foreground text-2xl font-semibold">
-            {t.setup?.title || 'Welcome to WorkAny'}
+            {t.setup?.title || 'Welcome to vibework'}
           </h1>
           <p className="text-muted-foreground mt-2">
             {t.setup?.subtitle ||

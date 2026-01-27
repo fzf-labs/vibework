@@ -1,4 +1,4 @@
-import type { PreviewStatus } from '@/shared/hooks/useVitePreview';
+import type { PreviewStatus } from '@/hooks/useVitePreview';
 
 export type ArtifactType =
   | 'html'

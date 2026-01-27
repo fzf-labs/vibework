@@ -6,9 +6,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageAttachment } from '@/shared/hooks/useAgent';
-import { cn } from '@/shared/lib/utils';
-import { useLanguage } from '@/shared/providers/language-provider';
+import type { MessageAttachment } from '@/hooks/useAgent';
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/providers/language-provider';
 import {
   ArrowUp,
   FileText,

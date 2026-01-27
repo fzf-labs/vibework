@@ -144,6 +144,61 @@ const api = {
       error?: boolean
     }) => ipcRenderer.invoke('notification:setSoundSettings', settings),
     getSoundSettings: () => ipcRenderer.invoke('notification:getSoundSettings')
+  },
+  database: {
+    // Session operations
+    createSession: (input: unknown) => ipcRenderer.invoke('db:createSession', input),
+    getSession: (id: string) => ipcRenderer.invoke('db:getSession', id),
+    getAllSessions: () => ipcRenderer.invoke('db:getAllSessions'),
+    updateSessionTaskCount: (sessionId: string, count: number) =>
+      ipcRenderer.invoke('db:updateSessionTaskCount', sessionId, count),
+    // Task operations
+    createTask: (input: unknown) => ipcRenderer.invoke('db:createTask', input),
+    getTask: (id: string) => ipcRenderer.invoke('db:getTask', id),
+    getAllTasks: () => ipcRenderer.invoke('db:getAllTasks'),
+    updateTask: (id: string, updates: unknown) => ipcRenderer.invoke('db:updateTask', id, updates),
+    deleteTask: (id: string) => ipcRenderer.invoke('db:deleteTask', id),
+    getTasksBySessionId: (sessionId: string) =>
+      ipcRenderer.invoke('db:getTasksBySessionId', sessionId),
+    // Message operations
+    createMessage: (input: unknown) => ipcRenderer.invoke('db:createMessage', input),
+    getMessagesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getMessagesByTaskId', taskId),
+    deleteMessagesByTaskId: (taskId: string) =>
+      ipcRenderer.invoke('db:deleteMessagesByTaskId', taskId),
+    // File operations
+    createFile: (input: unknown) => ipcRenderer.invoke('db:createFile', input),
+    getFilesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getFilesByTaskId', taskId),
+    getAllFiles: () => ipcRenderer.invoke('db:getAllFiles'),
+    toggleFileFavorite: (fileId: number) => ipcRenderer.invoke('db:toggleFileFavorite', fileId),
+    deleteFile: (fileId: number) => ipcRenderer.invoke('db:deleteFile', fileId)
+  },
+  fs: {
+    readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
+    readTextFile: (path: string) => ipcRenderer.invoke('fs:readTextFile', path),
+    writeFile: (path: string, data: unknown) => ipcRenderer.invoke('fs:writeFile', path, data),
+    writeTextFile: (path: string, content: string) =>
+      ipcRenderer.invoke('fs:writeTextFile', path, content),
+    stat: (path: string) => ipcRenderer.invoke('fs:stat', path),
+    exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
+    remove: (path: string, options?: { recursive?: boolean }) =>
+      ipcRenderer.invoke('fs:remove', path, options)
+  },
+  dialog: {
+    save: (options: unknown) => ipcRenderer.invoke('dialog:save', options),
+    open: (options: unknown) => ipcRenderer.invoke('dialog:open', options)
+  },
+  shell: {
+    openUrl: (url: string) => ipcRenderer.invoke('shell:openUrl', url),
+    openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
+    showItemInFolder: (path: string) => ipcRenderer.invoke('shell:showItemInFolder', path)
+  },
+  path: {
+    appDataDir: () => ipcRenderer.invoke('path:appDataDir'),
+    appConfigDir: () => ipcRenderer.invoke('path:appConfigDir'),
+    tempDir: () => ipcRenderer.invoke('path:tempDir')
+  },
+  app: {
+    getVersion: () => ipcRenderer.invoke('app:getVersion')
   }
 }
 
