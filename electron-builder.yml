@@ -1,5 +1,6 @@
-appId: com.electron.app
-productName: vibework
+appId: com.fzf-labs.vibework
+productName: VibeWork
+icon: resources/icon.png
 directories:
   buildResources: build
 files:
@@ -12,7 +13,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: vibework
+  executableName: VibeWork
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

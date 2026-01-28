@@ -12,10 +12,16 @@ export class MsgStoreService extends EventEmitter {
   private history: StoredMsg[] = []
   private totalBytes = 0
   private config: MsgStoreConfig
+  private sessionId: string | null = null
+  private logFilePath: string | null = null
 
-  constructor(config?: Partial<MsgStoreConfig>) {
+  constructor(config?: Partial<MsgStoreConfig>, sessionId?: string) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
+    if (sessionId) {
+      this.sessionId = sessionId
+      this.logFilePath = getAppPaths().getSessionLogFile(sessionId)
+    }
   }
 
   /**
@@ -46,6 +52,15 @@ export class MsgStoreService extends EventEmitter {
     // 存储新消息
     this.history.push({ msg, bytes })
     this.totalBytes += bytes
+
+    // 持久化到文件
+    if (this.logFilePath) {
+      try {
+        appendFileSync(this.logFilePath, JSON.stringify(msg) + '\n')
+      } catch (error) {
+        console.error('[MsgStore] Failed to persist log:', error)
+      }
+    }
 
     // 广播给所有监听者
     this.emit('message', msg)
@@ -81,6 +96,25 @@ export class MsgStoreService extends EventEmitter {
     return {
       messageCount: this.history.length,
       totalBytes: this.totalBytes
+    }
+  }
+
+  /**
+   * 从文件加载历史日志（静态方法）
+   */
+  static loadFromFile(sessionId: string): LogMsg[] {
+    const logFilePath = getAppPaths().getSessionLogFile(sessionId)
+    if (!existsSync(logFilePath)) {
+      return []
+    }
+
+    try {
+      const content = readFileSync(logFilePath, 'utf-8')
+      const lines = content.trim().split('\n').filter(Boolean)
+      return lines.map((line) => JSON.parse(line) as LogMsg)
+    } catch (error) {
+      console.error('[MsgStore] Failed to load log file:', error)
+      return []
     }
   }
 }

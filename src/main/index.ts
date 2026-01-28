@@ -34,6 +34,9 @@ let databaseService: DatabaseService
 let settingsService: SettingsService
 let taskService: TaskService
 
+const APP_NAME = 'VibeWork'
+const APP_IDENTIFIER = 'com.fzf-labs.vibework'
+
 type CLIToolConfigInput = Parameters<CLIToolConfigService['saveConfig']>[1]
 type ClaudeCodeConfigUpdate = Parameters<ClaudeCodeService['saveConfig']>[0]
 type ClaudeCodeSessionOptions = Parameters<ClaudeCodeService['startSession']>[2]
@@ -50,9 +53,11 @@ function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
+    title: '',
+    fullscreen: false,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -60,6 +65,7 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('ready-to-show', () => {
+    mainWindow?.maximize()
     mainWindow?.show()
   })
 
@@ -83,8 +89,14 @@ function createWindow(): BrowserWindow {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  app.setName(APP_NAME)
+
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId(APP_IDENTIFIER)
+
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(icon)
+  }
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

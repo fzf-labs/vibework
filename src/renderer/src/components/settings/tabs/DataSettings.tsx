@@ -1,16 +1,11 @@
 /**
- * Data Settings - Export, Import, and Clear Data
+ * Data Settings - Export, Import, and Delete Data
  */
 
-import { useState } from 'react';
-import { db } from '@/data';
-import {
-  clearAllSettings,
-  getSettings,
-  saveSettings,
-  type Settings,
-} from '@/data/settings';
-import { getSessionsDir } from '@/lib/paths';
+import { useEffect, useState } from 'react';
+import JSZip from 'jszip';
+import type { fs as ElectronFs } from '@/lib/electron-api';
+import { getDisplayPath, getVibeworkDataDir } from '@/lib/paths';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
@@ -22,82 +17,223 @@ import {
   Upload,
 } from 'lucide-react';
 
-// Check if running in Tauri environment
-function isTauri(): boolean {
-  if (typeof window === 'undefined') return false;
-  return '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
-}
+type FsApi = typeof ElectronFs;
 
-interface ExportData {
-  version: number;
-  exportedAt: string;
-  sessions: unknown[];
-  tasks: unknown[];
-  messages: unknown[];
-  files: unknown[];
-  settings?: Settings;
+interface FileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  children?: FileEntry[];
 }
 
 type OperationStatus = 'idle' | 'loading' | 'success' | 'error';
-type ClearType = 'tasks' | 'settings' | 'all' | null;
+
+const formatDate = (value: Date): string => value.toISOString().split('T')[0];
+
+const formatDateTime = (value: Date): string => {
+  const pad = (num: number) => String(num).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}-${pad(value.getHours())}${pad(value.getMinutes())}${pad(value.getSeconds())}`;
+};
+
+const toZipPath = (value: string): string => value.replace(/\\/g, '/');
+
+const trimTrailingSeparators = (value: string): string =>
+  value.replace(/[\\/]+$/, '');
+
+const getBaseName = (value: string): string => {
+  const trimmed = trimTrailingSeparators(value);
+  const lastSlash = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSlash === -1 ? trimmed : trimmed.slice(lastSlash + 1);
+};
+
+const getParentDir = (value: string): string => {
+  const trimmed = trimTrailingSeparators(value);
+  const lastSlash = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSlash === -1 ? trimmed : trimmed.slice(0, lastSlash);
+};
+
+const joinPath = (base: string, ...parts: string[]): string => {
+  if (!base) return parts.join('/');
+  const sep = base.includes('\\') ? '\\' : '/';
+  const sanitized = [base, ...parts]
+    .filter(Boolean)
+    .map((part, index) => {
+      if (index === 0) return trimTrailingSeparators(part);
+      return part.replace(/^[\\/]+/, '').replace(/[\\/]+$/, '');
+    });
+  return sanitized.join(sep);
+};
+
+const resolvePath = async (targetPath: string): Promise<string> => {
+  if (!targetPath) return targetPath;
+  if (targetPath.startsWith('~') && window.api?.path?.homeDir) {
+    const homeDir = await window.api.path.homeDir();
+    return targetPath.replace(/^~(?=\/|\\)/, homeDir);
+  }
+  return targetPath;
+};
+
+const addDirectoryToZip = async (
+  zip: JSZip,
+  dirPath: string,
+  zipPrefix: string,
+  fs: FsApi
+): Promise<void> => {
+  const entries = (await fs.readDir(dirPath, { maxDepth: 1 })) as FileEntry[];
+
+  if (!entries.length) {
+    if (zipPrefix) {
+      zip.folder(toZipPath(zipPrefix));
+    }
+    return;
+  }
+
+  for (const entry of entries) {
+    const entryZipPath = zipPrefix ? `${zipPrefix}/${entry.name}` : entry.name;
+    if (entry.isDir) {
+      await addDirectoryToZip(zip, entry.path, entryZipPath, fs);
+    } else {
+      const data = await fs.readFile(entry.path);
+      zip.file(toZipPath(entryZipPath), data);
+    }
+  }
+};
+
+const writeZipFromDirectory = async (
+  dirPath: string,
+  zipPath: string,
+  fs: FsApi
+): Promise<void> => {
+  const zip = new JSZip();
+  const rootName = getBaseName(dirPath) || '.vibework';
+  await addDirectoryToZip(zip, dirPath, rootName, fs);
+  const zipData = await zip.generateAsync({
+    type: 'uint8array',
+    compression: 'DEFLATE',
+  });
+  await fs.writeFile(zipPath, zipData);
+};
+
+const extractZipToDirectory = async (
+  zipData: Uint8Array,
+  targetDir: string,
+  fs: FsApi
+): Promise<void> => {
+  const zip = await JSZip.loadAsync(zipData);
+  const files = Object.values(zip.files);
+  if (!files.length) {
+    throw new Error('Invalid zip file');
+  }
+
+  const hasRootDir = files.some((file) =>
+    toZipPath(file.name).startsWith('.vibework/')
+  );
+  const stripPrefix = hasRootDir ? '.vibework/' : '';
+
+  for (const file of files) {
+    let relativePath = toZipPath(file.name);
+    if (stripPrefix && relativePath.startsWith(stripPrefix)) {
+      relativePath = relativePath.slice(stripPrefix.length);
+    }
+    if (!relativePath) continue;
+    const parts = relativePath.split('/').filter(Boolean);
+    if (!parts.length) continue;
+    const targetPath = joinPath(targetDir, ...parts);
+
+    if (file.dir) {
+      await fs.mkdir(targetPath);
+      continue;
+    }
+
+    const parentDir = getParentDir(targetPath);
+    if (parentDir) {
+      await fs.mkdir(parentDir);
+    }
+    const data = await file.async('uint8array');
+    await fs.writeFile(targetPath, data);
+  }
+};
 
 export function DataSettings() {
   const { t } = useLanguage();
   const [exportStatus, setExportStatus] = useState<OperationStatus>('idle');
   const [importStatus, setImportStatus] = useState<OperationStatus>('idle');
-  const [clearStatus, setClearStatus] = useState<OperationStatus>('idle');
-  const [showClearDialog, setShowClearDialog] = useState(false);
-  const [confirmClearType, setConfirmClearType] = useState<ClearType>(null);
+  const [deleteStatus, setDeleteStatus] = useState<OperationStatus>('idle');
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(null);
+  const [pendingBackupPath, setPendingBackupPath] = useState<string>('');
+  const [pendingBackupDisplayPath, setPendingBackupDisplayPath] =
+    useState<string>('');
+  const [vibeworkDisplayPath, setVibeworkDisplayPath] = useState('~/.vibework');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // Export all data
+  useEffect(() => {
+    const loadDisplayPath = async () => {
+      try {
+        const dirPath = await getVibeworkDataDir();
+        const resolvedPath = await resolvePath(dirPath);
+        const displayPath = await getDisplayPath(resolvedPath);
+        setVibeworkDisplayPath(displayPath);
+      } catch {
+        setVibeworkDisplayPath('~/.vibework');
+      }
+    };
+
+    loadDisplayPath();
+  }, []);
+
+  const getResolvedVibeworkDir = async () => {
+    const dirPath = await getVibeworkDataDir();
+    return resolvePath(dirPath);
+  };
+
+  const buildBackupPath = (vibeworkDir: string) => {
+    const parentDir = getParentDir(vibeworkDir);
+    return joinPath(
+      parentDir,
+      `vibework-backup-${formatDateTime(new Date())}.zip`
+    );
+  };
+
+  const buildExportFilename = () =>
+    `vibework-backup-${formatDate(new Date())}.zip`;
+
+  const ensureElectron = () => {
+    if (!window.api) {
+      throw new Error(t.settings.dataNotSupported || 'Not supported');
+    }
+  };
+
+  // Export ~/.vibework to zip
   const handleExport = async () => {
     setExportStatus('loading');
     setErrorMessage('');
 
     try {
-      // Gather all data
-      const sessions = await db.getAllSessions();
-      const tasks = await db.getAllTasks();
-      const files = await db.getAllFiles();
-      const settings = getSettings();
-
-      // Get messages for each task
-      const allMessages: unknown[] = [];
-      for (const task of tasks) {
-        const messages = await db.getMessagesByTaskId(task.id);
-        allMessages.push(...messages);
-      }
-
-      const exportData: ExportData = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        sessions,
-        tasks,
-        messages: allMessages,
-        files,
-        settings,
-      };
-
-      const jsonString = JSON.stringify(exportData, null, 2);
-      const filename = `VibeWork-backup-${new Date().toISOString().split('T')[0]}.json`;
-
-      // Use Electron dialog
+      ensureElectron();
       const { dialog, fs } = await import('@/lib/electron-api');
+      const vibeworkDir = await getResolvedVibeworkDir();
+      const exists = await fs.exists(vibeworkDir);
+      if (!exists) {
+        throw new Error(
+          t.settings.dataDirectoryMissing || 'Data directory not found.'
+        );
+      }
 
       const filePath = await dialog.save({
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-        defaultPath: filename,
+        filters: [{ name: 'Zip', extensions: ['zip'] }],
+        defaultPath: buildExportFilename(),
       });
 
-      if (filePath) {
-        await fs.writeTextFile(filePath, jsonString);
-        setExportStatus('success');
-        setTimeout(() => setExportStatus('idle'), 2000);
-      } else {
-        // User cancelled
+      if (!filePath) {
         setExportStatus('idle');
+        return;
       }
+
+      await writeZipFromDirectory(vibeworkDir, filePath, fs as FsApi);
+      setExportStatus('success');
+      setTimeout(() => setExportStatus('idle'), 2000);
     } catch (error) {
       console.error('[DataSettings] Export failed:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Export failed');
@@ -106,49 +242,36 @@ export function DataSettings() {
     }
   };
 
-  // Import data from file
+  // Prepare import flow
   const handleImport = async () => {
     setImportStatus('loading');
     setErrorMessage('');
 
     try {
-      // Use Electron dialog
+      ensureElectron();
       const { dialog, fs } = await import('@/lib/electron-api');
-
       const filePath = await dialog.open({
-        filters: [{ name: 'JSON', extensions: ['json'] }],
+        filters: [{ name: 'Zip', extensions: ['zip'] }],
         multiple: false,
       });
 
       if (!filePath) {
-        // User cancelled
         setImportStatus('idle');
         return;
       }
 
-      const content = await fs.readTextFile(filePath as string);
-      const data = JSON.parse(content) as ExportData;
+      const vibeworkDir = await getResolvedVibeworkDir();
+      const backupPath = buildBackupPath(vibeworkDir);
+      const backupDisplayPath = await getDisplayPath(backupPath);
 
-      // Validate data format
-      if (!data.version || !data.tasks) {
-        throw new Error('Invalid data format');
-      }
+      setPendingImportPath(filePath as string);
+      setPendingBackupPath(backupPath);
+      setPendingBackupDisplayPath(backupDisplayPath);
+      setShowImportConfirm(true);
+      setImportStatus('idle');
 
-      // Import settings if included
-      if (data.settings) {
-        saveSettings(data.settings);
-      }
-
-      // Note: Full import would require database insert operations
-      // For now, we just import settings
-      // TODO: Implement full data import with database operations
-
-      setImportStatus('success');
-      setTimeout(() => {
-        setImportStatus('idle');
-        // Reload page to apply imported settings
-        window.location.reload();
-      }, 1500);
+      // Preload zip to validate file exists
+      await fs.readFile(filePath as string);
     } catch (error) {
       console.error('[DataSettings] Import failed:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Import failed');
@@ -157,104 +280,70 @@ export function DataSettings() {
     }
   };
 
-  // Clear workspace files (sessions directory)
-  const clearWorkspaceFiles = async () => {
-    if (!isTauri()) return;
-
-    try {
-      const sessionsDir = await getSessionsDir();
-      const { fs } = await import('@/lib/electron-api');
-
-      // Check if sessions directory exists
-      const dirExists = await fs.exists(sessionsDir);
-      if (dirExists) {
-        // Remove the entire sessions directory recursively
-        await fs.remove(sessionsDir, { recursive: true });
-        console.log('[DataSettings] Cleared workspace files:', sessionsDir);
-      }
-    } catch (error) {
-      console.warn('[DataSettings] Failed to clear workspace files:', error);
-      // Don't throw - continue with database cleanup even if file cleanup fails
-    }
-  };
-
-  // Clear data
-  const handleClear = async (type: ClearType) => {
-    if (!type) return;
-
-    setClearStatus('loading');
+  const handleConfirmImport = async () => {
+    if (!pendingImportPath) return;
+    setImportStatus('loading');
     setErrorMessage('');
-    setShowClearDialog(false);
-    setConfirmClearType(null);
+    setShowImportConfirm(false);
 
     try {
-      if (type === 'settings') {
-        // Clear settings only
-        await clearAllSettings();
-      } else if (type === 'tasks') {
-        // Clear workspace files first
-        await clearWorkspaceFiles();
+      ensureElectron();
+      const { fs } = await import('@/lib/electron-api');
+      const vibeworkDir = await getResolvedVibeworkDir();
+      const exists = await fs.exists(vibeworkDir);
 
-        // Get all tasks and delete them with their messages
-        const tasks = await db.getAllTasks();
-        for (const task of tasks) {
-          await db.deleteMessagesByTaskId(task.id);
-          await db.deleteTask(task.id);
-        }
-      } else if (type === 'all') {
-        // Clear workspace files first
-        await clearWorkspaceFiles();
-
-        // Get all tasks and delete them with their messages
-        const tasks = await db.getAllTasks();
-        for (const task of tasks) {
-          await db.deleteMessagesByTaskId(task.id);
-          await db.deleteTask(task.id);
-        }
-
-        // Clear settings
-        await clearAllSettings();
+      if (exists) {
+        await writeZipFromDirectory(vibeworkDir, pendingBackupPath, fs as FsApi);
       }
 
-      setClearStatus('success');
+      if (exists) {
+        await fs.remove(vibeworkDir, { recursive: true });
+      }
+      await fs.mkdir(vibeworkDir);
+
+      const zipData = await fs.readFile(pendingImportPath);
+      await extractZipToDirectory(zipData, vibeworkDir, fs as FsApi);
+
+      setImportStatus('success');
       setTimeout(() => {
-        setClearStatus('idle');
-        // Reload page to reflect changes
+        setImportStatus('idle');
         window.location.reload();
       }, 1500);
     } catch (error) {
-      console.error('[DataSettings] Clear failed:', error);
-      setErrorMessage(error instanceof Error ? error.message : 'Clear failed');
-      setClearStatus('error');
-      setTimeout(() => setClearStatus('idle'), 3000);
+      console.error('[DataSettings] Import failed:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Import failed');
+      setImportStatus('error');
+      setTimeout(() => setImportStatus('idle'), 3000);
+    } finally {
+      setPendingImportPath(null);
+      setPendingBackupPath('');
+      setPendingBackupDisplayPath('');
     }
   };
 
-  // Handle clear option click - show confirmation
-  const handleClearOptionClick = (type: ClearType) => {
-    setConfirmClearType(type);
-  };
+  const handleDelete = async () => {
+    setDeleteStatus('loading');
+    setErrorMessage('');
+    setShowDeleteConfirm(false);
 
-  // Get confirmation message based on clear type
-  const getConfirmMessage = (type: ClearType): string => {
-    switch (type) {
-      case 'tasks':
-        return (
-          t.settings.dataClearTasksConfirm ||
-          'Are you sure you want to delete all tasks and messages? This action cannot be undone.'
-        );
-      case 'settings':
-        return (
-          t.settings.dataClearSettingsConfirm ||
-          'Are you sure you want to reset all settings to defaults? This action cannot be undone.'
-        );
-      case 'all':
-        return (
-          t.settings.dataClearAllConfirm ||
-          'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.'
-        );
-      default:
-        return '';
+    try {
+      ensureElectron();
+      const { fs } = await import('@/lib/electron-api');
+      const vibeworkDir = await getResolvedVibeworkDir();
+      const exists = await fs.exists(vibeworkDir);
+      if (exists) {
+        await fs.remove(vibeworkDir, { recursive: true });
+      }
+      setDeleteStatus('success');
+      setTimeout(() => {
+        setDeleteStatus('idle');
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error('[DataSettings] Delete failed:', error);
+      setErrorMessage(error instanceof Error ? error.message : 'Delete failed');
+      setDeleteStatus('error');
+      setTimeout(() => setDeleteStatus('idle'), 3000);
     }
   };
 
@@ -293,7 +382,7 @@ export function DataSettings() {
       {/* Description */}
       <p className="text-muted-foreground text-sm">
         {t.settings.dataDescription ||
-          'Manage your data: export backups, import data, or clear all data.'}
+          'Manage your data: export backups, import data, or delete data.'}
       </p>
 
       {/* Export Data */}
@@ -305,7 +394,7 @@ export function DataSettings() {
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
               {t.settings.dataExportDescription ||
-                'Export all tasks, messages, and settings to a JSON file.'}
+                'Export ~/.vibework to a zip file.'}
             </p>
           </div>
           <button
@@ -336,7 +425,7 @@ export function DataSettings() {
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
               {t.settings.dataImportDescription ||
-                'Import data from a previously exported JSON file.'}
+                'Import from a zip file and replace ~/.vibework (backup first).'}
             </p>
           </div>
           <button
@@ -358,21 +447,21 @@ export function DataSettings() {
         </div>
       </div>
 
-      {/* Clear Data */}
+      {/* Delete Data */}
       <div className="border-border rounded-lg border border-red-500/20 bg-red-500/5 p-4">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 className="text-foreground font-medium">
-              {t.settings.dataClear || 'Clear Data'}
+              {t.settings.dataClear || 'Delete Data'}
             </h3>
             <p className="text-muted-foreground mt-1 text-sm">
               {t.settings.dataClearDescription ||
-                'Permanently delete all data. This action cannot be undone.'}
+                'Permanently delete ~/.vibework. This action cannot be undone.'}
             </p>
           </div>
           <button
-            onClick={() => setShowClearDialog(true)}
-            disabled={clearStatus === 'loading'}
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={deleteStatus === 'loading'}
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
               'bg-red-500/10 text-red-500 hover:bg-red-500/20',
@@ -380,10 +469,10 @@ export function DataSettings() {
             )}
           >
             {getButtonContent(
-              clearStatus,
+              deleteStatus,
               <Trash2 className="size-4" />,
-              t.settings.dataClearButton || 'Clear',
-              t.settings.dataClearing || 'Clearing...'
+              t.settings.dataClearButton || 'Delete',
+              t.settings.dataClearing || 'Deleting...'
             )}
           </button>
         </div>
@@ -397,110 +486,51 @@ export function DataSettings() {
         </div>
       )}
 
-      {/* Clear Confirmation Dialog */}
-      {showClearDialog && (
+      {/* Import Confirmation Dialog */}
+      {showImportConfirm && (
         <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
           <div className="border-border bg-background mx-4 w-full max-w-md rounded-xl border p-6 shadow-lg">
             <div className="mb-4 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+              <div className="flex size-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
                 <AlertTriangle className="size-5" />
               </div>
               <h3 className="text-foreground text-lg font-semibold">
-                {t.settings.dataClearConfirmTitle || 'Clear Data'}
+                {t.settings.dataImportConfirmTitle || 'Import Data'}
               </h3>
             </div>
 
-            <p className="text-muted-foreground mb-6 text-sm">
-              {t.settings.dataClearConfirmDescription ||
-                'Choose what data you want to clear:'}
+            <p className="text-muted-foreground mb-4 text-sm">
+              {t.settings.dataImportConfirmDescription ||
+                'This will back up your current data and replace it with the imported zip.'}
             </p>
 
             <div className="space-y-3">
-              <button
-                onClick={() => handleClearOptionClick('tasks')}
-                className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors',
-                  'border-border hover:bg-accent border'
-                )}
-              >
-                <div>
-                  <div className="text-foreground font-medium">
-                    {t.settings.dataClearTasksOnly || 'Clear Tasks Only'}
-                  </div>
-                  <div className="text-muted-foreground text-sm">
-                    {t.settings.dataClearTasksOnlyDescription ||
-                      'Delete all tasks and messages, keep settings'}
-                  </div>
+              <div className="bg-muted rounded-lg p-3">
+                <div className="text-muted-foreground mb-1 text-xs">
+                  {t.settings.dataImportConfirmBackupLabel || 'Backup file'}
                 </div>
-              </button>
-
-              <button
-                onClick={() => handleClearOptionClick('settings')}
-                className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors',
-                  'border-border hover:bg-accent border'
-                )}
-              >
-                <div>
-                  <div className="text-foreground font-medium">
-                    {t.settings.dataClearSettingsOnly || 'Clear Settings Only'}
-                  </div>
-                  <div className="text-muted-foreground text-sm">
-                    {t.settings.dataClearSettingsOnlyDescription ||
-                      'Reset all settings to defaults, keep tasks'}
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleClearOptionClick('all')}
-                className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-colors',
-                  'border border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
-                )}
-              >
-                <div>
-                  <div className="font-medium text-red-500">
-                    {t.settings.dataClearAll || 'Clear All Data'}
-                  </div>
-                  <div className="text-muted-foreground text-sm">
-                    {t.settings.dataClearAllDescription ||
-                      'Delete all tasks, messages, and settings'}
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowClearDialog(false)}
-              className="text-muted-foreground hover:text-foreground mt-4 w-full py-2 text-center text-sm transition-colors"
-            >
-              {t.settings.dataCancel || 'Cancel'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Dialog */}
-      {confirmClearType && (
-        <div className="bg-background/80 fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm">
-          <div className="border-border bg-background mx-4 w-full max-w-md rounded-xl border p-6 shadow-lg">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10 text-red-500">
-                <AlertTriangle className="size-5" />
+                <code className="text-foreground text-xs break-all">
+                  {pendingBackupDisplayPath || pendingBackupPath}
+                </code>
               </div>
-              <h3 className="text-foreground text-lg font-semibold">
-                {t.settings.dataConfirmTitle || 'Confirm'}
-              </h3>
+              <div className="bg-muted rounded-lg p-3">
+                <div className="text-muted-foreground mb-1 text-xs">
+                  {t.settings.dataImportConfirmTargetLabel || 'Restore target'}
+                </div>
+                <code className="text-foreground text-xs break-all">
+                  {vibeworkDisplayPath}
+                </code>
+              </div>
             </div>
 
-            <p className="text-muted-foreground mb-6 text-sm">
-              {getConfirmMessage(confirmClearType)}
-            </p>
-
-            <div className="flex gap-3">
+            <div className="mt-6 flex gap-3">
               <button
-                onClick={() => setConfirmClearType(null)}
+                onClick={() => {
+                  setShowImportConfirm(false);
+                  setPendingImportPath(null);
+                  setPendingBackupPath('');
+                  setPendingBackupDisplayPath('');
+                }}
                 className={cn(
                   'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
                   'border-border text-foreground hover:bg-accent border'
@@ -509,13 +539,60 @@ export function DataSettings() {
                 {t.settings.dataCancel || 'Cancel'}
               </button>
               <button
-                onClick={() => handleClear(confirmClearType)}
+                onClick={handleConfirmImport}
+                className={cn(
+                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                  'bg-primary text-primary-foreground hover:bg-primary/90'
+                )}
+              >
+                {t.settings.dataImportConfirmButton || 'Yes, Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+          <div className="border-border bg-background mx-4 w-full max-w-md rounded-xl border p-6 shadow-lg">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+                <AlertTriangle className="size-5" />
+              </div>
+              <h3 className="text-foreground text-lg font-semibold">
+                {t.settings.dataDeleteConfirmTitle || 'Delete Data'}
+              </h3>
+            </div>
+
+            <p className="text-muted-foreground mb-4 text-sm">
+              {t.settings.dataDeleteConfirmDescription ||
+                'This will permanently delete ~/.vibework. This action cannot be undone.'}
+            </p>
+            <div className="bg-muted mb-6 rounded-lg p-3">
+              <code className="text-foreground text-xs break-all">
+                {vibeworkDisplayPath}
+              </code>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className={cn(
+                  'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
+                  'border-border text-foreground hover:bg-accent border'
+                )}
+              >
+                {t.settings.dataCancel || 'Cancel'}
+              </button>
+              <button
+                onClick={handleDelete}
                 className={cn(
                   'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors',
                   'bg-red-500 text-white hover:bg-red-600'
                 )}
               >
-                {t.settings.dataConfirmClear || 'Yes, Clear'}
+                {t.settings.dataDeleteConfirmButton || 'Yes, Delete'}
               </button>
             </div>
           </div>

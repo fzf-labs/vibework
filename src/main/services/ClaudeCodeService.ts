@@ -107,7 +107,7 @@ export class ClaudeCodeService extends EventEmitter {
       }
     })
 
-    const msgStore = new MsgStoreService()
+    const msgStore = new MsgStoreService(undefined, sessionId)
 
     const session: ClaudeCodeSession = {
       id: sessionId,
@@ -243,7 +243,12 @@ export class ClaudeCodeService extends EventEmitter {
    * 获取会话的历史日志
    */
   getSessionLogHistory(sessionId: string): LogMsg[] {
+    // 优先从内存中获取
     const msgStore = this.getSessionMsgStore(sessionId)
-    return msgStore?.getHistory() || []
+    if (msgStore) {
+      return msgStore.getHistory()
+    }
+    // 如果 session 不存在，从文件加载历史日志
+    return MsgStoreService.loadFromFile(sessionId)
   }
 }
