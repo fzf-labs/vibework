@@ -9,6 +9,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog'
 import { GitBranch } from 'lucide-react'
+import { db } from '@/data'
 
 interface CreateTaskDialogProps {
   open: boolean
@@ -40,10 +41,16 @@ export function CreateTaskDialog({
     setError(null)
 
     try {
+      const trimmedPrompt = prompt.trim()
+      const existingSession = await db.getSession(sessionId)
+      if (!existingSession) {
+        await db.createSession({ id: sessionId, prompt: trimmedPrompt })
+      }
+
       const result = await window.api.task.create({
         sessionId,
         taskIndex: Date.now(),
-        prompt: prompt.trim(),
+        prompt: trimmedPrompt,
         projectId,
         projectPath,
         createWorktree: createWorktree && !!projectPath

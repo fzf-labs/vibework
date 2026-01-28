@@ -76,11 +76,9 @@ export interface Settings {
   defaultProvider: string;
   defaultModel: string;
   mcpConfigPath: string;
-  mcpEnabled: boolean;
   mcpUserDirEnabled: boolean;
   mcpAppDirEnabled: boolean;
   skillsPath: string;
-  skillsEnabled: boolean;
   skillsUserDirEnabled: boolean;
   skillsAppDirEnabled: boolean;
   workDir: string;

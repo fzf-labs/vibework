@@ -1,144 +1,139 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLanguage } from '@/providers/language-provider';
-import { Terminal, FolderOpen, Check, AlertCircle } from 'lucide-react';
+import { Terminal, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { SettingsTabProps } from '../types';
 
-export function CLISettings({ settings, onSettingsChange }: SettingsTabProps) {
+const TOOL_CACHE = {
+  tools: null as CLIToolInfo[] | null,
+};
+
+interface CLIToolInfo {
+  id: string;
+  name: string;
+  displayName: string;
+  installed: boolean;
+}
+
+export function CLISettings({
+  settings: _settings,
+  onSettingsChange: _onSettingsChange,
+}: SettingsTabProps) {
   const { t } = useLanguage();
-  const [validating, setValidating] = useState<string | null>(null);
-  const [validationResults, setValidationResults] = useState<
-    Record<string, boolean | null>
-  >({});
+  const [tools, setTools] = useState<CLIToolInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  const handleBrowse = async (field: 'claudeCodePath' | 'codexCliPath') => {
+  const loadTools = useCallback(async (force = false) => {
+    setLoading(true);
+    setError(false);
+    if (!force && TOOL_CACHE.tools) {
+      setTools(TOOL_CACHE.tools);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const result = await window.api?.dialog?.showOpenDialog({
-        properties: ['openFile'],
-        filters: [{ name: 'Executables', extensions: ['*'] }],
-      });
-      if (result && !result.canceled && result.filePaths[0]) {
-        onSettingsChange({ ...settings, [field]: result.filePaths[0] });
-        setValidationResults((prev) => ({ ...prev, [field]: null }));
+      const result = await window.api?.cliTools?.detectAll?.();
+      if (Array.isArray(result)) {
+        const detectedTools = result as CLIToolInfo[];
+        TOOL_CACHE.tools = detectedTools;
+        setTools(detectedTools);
+      } else {
+        TOOL_CACHE.tools = [];
+        setTools([]);
       }
-    } catch (error) {
-      console.error('Failed to open file dialog:', error);
-    }
-  };
-
-  const handleValidate = async (field: 'claudeCodePath' | 'codexCliPath') => {
-    const path = settings[field];
-    if (!path) return;
-
-    setValidating(field);
-    try {
-      const result = await window.api?.fs?.exists?.(path);
-      setValidationResults((prev) => ({ ...prev, [field]: !!result }));
-    } catch {
-      setValidationResults((prev) => ({ ...prev, [field]: false }));
+    } catch (err) {
+      console.error('Failed to detect CLI tools:', err);
+      setError(true);
     } finally {
-      setValidating(null);
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const renderPathInput = (
-    field: 'claudeCodePath' | 'codexCliPath',
-    label: string,
-    description: string
-  ) => {
-    const value = settings[field];
-    const isValid = validationResults[field];
-    const isValidating = validating === field;
+  useEffect(() => {
+    void loadTools();
+  }, [loadTools]);
 
-    return (
-      <div className="space-y-2">
-        <label className="text-foreground text-sm font-medium">{label}</label>
-        <p className="text-muted-foreground text-xs">{description}</p>
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => {
-                onSettingsChange({ ...settings, [field]: e.target.value });
-                setValidationResults((prev) => ({ ...prev, [field]: null }));
-              }}
-              placeholder={t.settings?.enterPath || 'Enter path or browse...'}
-              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring block h-10 w-full rounded-lg border px-3 pr-10 font-mono text-sm focus:border-transparent focus:ring-2 focus:outline-none"
-            />
-            {isValid !== null && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                {isValid ? (
-                  <Check className="size-4 text-green-500" />
-                ) : (
-                  <AlertCircle className="size-4 text-red-500" />
-                )}
-              </div>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleBrowse(field)}
-            className="shrink-0"
-          >
-            <FolderOpen className="mr-1 size-4" />
-            {t.settings?.browse || 'Browse'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleValidate(field)}
-            disabled={!value || isValidating}
-            className="shrink-0"
-          >
-            {isValidating
-              ? t.settings?.validating || 'Validating...'
-              : t.settings?.validate || 'Validate'}
-          </Button>
-        </div>
-      </div>
-    );
-  };
+  const statusLabel = (installed: boolean) =>
+    installed
+      ? t.settings?.cliInstalled || 'Installed'
+      : t.settings?.cliNotInstalled || 'Not installed';
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-muted-foreground text-sm">
           {t.settings?.cliDescription ||
-            'Configure paths to CLI tools used by VibeWork.'}
+            'Check whether Agent CLI tools are installed on this machine.'}
         </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadTools(true)}
+          disabled={loading}
+          className="shrink-0"
+        >
+          {loading
+            ? t.settings?.cliDetecting || 'Detecting...'
+            : t.settings?.cliRescan || 'Rescan'}
+        </Button>
       </div>
 
-      <div className="space-y-6">
-        {/* Claude Code CLI */}
-        <div className="border-border rounded-lg border p-4">
-          <div className="mb-4 flex items-center gap-2">
-            <Terminal className="text-primary size-5" />
-            <h3 className="font-medium">Claude Code</h3>
-          </div>
-          {renderPathInput(
-            'claudeCodePath',
-            t.settings?.claudeCodePath || 'Claude Code Path',
-            t.settings?.claudeCodePathDesc ||
-              'Path to the Claude Code CLI executable. Leave empty to use system PATH.'
-          )}
+      {error && (
+        <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border px-3 py-2 text-sm">
+          {t.settings?.cliDetectError ||
+            'Unable to detect CLI tools. Please try again.'}
         </div>
+      )}
 
-        {/* Codex CLI */}
-        <div className="border-border rounded-lg border p-4">
-          <div className="mb-4 flex items-center gap-2">
-            <Terminal className="text-primary size-5" />
-            <h3 className="font-medium">Codex CLI</h3>
-          </div>
-          {renderPathInput(
-            'codexCliPath',
-            t.settings?.codexCliPath || 'Codex CLI Path',
-            t.settings?.codexCliPathDesc ||
-              'Path to the OpenAI Codex CLI executable. Leave empty to use system PATH.'
-          )}
+      {loading && tools.length === 0 ? (
+        <div className="border-border rounded-lg border px-4 py-6 text-center text-sm">
+          {t.settings?.cliDetecting || 'Detecting...'}
         </div>
-      </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {tools.map((tool) => (
+            <div key={tool.id} className="border-border rounded-lg border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="bg-muted/60 text-muted-foreground flex size-9 items-center justify-center rounded-md">
+                    <Terminal className="size-4" />
+                  </div>
+                  <div>
+                    <p className="text-foreground text-sm font-medium">
+                      {tool.displayName}
+                    </p>
+                    <p className="text-muted-foreground text-xs font-mono">
+                      {tool.name}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                    tool.installed
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                      : 'border-rose-500/30 bg-rose-500/10 text-rose-600'
+                  }`}
+                >
+                  {tool.installed ? (
+                    <Check className="size-3" />
+                  ) : (
+                    <AlertCircle className="size-3" />
+                  )}
+                  {statusLabel(tool.installed)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && tools.length === 0 && !error && (
+        <div className="border-border rounded-lg border px-4 py-6 text-center text-sm">
+          {t.settings?.cliEmpty || 'No CLI tools found.'}
+        </div>
+      )}
     </div>
   );
 }

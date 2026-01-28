@@ -1,6 +1,12 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
 type UnknownRecord = Record<string, unknown>
+interface FileEntry {
+  name: string
+  path: string
+  isDir: boolean
+  children?: FileEntry[]
+}
 
 interface ProjectAPI {
   getAll: () => Promise<unknown[]>
@@ -194,8 +200,13 @@ interface FSAPI {
   writeFile: (path: string, data: Uint8Array | string) => Promise<void>
   writeTextFile: (path: string, content: string) => Promise<void>
   stat: (path: string) => Promise<{ size: number; isFile: boolean; isDirectory: boolean }>
+  readDir: (
+    path: string,
+    options?: { maxDepth?: number }
+  ) => Promise<FileEntry[]>
   exists: (path: string) => Promise<boolean>
   remove: (path: string, options?: { recursive?: boolean }) => Promise<void>
+  mkdir: (path: string) => Promise<void>
 }
 
 interface DialogAPI {
@@ -214,6 +225,7 @@ interface PathAPI {
   appConfigDir: () => Promise<string>
   tempDir: () => Promise<string>
   vibeworkDataDir: () => Promise<string>
+  homeDir: () => Promise<string>
 }
 
 interface AppAPI {

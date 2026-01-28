@@ -9,15 +9,13 @@ import {
   Layers,
   Loader2,
   MoreHorizontal,
-  Plus,
-  Search,
+  RefreshCw,
   Trash2,
   X,
 } from 'lucide-react';
 
-import { Switch } from '../components/Switch';
 import { API_BASE_URL } from '../constants';
-import type { SettingsTabProps, SkillInfo } from '../types';
+import type { SettingsTabProps, SkillInfo, SkillFile } from '../types';
 
 // Parse YAML frontmatter from SKILL.md
 function parseSkillMdFrontmatter(content: string): {
@@ -48,10 +46,28 @@ function parseSkillMdFrontmatter(content: string): {
 // Helper function to open folder in system file manager
 const openFolderInSystem = async (folderPath: string) => {
   try {
+    let resolvedPath = folderPath;
+    if (resolvedPath.startsWith('~') && window.api?.path?.homeDir) {
+      const homeDir = await window.api.path.homeDir();
+      resolvedPath = resolvedPath.replace(/^~(?=\/|\\)/, homeDir);
+    }
+
+    if (window.api?.fs?.exists && window.api?.fs?.mkdir) {
+      const exists = await window.api.fs.exists(resolvedPath);
+      if (!exists) {
+        await window.api.fs.mkdir(resolvedPath);
+      }
+    }
+
+    if (window.api?.shell?.openPath) {
+      await window.api.shell.openPath(resolvedPath);
+      return;
+    }
+
     const response = await fetch(`${API_BASE_URL}/files/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: folderPath, expandHome: true }),
+      body: JSON.stringify({ path: resolvedPath, expandHome: true }),
     });
     const data = await response.json();
     if (!data.success) {
@@ -66,12 +82,15 @@ const openFolderInSystem = async (folderPath: string) => {
 function SkillCard({
   skill,
   onDelete,
+  readOnly = false,
 }: {
   skill: SkillInfo;
-  onDelete: () => void;
+  onDelete?: () => void;
+  readOnly?: boolean;
 }) {
   const { t } = useLanguage();
   const [showMenu, setShowMenu] = useState(false);
+  const showActions = !readOnly && onDelete;
 
   return (
     <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
@@ -85,86 +104,80 @@ function SkillCard({
         {skill.description || t.settings.skillsNoDescription}
       </p>
 
-      <div className="border-border flex items-center justify-end border-t pt-3">
-        <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1 transition-colors"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-          {showMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowMenu(false)}
-              />
-              <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
-                <button
-                  onClick={() => {
-                    openFolderInSystem(skill.path);
-                    setShowMenu(false);
-                  }}
-                  className="hover:bg-accent flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
-                >
-                  <FolderOpen className="size-3.5 shrink-0" />
-                  {t.settings.skillsOpenFolder}
-                </button>
-                <button
-                  onClick={() => {
-                    onDelete();
-                    setShowMenu(false);
-                  }}
-                  className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
-                >
-                  <Trash2 className="size-3.5 shrink-0" />
-                  {t.settings.skillsDelete}
-                </button>
-              </div>
-            </>
-          )}
+      {showActions && (
+        <div className="border-border flex items-center justify-end border-t pt-3">
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1 transition-colors"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+            {showMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowMenu(false)}
+                />
+                <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
+                  <button
+                    onClick={() => {
+                      openFolderInSystem(skill.path);
+                      setShowMenu(false);
+                    }}
+                    className="hover:bg-accent flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                  >
+                    <FolderOpen className="size-3.5 shrink-0" />
+                    {t.settings.skillsOpenFolder}
+                  </button>
+                  <button
+                    onClick={() => {
+                      onDelete?.();
+                      setShowMenu(false);
+                    }}
+                    className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                  >
+                    <Trash2 className="size-3.5 shrink-0" />
+                    {t.settings.skillsDelete}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-type MainTab = 'installed' | 'settings';
+type MainTab = 'installed' | 'cli';
+type CliSkillGroup = {
+  id: string;
+  label: string;
+  path: string;
+  exists: boolean;
+  skills: SkillInfo[];
+};
 
 export function SkillsSettings({
   settings,
-  onSettingsChange,
 }: SettingsTabProps) {
   const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [cliSkillGroups, setCliSkillGroups] = useState<CliSkillGroup[]>([]);
   const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [skillsDirs, setSkillsDirs] = useState<{
-    user: string;
-    app: string;
-  }>({ user: '', app: '' });
-  const [showAddMenu, setShowAddMenu] = useState(false);
   const [showGitHubImport, setShowGitHubImport] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const { t } = useLanguage();
+  const defaultAppSkillsPath = '~/.vibework/skills';
+  const appSkillsPath = settings.skillsPath || defaultAppSkillsPath;
 
   const isSkillConfigured = (skill: SkillInfo) => {
     return skill.files.length > 0;
   };
 
-  // Filter and sort skills
-  const filteredSkills = skills
-    .filter((skill) => {
-      // Filter by search query
-      if (
-        searchQuery &&
-        !skill.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ) {
-        return false;
-      }
-      return true;
-    })
+  const appSkillsSorted = skills
     .sort((a, b) => {
       const aConfigured = isSkillConfigured(a);
       const bConfigured = isSkillConfigured(b);
@@ -175,186 +188,241 @@ export function SkillsSettings({
       return 0;
     });
 
+  const cliGroupsVisible = cliSkillGroups.filter(
+    (group) => group.skills.length > 0
+  );
+
+  const formatCliLabel = (id: string) => {
+    const runtime = settings.agentRuntimes.find((item) => item.id === id);
+    if (runtime) return runtime.name;
+    return id
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  const cliSkillDirectories: Record<string, string> = {
+    'claude-code': '.claude/skills',
+    codex: '.codex/skills',
+    'gemini-cli': '.gemini/skills',
+    opencode: '.opencode/skills',
+    'cursor-agent': '.cursor/skills',
+  };
+
+  const resolvePath = async (targetPath: string) => {
+    if (!targetPath) return targetPath;
+    if (targetPath.startsWith('~') && window.api?.path?.homeDir) {
+      const homeDir = await window.api.path.homeDir();
+      return targetPath.replace(/^~(?=\/|\\)/, homeDir);
+    }
+    return targetPath;
+  };
+
+  const readDirectoryEntries = async (
+    directoryPath: string
+  ): Promise<SkillFile[]> => {
+    if (!directoryPath) return [];
+    try {
+      const resolvedPath = await resolvePath(directoryPath);
+      if (window.api?.fs?.exists) {
+        const exists = await window.api.fs.exists(resolvedPath);
+        if (!exists) return [];
+      }
+      if (window.api?.fs?.readDir) {
+        return (await window.api.fs.readDir(resolvedPath, {
+          maxDepth: 3,
+        })) as SkillFile[];
+      }
+    } catch (err) {
+      console.error('[Skills] Failed to read directory:', err);
+      return [];
+    }
+
+    try {
+      const resolvedPath = await resolvePath(directoryPath);
+      const filesResponse = await fetch(`${API_BASE_URL}/files/readdir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: resolvedPath, maxDepth: 3 }),
+      });
+      const filesData = await filesResponse.json();
+      if (filesData.success && filesData.files) {
+        return filesData.files as SkillFile[];
+      }
+    } catch (err) {
+      console.error('[Skills] Failed to read directory via API:', err);
+    }
+
+    return [];
+  };
+
+  const readSkillMarkdown = async (skillMdPath: string): Promise<string> => {
+    try {
+      const resolvedPath = await resolvePath(skillMdPath);
+      if (window.api?.fs?.exists) {
+        const exists = await window.api.fs.exists(resolvedPath);
+        if (!exists) return '';
+      }
+      if (window.api?.fs?.readTextFile) {
+        return await window.api.fs.readTextFile(resolvedPath);
+      }
+    } catch (err) {
+      console.error('[Skills] Failed to read skill file:', err);
+      return '';
+    }
+
+    try {
+      const resolvedPath = await resolvePath(skillMdPath);
+      const mdResponse = await fetch(`${API_BASE_URL}/files/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: resolvedPath }),
+      });
+      const mdData = await mdResponse.json();
+      if (mdData.success && mdData.content) {
+        return mdData.content as string;
+      }
+    } catch (err) {
+      console.error('[Skills] Failed to read skill file via API:', err);
+    }
+
+    return '';
+  };
+
+  const loadSkillsFromDirectory = async (
+    directoryPath: string,
+    source: string
+  ): Promise<SkillInfo[]> => {
+    try {
+      const filesData = await readDirectoryEntries(directoryPath);
+      if (!filesData.length) return [];
+
+      const skillsFromDir: SkillInfo[] = [];
+      for (const folder of filesData) {
+        if (!folder.isDir) continue;
+
+        let skillName = folder.name;
+        let description = '';
+        try {
+          const skillMdCandidates = ['SKILL.md', 'skill.md'];
+          let content = '';
+
+          for (const candidate of skillMdCandidates) {
+            const skillMdPath = `${folder.path}/${candidate}`;
+            content = await readSkillMarkdown(skillMdPath);
+            if (content) break;
+          }
+
+          if (!content) {
+            continue;
+          }
+
+          const frontmatter = parseSkillMdFrontmatter(content);
+          if (frontmatter.name) {
+            skillName = frontmatter.name;
+          }
+          if (frontmatter.description) {
+            description = frontmatter.description;
+          }
+        } catch {
+          // Ignore errors reading SKILL.md
+          continue;
+        }
+
+        skillsFromDir.push({
+          id: `${source}-${folder.name}`,
+          name: skillName,
+          source,
+          path: folder.path,
+          files: folder.children || [],
+          enabled: true,
+          description,
+        });
+      }
+
+      return skillsFromDir;
+    } catch (err) {
+      console.error(
+        `[Skills] Failed to load skills from ${directoryPath}:`,
+        err
+      );
+      return [];
+    }
+  };
+
   const loadSkillsFromPath = async (skillsPath: string) => {
     setLoading(true);
     try {
-      // Get all skills directories (VibeWork and claude)
-      const dirsResponse = await fetch(`${API_BASE_URL}/files/skills-dir`);
-      const dirsData = await dirsResponse.json();
-
-      const allSkills: SkillInfo[] = [];
-
-      // Save directory paths
-      const dirs: { user: string; app: string } = { user: '', app: '' };
-      if (dirsData.directories) {
-        for (const dir of dirsData.directories as {
-          name: string;
-          path: string;
-          exists: boolean;
-        }[]) {
-          if (dir.name === 'claude') {
-            dirs.user = dir.path;
-          } else if (dir.name === 'VibeWork') {
-            dirs.app = dir.path;
+      const appSkillsDir = skillsPath || defaultAppSkillsPath;
+      const [appSkills, cliSkills] = await Promise.all([
+        loadSkillsFromDirectory(appSkillsDir, 'app'),
+        (async () => {
+          const tools =
+            (await window.api?.cliTools?.getAll?.())?.filter(Boolean) ?? [];
+          if (!tools.length || !window.api?.path?.homeDir || !window.api?.fs?.exists) {
+            return [] as CliSkillGroup[];
           }
-        }
-      }
-      setSkillsDirs(dirs);
 
-      // Load skills from user directory only (claude)
-      if (dirsData.directories) {
-        for (const dir of dirsData.directories as {
-          name: string;
-          path: string;
-          exists: boolean;
-        }[]) {
-          // Only load from user directory (claude), skip app directory (VibeWork)
-          if (dir.name !== 'claude' || !dir.exists) continue;
+          const homeDir = await window.api.path.homeDir();
+          const groups: CliSkillGroup[] = [];
 
-          try {
-            const filesResponse = await fetch(`${API_BASE_URL}/files/readdir`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: dir.path, maxDepth: 3 }),
-            });
-            const filesData = await filesResponse.json();
-
-            if (filesData.success && filesData.files) {
-              for (const folder of filesData.files) {
-                if (folder.isDir) {
-                  // Read SKILL.md for name and description
-                  let skillName = folder.name;
-                  let description = '';
-                  try {
-                    const skillMdPath = `${folder.path}/SKILL.md`;
-                    const mdResponse = await fetch(
-                      `${API_BASE_URL}/files/read`,
-                      {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: skillMdPath }),
-                      }
-                    );
-                    const mdData = await mdResponse.json();
-                    if (mdData.success && mdData.content) {
-                      const frontmatter = parseSkillMdFrontmatter(
-                        mdData.content
-                      );
-                      if (frontmatter.name) {
-                        skillName = frontmatter.name;
-                      }
-                      if (frontmatter.description) {
-                        description = frontmatter.description;
-                      }
-                    }
-                  } catch {
-                    // Ignore errors reading SKILL.md
-                  }
-
-                  allSkills.push({
-                    id: `${dir.name}-${folder.name}`,
-                    name: skillName,
-                    source: dir.name as 'claude' | 'VibeWork',
-                    path: folder.path,
-                    files: folder.children || [],
-                    enabled: true,
-                    description,
-                  });
-                }
-              }
+          for (const tool of tools as { id: string; displayName?: string }[]) {
+            const relativeDir = cliSkillDirectories[tool.id];
+            if (!relativeDir) continue;
+            const dirPath = `${homeDir}/${relativeDir}`;
+            const exists = await window.api.fs.exists(dirPath);
+            if (!exists) {
+              continue;
             }
-          } catch (err) {
-            console.error(
-              `[Skills] Failed to load skills from ${dir.name}:`,
-              err
-            );
-          }
-        }
-      }
 
-      // Also load from user-configured skillsPath if different from default directories
-      if (skillsPath) {
-        const isDefaultDir = dirsData.directories?.some(
-          (d: { path: string }) => d.path === skillsPath
-        );
-        if (!isDefaultDir) {
-          try {
-            const filesResponse = await fetch(`${API_BASE_URL}/files/readdir`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: skillsPath, maxDepth: 3 }),
+            const skills = await loadSkillsFromDirectory(dirPath, tool.id);
+
+            groups.push({
+              id: tool.id,
+              label: tool.displayName || formatCliLabel(tool.id),
+              path: dirPath,
+              exists: true,
+              skills,
             });
-            const filesData = await filesResponse.json();
-
-            if (filesData.success && filesData.files) {
-              for (const folder of filesData.files) {
-                if (folder.isDir) {
-                  // Read SKILL.md for name and description
-                  let skillName = folder.name;
-                  let description = '';
-                  try {
-                    const skillMdPath = `${folder.path}/SKILL.md`;
-                    const mdResponse = await fetch(
-                      `${API_BASE_URL}/files/read`,
-                      {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: skillMdPath }),
-                      }
-                    );
-                    const mdData = await mdResponse.json();
-                    if (mdData.success && mdData.content) {
-                      const frontmatter = parseSkillMdFrontmatter(
-                        mdData.content
-                      );
-                      if (frontmatter.name) {
-                        skillName = frontmatter.name;
-                      }
-                      if (frontmatter.description) {
-                        description = frontmatter.description;
-                      }
-                    }
-                  } catch {
-                    // Ignore errors reading SKILL.md
-                  }
-
-                  allSkills.push({
-                    id: `custom-${folder.name}`,
-                    name: skillName,
-                    source: 'VibeWork',
-                    path: folder.path,
-                    files: folder.children || [],
-                    enabled: true,
-                    description,
-                  });
-                }
-              }
-            }
-          } catch (err) {
-            console.error(
-              '[Skills] Failed to load skills from custom path:',
-              err
-            );
           }
-        }
-      }
 
-      setSkills(allSkills);
+          return groups;
+        })(),
+      ]);
+
+      setSkills(appSkills);
+      setCliSkillGroups(cliSkills);
     } catch (err) {
       console.error('[Skills] Failed to load skills:', err);
       setSkills([]);
+      setCliSkillGroups([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSkillsFromPath(settings.skillsPath);
-  }, [settings.skillsPath]);
+    loadSkillsFromPath(appSkillsPath);
+  }, [appSkillsPath]);
+
+  const handleRefreshCliGroup = async (group: CliSkillGroup) => {
+    try {
+      const skills = await loadSkillsFromDirectory(group.path, group.id);
+      setCliSkillGroups((prev) =>
+        prev.map((item) =>
+          item.id === group.id ? { ...item, skills } : item
+        )
+      );
+    } catch (err) {
+      console.error('[Skills] Failed to refresh CLI skills:', err);
+    }
+  };
 
   const [deleteDialogSkill, setDeleteDialogSkill] = useState<SkillInfo | null>(
     null
   );
+  const [deletingSkill, setDeletingSkill] = useState(false);
 
   const handleDeleteSkill = (skillId: string) => {
     const skill = skills.find((s) => s.id === skillId);
@@ -363,10 +431,30 @@ export function SkillsSettings({
     }
   };
 
-  const handleOpenSkillFolder = () => {
-    if (deleteDialogSkill) {
-      openFolderInSystem(deleteDialogSkill.path);
+  const handleConfirmDeleteSkill = async () => {
+    if (!deleteDialogSkill) return;
+    try {
+      setDeletingSkill(true);
+      const resolvedPath = await resolvePath(deleteDialogSkill.path);
+      if (!window.api?.fs?.stat || !window.api?.fs?.remove) {
+        console.error('[Skills] Delete not supported in this environment.');
+        return;
+      }
+      const stats = await window.api.fs.stat(resolvedPath);
+      if (!stats.isDirectory) {
+        console.error(
+          '[Skills] Refusing to delete non-directory skill path:',
+          resolvedPath
+        );
+        return;
+      }
+      await window.api.fs.remove(resolvedPath, { recursive: true });
       setDeleteDialogSkill(null);
+      await loadSkillsFromPath(appSkillsPath);
+    } catch (err) {
+      console.error('[Skills] Failed to delete skill:', err);
+    } finally {
+      setDeletingSkill(false);
     }
   };
 
@@ -399,16 +487,16 @@ export function SkillsSettings({
             )}
           </button>
           <button
-            onClick={() => setMainTab('settings')}
+            onClick={() => setMainTab('cli')}
             className={cn(
               'relative py-4 text-sm font-medium transition-colors',
-              mainTab === 'settings'
+              mainTab === 'cli'
                 ? 'text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            {t.settings.title}
-            {mainTab === 'settings' && (
+            {t.settings.cli}
+            {mainTab === 'cli' && (
               <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
             )}
           </button>
@@ -419,85 +507,59 @@ export function SkillsSettings({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {mainTab === 'installed' ? (
           /* Installed Tab Content */
-          <div className="flex h-full flex-col">
-            {/* Filter Bar */}
-            <div className="bg-background sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-4">
-              <div className="flex items-center gap-3">
-                {/* Search Input */}
-                <div className="relative">
-                  <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t.settings.skillsSearch}
-                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-64 rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Add Button with Dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowAddMenu(!showAddMenu)}
-                    className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
-                  >
-                    <Plus className="size-4" />
-                    {t.settings.add}
-                    <ChevronDown className="size-4" />
-                  </button>
-                  {showAddMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowAddMenu(false)}
-                      />
-                      <div className="border-border bg-popover absolute top-full right-0 z-50 mt-1 min-w-[180px] rounded-xl border py-1 shadow-lg">
-                        <button
-                          onClick={() => {
-                            openFolderInSystem(skillsDirs.user);
-                            setShowAddMenu(false);
-                          }}
-                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
-                        >
-                          <FolderOpen className="text-muted-foreground size-4 shrink-0" />
-                          <span className="text-foreground text-sm">
-                            {t.settings.skillsAddToDirectory}
-                          </span>
-                        </button>
-                        {/* TODO: Import from GitHub - hidden for now
-                        <button
-                          onClick={() => {
-                            setShowGitHubImport(true);
-                            setShowAddMenu(false);
-                          }}
-                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
-                        >
-                          <Github className="text-muted-foreground size-4 shrink-0" />
-                          <span className="text-foreground text-sm">
-                            {t.settings.skillsImportGitHub}
-                          </span>
-                        </button>
-                        */}
-                      </div>
-                    </>
-                  )}
+          <div className="space-y-6 p-6">
+            <div className="border-border bg-background rounded-xl border p-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-foreground text-sm font-medium">
+                    {t.settings.skillsAppDirectory}
+                  </h3>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {t.settings.skillsAppDirectoryDescription}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
+                      {appSkillsPath}
+                    </code>
+                    <button
+                      onClick={() => openFolderInSystem(appSkillsPath)}
+                      className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-8 w-8 items-center justify-center rounded transition-colors"
+                      title={t.settings.skillsOpenFolder}
+                    >
+                      <FolderOpen className="size-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Skills Grid */}
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              {filteredSkills.length === 0 ? (
-                <div className="text-muted-foreground flex h-32 items-center justify-center text-sm">
-                  {searchQuery
-                    ? t.settings.skillsNoResults
-                    : t.settings.skillsEmpty}
+            <div className="border-border bg-background space-y-3 rounded-xl border p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-foreground text-sm font-medium">
+                  {t.settings.skillsAppSkills}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => loadSkillsFromPath(appSkillsPath)}
+                    className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-7 w-7 items-center justify-center rounded transition-colors"
+                    title={t.common.refresh}
+                    aria-label={t.common.refresh}
+                  >
+                    <RefreshCw className="size-3.5" />
+                  </button>
+                  <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs font-medium">
+                    {appSkillsSorted.length} {t.settings.skillsList}
+                  </span>
+                </div>
+              </div>
+
+              {appSkillsSorted.length === 0 ? (
+                <div className="text-muted-foreground flex h-28 items-center justify-center rounded-lg border border-dashed border-border text-sm">
+                  {t.settings.skillsEmpty}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {filteredSkills.map((skill) => (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {appSkillsSorted.map((skill) => (
                     <SkillCard
                       key={skill.id}
                       skill={skill}
@@ -509,54 +571,71 @@ export function SkillsSettings({
             </div>
           </div>
         ) : (
-          /* Settings Tab Content */
+          /* CLI Tab Content */
           <div className="space-y-4 p-6">
-            {/* Global Enable Switch */}
-            <div className="border-border bg-background rounded-xl border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-foreground text-sm font-medium">
-                    {t.settings.skillsEnabled}
-                  </h3>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {t.settings.skillsEnabledDescription}
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.skillsEnabled !== false}
-                  onChange={(checked) =>
-                    onSettingsChange({ ...settings, skillsEnabled: checked })
-                  }
-                />
-              </div>
-            </div>
+            <div className="space-y-3">
 
-            {/* Skills Directory */}
-            <div
-              className={cn(
-                'border-border bg-background rounded-xl border p-4 transition-opacity',
-                settings.skillsEnabled === false && 'opacity-50'
+              {cliGroupsVisible.length === 0 ? (
+                <div className="text-muted-foreground flex h-28 items-center justify-center rounded-xl border border-dashed border-border text-sm">
+                  {t.settings.skillsGlobalEmpty}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cliGroupsVisible.map((group) => (
+                    <div
+                      key={group.id}
+                      className="border-border bg-background rounded-xl border p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-foreground text-sm font-medium">
+                              {group.label}
+                            </h4>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleRefreshCliGroup(group)}
+                                className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-7 w-7 items-center justify-center rounded transition-colors"
+                                title={t.common.refresh}
+                                aria-label={t.common.refresh}
+                              >
+                                <RefreshCw className="size-3.5" />
+                              </button>
+                              <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-medium">
+                                {group.skills.length} {t.settings.skillsList}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
+                              {group.path}
+                            </code>
+                            <button
+                              onClick={() => openFolderInSystem(group.path)}
+                              className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-8 w-8 items-center justify-center rounded transition-colors"
+                              title={t.settings.skillsOpenFolder}
+                            >
+                              <FolderOpen className="size-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                          {group.skills.map((skill) => (
+                            <SkillCard
+                              key={skill.id}
+                              skill={skill}
+                              readOnly
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            >
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-foreground text-sm font-medium">
-                    {t.settings.skillsSource}
-                  </h3>
-                  <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
-                    {skillsDirs.user || '~/.claude/skills'}
-                  </code>
-                </div>
-                <div className="ml-4 flex shrink-0 items-center gap-2">
-                  <button
-                    onClick={() => openFolderInSystem(skillsDirs.user)}
-                    className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
-                    title={t.settings.skillsOpenFolder}
-                  >
-                    <FolderOpen className="size-4" />
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -585,15 +664,17 @@ export function SkillsSettings({
               <button
                 onClick={() => setDeleteDialogSkill(null)}
                 className="border-border hover:bg-accent h-9 rounded-lg border px-4 text-sm transition-colors"
+                disabled={deletingSkill}
               >
                 {t.common.cancel}
               </button>
               <button
-                onClick={handleOpenSkillFolder}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors"
+                onClick={handleConfirmDeleteSkill}
+                disabled={deletingSkill}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 flex h-9 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <FolderOpen className="size-4" />
-                {t.settings.skillsOpenFolder}
+                <Trash2 className="size-4" />
+                {t.common.delete}
               </button>
             </div>
           </div>
@@ -664,7 +745,7 @@ export function SkillsSettings({
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         url: githubUrl,
-                        targetDir: skillsDirs.user,
+                        targetDir: appSkillsPath,
                       }),
                     }
                   );
@@ -673,7 +754,7 @@ export function SkillsSettings({
                     setShowGitHubImport(false);
                     setGithubUrl('');
                     // Reload skills
-                    loadSkillsFromPath(settings.skillsPath || '');
+                    loadSkillsFromPath(appSkillsPath);
                   } else {
                     console.error('[Skills] Import failed:', data.error);
                   }

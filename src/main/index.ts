@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile, stat, rm, access } from 'fs/promises'
+import { readFile, writeFile, stat, rm, access, readdir, realpath, mkdir } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { getAppPaths } from './services/AppPaths'
@@ -541,6 +541,39 @@ app.whenReady().then(() => {
     }
   })
 
+  // IPC handlers for log stream
+  const logStreamSubscriptions = new Map<string, () => void>()
+
+  ipcMain.handle('logStream:subscribe', (event, sessionId: string) => {
+    const webContents = event.sender
+    const unsubscribe = claudeCodeService.subscribeToSession(sessionId, (msg) => {
+      if (!webContents.isDestroyed()) {
+        webContents.send('logStream:message', sessionId, msg)
+      }
+    })
+
+    if (unsubscribe) {
+      const key = `${webContents.id}-${sessionId}`
+      logStreamSubscriptions.set(key, unsubscribe)
+      return { success: true }
+    }
+    return { success: false, error: 'Session not found' }
+  })
+
+  ipcMain.handle('logStream:unsubscribe', (event, sessionId: string) => {
+    const key = `${event.sender.id}-${sessionId}`
+    const unsubscribe = logStreamSubscriptions.get(key)
+    if (unsubscribe) {
+      unsubscribe()
+      logStreamSubscriptions.delete(key)
+    }
+    return { success: true }
+  })
+
+  ipcMain.handle('logStream:getHistory', (_, sessionId: string) => {
+    return claudeCodeService.getSessionLogHistory(sessionId)
+  })
+
   // IPC handlers for CLI tool detection
   ipcMain.handle('cliTools:getAll', () => {
     return cliToolDetectorService.getAllTools()
@@ -931,6 +964,70 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for file system operations
+  type FileEntry = { name: string; path: string; isDir: boolean; children?: FileEntry[] }
+
+  const readDirTree = async (
+    targetPath: string,
+    maxDepth: number,
+    visited: Set<string>
+  ): Promise<FileEntry[]> => {
+    if (maxDepth <= 0) return []
+    try {
+      const resolved = await realpath(targetPath)
+      if (visited.has(resolved)) return []
+      visited.add(resolved)
+    } catch {
+      return []
+    }
+    const entries = await readdir(targetPath, { withFileTypes: true })
+    const results: FileEntry[] = []
+
+    for (const entry of entries) {
+      const entryPath = join(targetPath, entry.name)
+      let isDir = entry.isDirectory()
+      let entryResolvedPath: string | null = null
+
+      if (!isDir && entry.isSymbolicLink()) {
+        try {
+          entryResolvedPath = await realpath(entryPath)
+          const targetStats = await stat(entryResolvedPath)
+          isDir = targetStats.isDirectory()
+        } catch {
+          isDir = false
+        }
+      }
+
+      if (isDir) {
+        let children: FileEntry[] = []
+        if (maxDepth > 1) {
+          try {
+            const resolvedPath = entryResolvedPath || (await realpath(entryPath))
+            if (!visited.has(resolvedPath)) {
+              children = await readDirTree(entryPath, maxDepth - 1, visited)
+            }
+          } catch {
+            children = []
+          }
+        }
+        results.push({ name: entry.name, path: entryPath, isDir: true, children })
+      } else {
+        results.push({ name: entry.name, path: entryPath, isDir: false })
+      }
+    }
+
+    return results
+  }
+
+  ipcMain.handle('fs:readDir', async (_, path: string, options?: { maxDepth?: number }) => {
+    try {
+      const maxDepth = Math.max(1, options?.maxDepth ?? 1)
+      return await readDirTree(path, maxDepth, new Set())
+    } catch (error) {
+      console.error('Failed to read directory:', error)
+      throw error
+    }
+  })
+
   ipcMain.handle('fs:readFile', async (_, path: string) => {
     try {
       const buffer = await readFile(path)
@@ -996,6 +1093,15 @@ app.whenReady().then(() => {
       await rm(path, { recursive: options?.recursive || false })
     } catch (error) {
       console.error('Failed to remove file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:mkdir', async (_, path: string) => {
+    try {
+      await mkdir(path, { recursive: true })
+    } catch (error) {
+      console.error('Failed to create directory:', error)
       throw error
     }
   })
@@ -1068,6 +1174,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('path:vibeworkDataDir', () => {
     return appPaths.getRootDir()
+  })
+
+  ipcMain.handle('path:homeDir', () => {
+    return app.getPath('home')
   })
 
   // IPC handlers for settings

@@ -145,12 +145,6 @@ export function getSkillsConfig(): {
   try {
     const settings = getSettings();
 
-    // If global switch is off, return undefined (no skills)
-    if (settings.skillsEnabled === false) {
-      console.log('[useAgent] Skills disabled globally');
-      return undefined;
-    }
-
     const config = {
       enabled: true,
       userDirEnabled: settings.skillsUserDirEnabled !== false,
@@ -167,7 +161,6 @@ export function getSkillsConfig(): {
 
 // Helper to get MCP configuration from settings
 export function getMcpConfig(): {
-  enabled: boolean;
   userDirEnabled: boolean;
   appDirEnabled: boolean;
   mcpConfigPath?: string;
@@ -175,14 +168,7 @@ export function getMcpConfig(): {
   try {
     const settings = getSettings();
 
-    // If global switch is off, return undefined (no MCP)
-    if (settings.mcpEnabled === false) {
-      console.log('[useAgent] MCP disabled globally');
-      return undefined;
-    }
-
     const config = {
-      enabled: true,
       userDirEnabled: settings.mcpUserDirEnabled !== false,
       appDirEnabled: settings.mcpAppDirEnabled !== false,
       mcpConfigPath: settings.mcpConfigPath || undefined,

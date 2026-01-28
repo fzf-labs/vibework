@@ -226,7 +226,29 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_files_task_id ON files(task_id);
     `)
 
+    this.migrateSchema()
+
     console.log('[DatabaseService] Tables created successfully')
+  }
+
+  private migrateSchema(): void {
+    this.ensureColumn('tasks', 'project_id', 'TEXT')
+    this.ensureColumn('tasks', 'worktree_path', 'TEXT')
+    this.ensureColumn('tasks', 'branch_name', 'TEXT')
+    this.ensureColumn('tasks', 'cost', 'REAL')
+    this.ensureColumn('tasks', 'duration', 'REAL')
+    this.ensureColumn('tasks', 'favorite', 'INTEGER DEFAULT 0')
+  }
+
+  private ensureColumn(table: string, column: string, definition: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+      name: string
+    }>
+    const hasColumn = columns.some((col) => col.name === column)
+    if (hasColumn) return
+
+    console.log(`[DatabaseService] Adding missing column ${table}.${column}`)
+    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
   }
 
   // ============ Session 操作 ============

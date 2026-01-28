@@ -1,7 +1,7 @@
 // General settings - theme, language, AI providers, sandbox, agent runtime
 
 import { API_BASE_URL } from '@/config';
-import { getAppDataDir, getMcpConfigPath } from '../../lib/paths';
+import { getAppDataDir, getMcpConfigPath, getSkillsDir } from '../../lib/paths';
 import type {
   Settings,
   AIProvider,
@@ -122,11 +122,9 @@ export const defaultSettings: Settings = {
   defaultProvider: 'default',
   defaultModel: '',
   mcpConfigPath: '',
-  mcpEnabled: true,
   mcpUserDirEnabled: true,
   mcpAppDirEnabled: true,
   skillsPath: '',
-  skillsEnabled: true,
   skillsUserDirEnabled: true,
   skillsAppDirEnabled: true,
   workDir: '',
@@ -200,6 +198,9 @@ export async function getSettingsAsync(): Promise<Settings> {
     const stored = localStorage.getItem('VibeWork_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
+      if ('mcpEnabled' in loadedSettings) {
+        delete (loadedSettings as { mcpEnabled?: boolean }).mcpEnabled;
+      }
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
           loadedSettings.providers.push(defaultProvider);
@@ -223,6 +224,9 @@ export function getSettings(): Settings {
     const stored = localStorage.getItem('VibeWork_settings');
     if (stored) {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
+      if ('mcpEnabled' in loadedSettings) {
+        delete (loadedSettings as { mcpEnabled?: boolean }).mcpEnabled;
+      }
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
           loadedSettings.providers.push(defaultProvider);
@@ -254,7 +258,9 @@ export function saveSettings(settings: Settings): void {
   }
 
   try {
-    localStorage.setItem('VibeWork_settings', JSON.stringify(settings));
+    const sanitized = { ...settings } as Settings & { mcpEnabled?: boolean };
+    if ('mcpEnabled' in sanitized) delete sanitized.mcpEnabled;
+    localStorage.setItem('VibeWork_settings', JSON.stringify(sanitized));
   } catch (error) {
     console.error('[Settings] Failed to save to localStorage:', error);
   }
@@ -269,16 +275,20 @@ export async function saveSettingItem(key: string, value: string): Promise<void>
 }
 
 export async function initializeSettings(): Promise<Settings> {
-  const [appDataDir, mcpConfigPath] = await Promise.all([
+  const [appDataDir, mcpConfigPath, skillsDir] = await Promise.all([
     getAppDataDir(),
     getMcpConfigPath(),
+    getSkillsDir(),
   ]);
 
   const settings = await getSettingsAsync();
 
   if (!settings.workDir) settings.workDir = appDataDir;
   if (!settings.mcpConfigPath) settings.mcpConfigPath = mcpConfigPath;
-  if (!settings.skillsPath) settings.skillsPath = `${settings.workDir}/skills`;
+  const legacySkillsDir = `${settings.workDir}/skills`;
+  if (!settings.skillsPath || settings.skillsPath === legacySkillsDir) {
+    settings.skillsPath = skillsDir;
+  }
   if (settings.defaultSandboxProvider && settings.sandboxEnabled !== true) {
     settings.sandboxEnabled = true;
   }

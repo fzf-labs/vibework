@@ -22,6 +22,7 @@ export default {
   success: 'Success',
   warning: 'Warning',
   info: 'Info',
+  refresh: 'Refresh',
 
   // Scroll
   scrollToBottom: 'Scroll to bottom',

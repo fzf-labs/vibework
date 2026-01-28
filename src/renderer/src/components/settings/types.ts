@@ -63,7 +63,7 @@ export interface SkillInfo {
   id: string;
   name: string;
   description?: string;
-  source: 'claude' | 'VibeWork';
+  source: string;
   path: string;
   files: SkillFile[];
   enabled: boolean;

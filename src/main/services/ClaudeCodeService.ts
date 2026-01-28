@@ -3,6 +3,10 @@ import { EventEmitter } from 'events'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
+import { MsgStoreService } from './MsgStoreService'
+import { LogNormalizerService } from './LogNormalizerService'
+import { ClaudeCodeNormalizer } from './normalizers/ClaudeCodeNormalizer'
+import { LogMsg } from '../types/log'
 
 interface MCPServer {
   name: string
@@ -30,15 +34,19 @@ interface ClaudeCodeSession {
   status: 'running' | 'stopped' | 'error'
   output: string[]
   startTime: Date
+  msgStore: MsgStoreService
 }
 
 export class ClaudeCodeService extends EventEmitter {
   private sessions: Map<string, ClaudeCodeSession> = new Map()
   private config: ClaudeCodeConfig
+  private normalizer: LogNormalizerService
 
   constructor() {
     super()
     this.config = this.loadConfig()
+    this.normalizer = new LogNormalizerService()
+    this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
   }
 
   private loadConfig(): ClaudeCodeConfig {
@@ -91,9 +99,15 @@ export class ClaudeCodeService extends EventEmitter {
 
     const childProcess = spawn(command, args, {
       cwd: workdir,
-      shell: true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      shell: true, // 使用系统默认 shell
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PATH: `${process.env.HOME}/.local/bin:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}`
+      }
     })
+
+    const msgStore = new MsgStoreService()
 
     const session: ClaudeCodeSession = {
       id: sessionId,
@@ -101,24 +115,63 @@ export class ClaudeCodeService extends EventEmitter {
       workdir,
       status: 'running',
       output: [],
-      startTime: new Date()
+      startTime: new Date(),
+      msgStore
     }
 
     // 监听输出
     childProcess.stdout?.on('data', (data) => {
       const output = data.toString()
       session.output.push(output)
+
+      // 推送到 MsgStore
+      const stdoutMsg: LogMsg = {
+        type: 'stdout',
+        content: output,
+        timestamp: Date.now()
+      }
+      msgStore.push(stdoutMsg)
+
+      // 尝试解析为结构化日志
+      const lines = output.split('\n')
+      for (const line of lines) {
+        const entry = this.normalizer.normalize('claude-code', line)
+        if (entry) {
+          msgStore.push({
+            type: 'normalized',
+            entry,
+            timestamp: Date.now()
+          })
+        }
+      }
+
       this.emit('output', { sessionId, type: 'stdout', content: output })
     })
 
     childProcess.stderr?.on('data', (data) => {
       const output = data.toString()
       session.output.push(output)
+
+      // 推送到 MsgStore
+      msgStore.push({
+        type: 'stderr',
+        content: output,
+        timestamp: Date.now()
+      })
+
       this.emit('output', { sessionId, type: 'stderr', content: output })
     })
 
     childProcess.on('close', (code) => {
       session.status = code === 0 ? 'stopped' : 'error'
+
+      // 推送完成消息
+      msgStore.push({
+        type: 'finished',
+        exitCode: code ?? undefined,
+        timestamp: Date.now()
+      })
+
       this.emit('close', { sessionId, code })
     })
 
@@ -168,5 +221,29 @@ export class ClaudeCodeService extends EventEmitter {
       workdir: s.workdir,
       startTime: s.startTime
     }))
+  }
+
+  /**
+   * 获取会话的 MsgStore
+   */
+  getSessionMsgStore(sessionId: string): MsgStoreService | undefined {
+    return this.sessions.get(sessionId)?.msgStore
+  }
+
+  /**
+   * 订阅会话的日志流
+   */
+  subscribeToSession(sessionId: string, callback: (msg: LogMsg) => void): (() => void) | undefined {
+    const msgStore = this.getSessionMsgStore(sessionId)
+    if (!msgStore) return undefined
+    return msgStore.subscribe(callback)
+  }
+
+  /**
+   * 获取会话的历史日志
+   */
+  getSessionLogHistory(sessionId: string): LogMsg[] {
+    const msgStore = this.getSessionMsgStore(sessionId)
+    return msgStore?.getHistory() || []
   }
 }

@@ -10,6 +10,7 @@
 
 // Cache for resolved paths
 let cachedAppDataDir: string | null = null;
+let cachedVibeworkDataDir: string | null = null;
 
 /**
  * Check if running in Electron environment
@@ -46,6 +47,29 @@ export async function getAppDataDir(): Promise<string> {
 }
 
 /**
+ * Get the VibeWork data directory
+ * Returns ~/.vibework on all platforms
+ */
+export async function getVibeworkDataDir(): Promise<string> {
+  if (cachedVibeworkDataDir) {
+    return cachedVibeworkDataDir;
+  }
+
+  if (isElectron()) {
+    try {
+      const { path } = await import('./electron-api');
+      cachedVibeworkDataDir = await path.vibeworkDataDir();
+      return cachedVibeworkDataDir;
+    } catch (error) {
+      console.warn('[Paths] Failed to get vibework data dir:', error);
+    }
+  }
+
+  cachedVibeworkDataDir = '~/.vibework';
+  return cachedVibeworkDataDir;
+}
+
+/**
  * Get the default working directory for sessions
  */
 export async function getDefaultWorkDir(): Promise<string> {
@@ -73,7 +97,7 @@ export async function getMcpConfigPath(): Promise<string> {
  * Get the default skills directory
  */
 export async function getSkillsDir(): Promise<string> {
-  const appDir = await getAppDataDir();
+  const appDir = await getVibeworkDataDir();
   return `${appDir}/skills`;
 }
 

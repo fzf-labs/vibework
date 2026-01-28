@@ -52,6 +52,20 @@ export class AppPaths {
   }
 
   /**
+   * 获取 session 日志目录路径 ~/.vibework/logs/sessions/
+   */
+  getSessionLogsDir(): string {
+    return join(this.getLogsDir(), 'sessions')
+  }
+
+  /**
+   * 获取指定 session 的日志文件路径
+   */
+  getSessionLogFile(sessionId: string): string {
+    return join(this.getSessionLogsDir(), `${sessionId}.jsonl`)
+  }
+
+  /**
    * 获取缓存目录路径 ~/.vibework/cache/
    */
   getCacheDir(): string {
@@ -88,6 +102,7 @@ export class AppPaths {
       this.getConfigDir(),
       this.getDataDir(),
       this.getLogsDir(),
+      this.getSessionLogsDir(),
       this.getCacheDir(),
     ]
 

@@ -61,6 +61,19 @@ export const fs = {
   },
 
   /**
+   * 读取目录内容
+   */
+  async readDir(
+    path: string,
+    options?: { maxDepth?: number }
+  ): Promise<{ name: string; path: string; isDir: boolean; children?: unknown[] }[]> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.readDir(path, options)
+  },
+
+  /**
    * 检查文件/目录是否存在
    */
   async exists(path: string): Promise<boolean> {
@@ -78,6 +91,15 @@ export const fs = {
       throw new Error('Electron API not available')
     }
     return window.api.fs.remove(path, options)
+  },
+  /**
+   * 创建目录
+   */
+  async mkdir(path: string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.mkdir(path)
   }
 }
 
@@ -174,6 +196,26 @@ export const path = {
       throw new Error('Electron API not available')
     }
     return window.api.path.tempDir()
+  },
+
+  /**
+   * 获取应用数据目录 (~/.vibework)
+   */
+  async vibeworkDataDir(): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.path.vibeworkDataDir()
+  },
+
+  /**
+   * 获取用户目录
+   */
+  async homeDir(): Promise<string> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.path.homeDir()
   },
 
   /**

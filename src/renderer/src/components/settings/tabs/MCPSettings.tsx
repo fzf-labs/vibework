@@ -14,7 +14,6 @@ import {
   X,
 } from 'lucide-react';
 
-import { Switch } from '../components/Switch';
 import { API_BASE_URL } from '../constants';
 import type {
   MCPConfig,
@@ -128,7 +127,7 @@ const initialConfigDialog: ConfigDialogState = {
   headers: [],
 };
 
-export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
+export function MCPSettings(_props: SettingsTabProps) {
   const [servers, setServers] = useState<MCPServerUI[]>([]);
   const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
@@ -701,49 +700,24 @@ export function MCPSettings({ settings, onSettingsChange }: SettingsTabProps) {
           ) : (
             /* Settings Tab Content */
             <div className="space-y-4 p-6">
-              {/* Global Enable Switch */}
-              <div className="border-border bg-background rounded-xl border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-foreground text-sm font-medium">
-                      {t.settings.mcpEnabled}
-                    </h3>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      {t.settings.mcpEnabledDescription}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={settings.mcpEnabled !== false}
-                    onChange={(checked) =>
-                      onSettingsChange({ ...settings, mcpEnabled: checked })
-                    }
-                  />
-                </div>
-              </div>
-
               {/* MCP Config File */}
-              <div
-                className={cn(
-                  'border-border bg-background rounded-xl border p-4 transition-opacity',
-                  settings.mcpEnabled === false && 'opacity-50'
-                )}
-              >
-                <div className="flex items-center justify-between">
+              <div className="border-border bg-background rounded-xl border p-4">
+                <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
                     <h3 className="text-foreground text-sm font-medium">
                       {t.settings.mcpConfigPath}
                     </h3>
-                    <code className="bg-muted text-muted-foreground mt-2 block truncate rounded px-2 py-1 text-xs">
-                      {mcpDirs.app || '~/.VibeWork/mcp.json'}
-                    </code>
-                  </div>
-                  <div className="ml-4 flex shrink-0 items-center gap-2">
-                    <button
-                      onClick={() => openFolderInSystem(mcpDirs.app)}
-                      className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-2 transition-colors"
-                    >
-                      <FileJson className="size-4" />
-                    </button>
+                    <div className="mt-2 flex items-center gap-2">
+                      <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
+                        {mcpDirs.app || '~/.VibeWork/mcp.json'}
+                      </code>
+                      <button
+                        onClick={() => openFolderInSystem(mcpDirs.app)}
+                        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-8 w-8 items-center justify-center rounded transition-colors"
+                      >
+                        <FileJson className="size-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

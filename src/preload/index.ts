@@ -99,6 +99,16 @@ const api = {
       return () => ipcRenderer.removeListener('claudeCode:error', listener)
     }
   },
+  logStream: {
+    subscribe: (sessionId: string) => ipcRenderer.invoke('logStream:subscribe', sessionId),
+    unsubscribe: (sessionId: string) => ipcRenderer.invoke('logStream:unsubscribe', sessionId),
+    getHistory: (sessionId: string) => ipcRenderer.invoke('logStream:getHistory', sessionId),
+    onMessage: (callback: (sessionId: string, msg: unknown) => void) => {
+      const listener = (_: unknown, sessionId: string, msg: unknown) => callback(sessionId, msg)
+      ipcRenderer.on('logStream:message', listener)
+      return () => ipcRenderer.removeListener('logStream:message', listener)
+    }
+  },
   cliTools: {
     getAll: () => ipcRenderer.invoke('cliTools:getAll'),
     detect: (toolId: string) => ipcRenderer.invoke('cliTools:detect', toolId),
@@ -206,9 +216,12 @@ const api = {
     writeTextFile: (path: string, content: string) =>
       ipcRenderer.invoke('fs:writeTextFile', path, content),
     stat: (path: string) => ipcRenderer.invoke('fs:stat', path),
+    readDir: (path: string, options?: { maxDepth?: number }) =>
+      ipcRenderer.invoke('fs:readDir', path, options),
     exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
     remove: (path: string, options?: { recursive?: boolean }) =>
-      ipcRenderer.invoke('fs:remove', path, options)
+      ipcRenderer.invoke('fs:remove', path, options),
+    mkdir: (path: string) => ipcRenderer.invoke('fs:mkdir', path)
   },
   dialog: {
     save: (options: unknown) => ipcRenderer.invoke('dialog:save', options),
@@ -223,7 +236,8 @@ const api = {
     appDataDir: () => ipcRenderer.invoke('path:appDataDir'),
     appConfigDir: () => ipcRenderer.invoke('path:appConfigDir'),
     tempDir: () => ipcRenderer.invoke('path:tempDir'),
-    vibeworkDataDir: () => ipcRenderer.invoke('path:vibeworkDataDir')
+    vibeworkDataDir: () => ipcRenderer.invoke('path:vibeworkDataDir'),
+    homeDir: () => ipcRenderer.invoke('path:homeDir')
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion')

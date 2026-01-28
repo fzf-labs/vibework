@@ -22,6 +22,7 @@ export default {
   success: '成功',
   warning: '警告',
   info: '提示',
+  refresh: '刷新',
 
   // 滚动
   scrollToBottom: '滚动到底部',

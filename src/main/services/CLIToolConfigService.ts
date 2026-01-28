@@ -20,6 +20,8 @@ export class CLIToolConfigService {
         return path.join(homeDir, '.codex', 'config.json')
       case 'gemini-cli':
         return path.join(homeDir, '.gemini', 'config.json')
+      case 'opencode':
+        return path.join(homeDir, '.opencode', 'config.json')
       case 'cursor-agent':
         return path.join(homeDir, '.cursor', 'agent-config.json')
       default:
@@ -51,6 +53,8 @@ export class CLIToolConfigService {
         return { executablePath: 'codex', apiKey: '' }
       case 'gemini-cli':
         return { executablePath: 'gemini', apiKey: '' }
+      case 'opencode':
+        return { executablePath: 'opencode' }
       case 'cursor-agent':
         return { executablePath: 'cursor-agent' }
       default:

@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { TerminalOutput } from './TerminalOutput'
+import { NormalizedLogView } from './NormalizedLogView'
+import { useLogStream } from '@/hooks/useLogStream'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Play, Square, Send } from 'lucide-react'
+import { Play, Square, Send, Terminal, List } from 'lucide-react'
 
 interface TerminalLine {
   type: 'stdout' | 'stderr'
@@ -10,22 +12,44 @@ interface TerminalLine {
   timestamp: Date
 }
 
+type ViewMode = 'raw' | 'structured'
+
 interface ClaudeCodeSessionProps {
   sessionId: string
   workdir: string
   className?: string
   onClose?: () => void
+  defaultViewMode?: ViewMode
 }
 
 export function ClaudeCodeSession({
   sessionId,
   workdir,
   className,
-  onClose
+  onClose,
+  defaultViewMode = 'raw'
 }: ClaudeCodeSessionProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'stopped' | 'error'>('idle')
   const [lines, setLines] = useState<TerminalLine[]>([])
   const [input, setInput] = useState('')
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
+
+  // 使用新的日志流 hook - 始终传入 sessionId 以加载历史日志
+  const { rawLogs, normalizedLogs, isConnected, clearLogs } = useLogStream(sessionId)
+
+  // 将 rawLogs 转换为 TerminalLine 格式
+  const terminalLines = useMemo<TerminalLine[]>(() => {
+    // 优先使用 logStream 的数据
+    if (rawLogs.length > 0) {
+      return rawLogs.map((log) => ({
+        type: log.type === 'stderr' ? 'stderr' : 'stdout',
+        content: log.content || '',
+        timestamp: new Date(log.timestamp)
+      }))
+    }
+    // 回退到本地 lines 状态
+    return lines
+  }, [rawLogs, lines])
 
   const handleOutput = useCallback(
     (data: { sessionId: string; type: string; content: string }) => {
@@ -84,6 +108,7 @@ export function ClaudeCodeSession({
   const startSession = async () => {
     try {
       setLines([])
+      clearLogs()
       setStatus('running')
       await window.api.claudeCode.startSession(sessionId, workdir)
     } catch (error) {
@@ -143,6 +168,35 @@ export function ClaudeCodeSession({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* 视图切换按钮 */}
+          <div className="flex items-center rounded-md border border-zinc-700 p-0.5">
+            <button
+              onClick={() => setViewMode('raw')}
+              className={cn(
+                'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+                viewMode === 'raw'
+                  ? 'bg-zinc-700 text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              )}
+              title="Raw output"
+            >
+              <Terminal className="w-3 h-3" />
+              Raw
+            </button>
+            <button
+              onClick={() => setViewMode('structured')}
+              className={cn(
+                'flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+                viewMode === 'structured'
+                  ? 'bg-zinc-700 text-zinc-100'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              )}
+              title="Structured view"
+            >
+              <List className="w-3 h-3" />
+              Structured
+            </button>
+          </div>
           {status !== 'running' ? (
             <Button size="sm" variant="outline" onClick={startSession}>
               <Play className="w-4 h-4" />
@@ -157,7 +211,13 @@ export function ClaudeCodeSession({
         </div>
       </div>
 
-      <TerminalOutput lines={lines} className="h-80" />
+      {viewMode === 'raw' ? (
+        <TerminalOutput lines={terminalLines} className="h-80" />
+      ) : (
+        <div className="bg-zinc-900 rounded-lg h-80 overflow-auto p-2">
+          <NormalizedLogView entries={normalizedLogs} />
+        </div>
+      )}
 
       {status === 'running' && (
         <div className="flex gap-2">

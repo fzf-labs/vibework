@@ -52,6 +52,16 @@ export class CLIToolDetectorService {
       detectionCommand: 'gemini --version'
     },
     {
+      id: 'opencode',
+      name: 'opencode',
+      command: 'opencode',
+      displayName: 'OpenCode',
+      description: 'OpenCode CLI 工具',
+      installed: false,
+      configValid: false,
+      detectionCommand: 'opencode --version'
+    },
+    {
       id: 'cursor-agent',
       name: 'cursor-agent',
       command: 'cursor-agent',
@@ -94,6 +104,9 @@ export class CLIToolDetectorService {
         break
       case 'gemini-cli':
         configPath = path.join(homeDir, '.gemini', 'config.json')
+        break
+      case 'opencode':
+        configPath = path.join(homeDir, '.opencode', 'config.json')
         break
       case 'cursor-agent':
         configPath = path.join(homeDir, '.cursor', 'agent-config.json')
