@@ -55,6 +55,23 @@ export function EditorSettings({
     [editors]
   );
 
+  const editorOptions = useMemo(
+    () => [
+      { value: 'vscode' as EditorType, label: 'Visual Studio Code' },
+      { value: 'cursor' as EditorType, label: 'Cursor' },
+      { value: 'antigravity' as EditorType, label: 'Google Antigravity' },
+      { value: 'webstorm' as EditorType, label: 'WebStorm' },
+      { value: 'idea' as EditorType, label: 'IntelliJ IDEA' },
+      { value: 'goland' as EditorType, label: 'GoLand' },
+      { value: 'xcode' as EditorType, label: 'Xcode' },
+      {
+        value: 'custom' as EditorType,
+        label: t.settings?.editorCustomOption || 'Custom',
+      },
+    ],
+    [t.settings?.editorCustomOption]
+  );
+
   const selectedType = editorSettings.editorType;
   const selectedMissing =
     !loading &&
@@ -97,37 +114,21 @@ export function EditorSettings({
           onChange={(e) => handleEditorTypeChange(e.target.value as EditorType)}
           className="border-input bg-background text-foreground focus:ring-ring block h-10 w-full max-w-sm cursor-pointer rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:outline-none"
         >
-          {selectedType !== 'custom' && selectedMissing && (
-            <option value={selectedType}>
-              {t.settings?.editorMissingOption ||
-                `Unavailable (${selectedType})`}
-            </option>
-          )}
-          {selectedType !== 'custom' && loading && (
-            <option value={selectedType}>
-              {t.settings?.editorDetecting || 'Detecting editors...'}
-            </option>
-          )}
-          {selectedType !== 'custom' &&
-            !loading &&
-            availableEditors.length === 0 && (
-              <option value={selectedType}>
-                {t.settings?.editorEmpty || 'No editors detected'}
-              </option>
-            )}
-          {availableEditors.map((editor) => (
-            <option key={editor.type} value={editor.type}>
-              {editor.name}
+          {editorOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
-          <option value="custom">
-            {t.settings?.editorCustomOption || 'Custom'}
-          </option>
         </select>
         {error && (
           <p className="text-destructive text-sm">
             {t.settings?.editorDetectError ||
               'Unable to detect editors. You can still use a custom command.'}
+          </p>
+        )}
+        {!loading && availableEditors.length === 0 && !error && (
+          <p className="text-muted-foreground text-xs">
+            {t.settings?.editorEmpty || 'No editors detected'}
           </p>
         )}
         {selectedMissing && (

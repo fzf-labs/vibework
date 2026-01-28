@@ -164,44 +164,25 @@ export function BoardPage() {
         let editorCommand: string | null = null;
 
         if (editorType === 'custom') {
-          editorCommand = customCommand || null;
-        } else if (window.api?.editor?.getAvailable) {
-          const available = await window.api.editor.getAvailable();
-          const editors = Array.isArray(available) ? available : [];
-          const matched = editors.find((editor) => editor.type === editorType);
-          editorCommand =
-            matched?.path ??
-            matched?.command ??
-            editors[0]?.path ??
-            editors[0]?.command ??
-            null;
-        }
-
-        if (!editorCommand && editorType !== 'custom') {
-          editorCommand = defaultCommandMap[editorType] ?? null;
+          editorCommand = customCommand || 'code';
+        } else {
+          editorCommand = defaultCommandMap[editorType] ?? 'code';
         }
 
         if (editorCommand && window.api?.editor?.openProject) {
-          try {
-            console.log(
-              '[BoardPage] Opening in editor with command:',
-              editorCommand,
-              currentProject.path
-            );
-            await window.api.editor.openProject(
-              currentProject.path,
-              editorCommand
-            );
-            return;
-          } catch (openError) {
-            console.error(
-              '[BoardPage] Failed to open via editor command:',
-              openError
-            );
-          }
+          console.log(
+            '[BoardPage] Opening in editor with command:',
+            editorCommand,
+            currentProject.path
+          );
+          await window.api.editor.openProject(
+            currentProject.path,
+            editorCommand
+          );
+          return;
         }
 
-        await window.api.shell.openPath(currentProject.path);
+        console.error('[BoardPage] Editor API is unavailable.');
       } catch (error) {
         console.error('Failed to open in IDE:', error);
       }

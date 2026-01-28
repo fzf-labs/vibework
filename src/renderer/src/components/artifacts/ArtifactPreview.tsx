@@ -267,21 +267,9 @@ export function ArtifactPreview({
       let editorCommand: string | null = null;
 
       if (editorType === 'custom') {
-        editorCommand = customCommand || null;
-      } else if (window.api?.editor?.getAvailable) {
-        const available = await window.api.editor.getAvailable();
-        const editors = Array.isArray(available) ? available : [];
-        const matched = editors.find((editor) => editor.type === editorType);
-          editorCommand =
-            matched?.path ??
-            matched?.command ??
-            editors[0]?.path ??
-            editors[0]?.command ??
-            null;
-      }
-
-      if (!editorCommand && editorType !== 'custom') {
-        editorCommand = defaultCommandMap[editorType] ?? null;
+        editorCommand = customCommand || 'code';
+      } else {
+        editorCommand = defaultCommandMap[editorType] ?? 'code';
       }
 
       if (editorCommand && window.api?.editor?.openProject) {
@@ -290,32 +278,11 @@ export function ArtifactPreview({
           editorCommand,
           artifact.path
         );
-        try {
-          await window.api.editor.openProject(artifact.path, editorCommand);
-          return;
-        } catch (error) {
-          console.error(
-            '[ArtifactPreview] Failed to open via editor command:',
-            error
-          );
-        }
+        await window.api.editor.openProject(artifact.path, editorCommand);
+        return;
       }
 
-      console.log('[ArtifactPreview] Opening in editor via API:', artifact.path);
-      const response = await fetch(`${API_BASE_URL}/files/open-in-editor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: artifact.path }),
-      });
-      const result = await response.json();
-      if (result.success) {
-        console.log('[ArtifactPreview] Opened in', result.editor);
-      } else {
-        console.error(
-          '[ArtifactPreview] Failed to open in editor:',
-          result.error
-        );
-      }
+      console.error('[ArtifactPreview] Editor API is unavailable.');
     } catch (err) {
       console.error('[ArtifactPreview] Failed to open in editor:', err);
     }
