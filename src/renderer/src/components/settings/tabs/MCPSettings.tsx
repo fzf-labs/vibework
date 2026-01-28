@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
+import { getMcpConfigPath } from '@/lib/paths';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   ChevronDown,
   FileJson,
+  FolderOpen,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -127,13 +135,12 @@ const initialConfigDialog: ConfigDialogState = {
   headers: [],
 };
 
-export function MCPSettings(_props: SettingsTabProps) {
+export function MCPSettings({ settings }: SettingsTabProps) {
   const [servers, setServers] = useState<MCPServerUI[]>([]);
   const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAddMenu, setShowAddMenu] = useState(false);
   const [mcpDirs, setMcpDirs] = useState<{ user: string; app: string }>({
     user: '',
     app: '',
@@ -148,6 +155,86 @@ export function MCPSettings(_props: SettingsTabProps) {
     useState<ConfigDialogState>(initialConfigDialog);
 
   const { t } = useLanguage();
+
+  const resolvePath = async (targetPath: string): Promise<string> => {
+    if (!targetPath) return targetPath;
+    if (targetPath.startsWith('~') && window.api?.path?.homeDir) {
+      const homeDir = await window.api.path.homeDir();
+      return targetPath.replace(/^~(?=\/|\\)/, homeDir);
+    }
+    return targetPath;
+  };
+
+  const getSaveConfigPath = async (): Promise<string> => {
+    if (settings?.mcpConfigPath) return settings.mcpConfigPath;
+    return getMcpConfigPath();
+  };
+
+  const ensureParentDir = async (filePath: string): Promise<void> => {
+    const lastSeparator = Math.max(
+      filePath.lastIndexOf('/'),
+      filePath.lastIndexOf('\\')
+    );
+    if (lastSeparator <= 0) return;
+    const dirPath = filePath.slice(0, lastSeparator);
+    if (window.api?.fs?.mkdir) {
+      await window.api.fs.mkdir(dirPath);
+    }
+  };
+
+  const ensureDirectoryExists = async (dirPath: string): Promise<void> => {
+    if (!dirPath) return;
+    if (window.api?.fs?.mkdir) {
+      await window.api.fs.mkdir(dirPath);
+    }
+  };
+
+  const getDirectoryPath = (filePath: string): string => {
+    if (!filePath) return filePath;
+    const lastSeparator = Math.max(
+      filePath.lastIndexOf('/'),
+      filePath.lastIndexOf('\\')
+    );
+    if (lastSeparator <= 0) return filePath;
+    return filePath.slice(0, lastSeparator);
+  };
+
+  const buildServersFromConfig = (
+    servers: Record<
+      string,
+      MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+    >,
+    sourceName: 'VibeWork' | 'claude'
+  ): MCPServerUI[] => {
+    const serverList: MCPServerUI[] = [];
+    for (const [id, serverConfig] of Object.entries(servers)) {
+      const hasUrl = 'url' in serverConfig;
+      const cfg = serverConfig as {
+        type?: 'http' | 'sse';
+        url?: string;
+        headers?: Record<string, string>;
+      };
+      // Determine type: use explicit type if provided, otherwise default based on config
+      let serverType: 'stdio' | 'http' | 'sse' = 'stdio';
+      if (hasUrl) {
+        serverType = cfg.type || 'http';
+      }
+      serverList.push({
+        id: `${sourceName}-${id}`,
+        name: id,
+        type: serverType,
+        enabled: true,
+        command: hasUrl ? undefined : (serverConfig as MCPServerStdio).command,
+        args: hasUrl ? undefined : (serverConfig as MCPServerStdio).args,
+        env: hasUrl ? undefined : (serverConfig as MCPServerStdio).env,
+        url: hasUrl ? cfg.url : undefined,
+        headers: hasUrl ? cfg.headers : undefined,
+        autoExecute: true,
+        source: sourceName,
+      });
+    }
+    return serverList;
+  };
 
   // Filter and sort servers
   const filteredServers = servers
@@ -175,6 +262,32 @@ export function MCPSettings(_props: SettingsTabProps) {
       setError(null);
 
       try {
+        if (window.api?.fs?.readTextFile && window.api?.fs?.exists) {
+          const localPath = await resolvePath(await getSaveConfigPath());
+          if (localPath) {
+            const exists = await window.api.fs.exists(localPath);
+            if (exists) {
+              const content = await window.api.fs.readTextFile(localPath);
+              const parsed = JSON.parse(content) as MCPConfig | Record<string, unknown>;
+              const mcpServers = (parsed as MCPConfig).mcpServers || parsed;
+              if (mcpServers && typeof mcpServers === 'object') {
+                const serverList = buildServersFromConfig(
+                  mcpServers as Record<
+                    string,
+                    MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+                  >,
+                  'VibeWork'
+                );
+                setMcpDirs({ user: '', app: localPath });
+                setServers(serverList);
+                setError(null);
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        }
+
         const response = await fetch(`${API_BASE_URL}/mcp/all-configs`);
         const result = await response.json();
 
@@ -202,37 +315,24 @@ export function MCPSettings(_props: SettingsTabProps) {
 
           if (!configInfo.exists) continue;
 
-          for (const [id, serverConfig] of Object.entries(configInfo.servers)) {
-            const hasUrl = 'url' in serverConfig;
-            const cfg = serverConfig as {
-              type?: 'http' | 'sse';
-              url?: string;
-              headers?: Record<string, string>;
-            };
-            // Determine type: use explicit type if provided, otherwise default based on config
-            let serverType: 'stdio' | 'http' | 'sse' = 'stdio';
-            if (hasUrl) {
-              serverType = cfg.type || 'http';
-            }
-            serverList.push({
-              id: `${configInfo.name}-${id}`,
-              name: id,
-              type: serverType,
-              enabled: true,
-              command: hasUrl
-                ? undefined
-                : (serverConfig as MCPServerStdio).command,
-              args: hasUrl ? undefined : (serverConfig as MCPServerStdio).args,
-              url: hasUrl ? cfg.url : undefined,
-              headers: hasUrl ? cfg.headers : undefined,
-              autoExecute: true,
-              source: configInfo.name as 'VibeWork' | 'claude',
-            });
-          }
+          serverList.push(
+            ...buildServersFromConfig(
+              configInfo.servers as Record<
+                string,
+                MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+              >,
+              configInfo.name as 'VibeWork' | 'claude'
+            )
+          );
+        }
+
+        if (!dirs.app) {
+          dirs.app = await getMcpConfigPath();
         }
 
         setMcpDirs(dirs);
         setServers(serverList);
+        setError(null);
       } catch (err) {
         console.error('[MCP] Failed to load MCP config:', err);
         setError(t.settings.mcpLoadError);
@@ -247,37 +347,57 @@ export function MCPSettings(_props: SettingsTabProps) {
 
   // Save MCP config via API
   const saveMCPConfig = async (serverList: MCPServerUI[]) => {
-    try {
-      const mcpServers: Record<string, unknown> = {};
-      for (const server of serverList) {
-        if (server.source === 'claude') continue;
-        if (server.type === 'http' || server.type === 'sse') {
-          const serverConfig: Record<string, unknown> = {
-            url: server.url || '',
-          };
-          // Only add type field for sse (http is default)
-          if (server.type === 'sse') {
-            serverConfig.type = 'sse';
-          }
-          if (server.headers && Object.keys(server.headers).length > 0) {
-            serverConfig.headers = server.headers;
-          }
-          mcpServers[server.name] = serverConfig;
-        } else {
-          const serverConfig: Record<string, unknown> = {
-            command: server.command || '',
-          };
-          if (server.args && server.args.length > 0) {
-            serverConfig.args = server.args;
-          }
-          mcpServers[server.name] = serverConfig;
+    const mcpServers: Record<string, unknown> = {};
+    for (const server of serverList) {
+      if (server.source === 'claude') continue;
+      if (server.type === 'http' || server.type === 'sse') {
+        const serverConfig: Record<string, unknown> = {
+          url: server.url || '',
+        };
+        // Only add type field for sse (http is default)
+        if (server.type === 'sse') {
+          serverConfig.type = 'sse';
         }
+        if (server.headers && Object.keys(server.headers).length > 0) {
+          serverConfig.headers = server.headers;
+        }
+        mcpServers[server.name] = serverConfig;
+      } else {
+        const serverConfig: Record<string, unknown> = {
+          command: server.command || '',
+        };
+        if (server.args && server.args.length > 0) {
+          serverConfig.args = server.args;
+        }
+        if (server.env && Object.keys(server.env).length > 0) {
+          serverConfig.env = server.env;
+        }
+        mcpServers[server.name] = serverConfig;
       }
+    }
 
-      const config: MCPConfig = {
-        mcpServers: mcpServers as MCPConfig['mcpServers'],
-      };
+    const config: MCPConfig = {
+      mcpServers: mcpServers as MCPConfig['mcpServers'],
+    };
 
+    let fileSaved = false;
+    if (window.api?.fs?.writeTextFile) {
+      try {
+        const targetPath = await resolvePath(await getSaveConfigPath());
+        if (targetPath) {
+          await ensureParentDir(targetPath);
+          await window.api.fs.writeTextFile(
+            targetPath,
+            JSON.stringify(config, null, 2)
+          );
+          fileSaved = true;
+        }
+      } catch (err) {
+        console.error('[MCP] Failed to save MCP config to file:', err);
+      }
+    }
+
+    try {
       const response = await fetch(`${API_BASE_URL}/mcp/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -289,17 +409,33 @@ export function MCPSettings(_props: SettingsTabProps) {
         throw new Error(result.error || 'Failed to save config');
       }
     } catch (err) {
-      console.error('[MCP] Failed to save MCP config:', err);
+      if (!fileSaved) {
+        console.error('[MCP] Failed to save MCP config via API:', err);
+      }
     }
   };
 
   // Open folder in system file manager
   const openFolderInSystem = async (folderPath: string) => {
     try {
+      const resolvedPath = await resolvePath(folderPath);
+      await ensureDirectoryExists(resolvedPath);
+      if (window.api?.shell?.openPath) {
+        try {
+          await window.api.shell.openPath(resolvedPath);
+          return;
+        } catch (error) {
+          if (window.api?.shell?.showItemInFolder) {
+            await window.api.shell.showItemInFolder(resolvedPath);
+            return;
+          }
+          throw error;
+        }
+      }
       const response = await fetch(`${API_BASE_URL}/files/open`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: folderPath, expandHome: true }),
+        body: JSON.stringify({ path: resolvedPath, expandHome: true }),
       });
       const data = await response.json();
       if (!data.success) {
@@ -308,6 +444,13 @@ export function MCPSettings(_props: SettingsTabProps) {
     } catch (err) {
       console.error('[MCP] Error opening folder:', err);
     }
+  };
+
+  const handleOpenMcpFolder = async () => {
+    const path = await getSaveConfigPath();
+    const folderPath = getDirectoryPath(path);
+    if (!folderPath) return;
+    await openFolderInSystem(folderPath);
   };
 
   // Handle import by JSON
@@ -342,6 +485,7 @@ export function MCPSettings(_props: SettingsTabProps) {
           enabled: true,
           command: cfg.command as string | undefined,
           args: cfg.args as string[] | undefined,
+          env: cfg.env as Record<string, string> | undefined,
           url: cfg.url as string | undefined,
           headers: cfg.headers as Record<string, string> | undefined,
           autoExecute: true,
@@ -356,6 +500,7 @@ export function MCPSettings(_props: SettingsTabProps) {
       }
 
       setServers(newServers);
+      setError(null);
       saveMCPConfig(newServers);
       setShowImportDialog(false);
       setImportJson('');
@@ -398,7 +543,7 @@ export function MCPSettings(_props: SettingsTabProps) {
       transportType: server.type,
       command: server.command || '',
       args: server.args || [],
-      env: [],
+      env: objectToKeyValuePairs(server.env),
       url: server.url || '',
       headers: objectToKeyValuePairs(server.headers),
       editServerId: server.id,
@@ -412,6 +557,8 @@ export function MCPSettings(_props: SettingsTabProps) {
     const newServers = [...servers];
     const headersObj = keyValuePairsToObject(configDialog.headers);
     const hasHeaders = Object.keys(headersObj).length > 0;
+    const envObj = keyValuePairsToObject(configDialog.env);
+    const hasEnv = Object.keys(envObj).length > 0;
 
     const isUrlType = configDialog.transportType !== 'stdio';
 
@@ -432,6 +579,8 @@ export function MCPSettings(_props: SettingsTabProps) {
             configDialog.transportType === 'stdio'
               ? configDialog.args
               : undefined,
+          env:
+            configDialog.transportType === 'stdio' && hasEnv ? envObj : undefined,
           url: isUrlType ? configDialog.url : undefined,
           headers: isUrlType && hasHeaders ? headersObj : undefined,
         };
@@ -460,6 +609,8 @@ export function MCPSettings(_props: SettingsTabProps) {
           configDialog.transportType === 'stdio'
             ? configDialog.args
             : undefined,
+        env:
+          configDialog.transportType === 'stdio' && hasEnv ? envObj : undefined,
         url: isUrlType ? configDialog.url : undefined,
         headers: isUrlType && hasHeaders ? headersObj : undefined,
         autoExecute: true,
@@ -468,6 +619,7 @@ export function MCPSettings(_props: SettingsTabProps) {
     }
 
     setServers(newServers);
+    setError(null);
     saveMCPConfig(newServers);
     setConfigDialog(initialConfigDialog);
   };
@@ -622,58 +774,48 @@ export function MCPSettings(_props: SettingsTabProps) {
                 </div>
 
                 {/* Add Button with Dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowAddMenu(!showAddMenu)}
-                    className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
-                  >
-                    <Plus className="size-4" />
-                    {t.settings.add}
-                    <ChevronDown className="size-4" />
-                  </button>
-                  {showAddMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setShowAddMenu(false)}
-                      />
-                      <div className="border-border bg-popover absolute top-full right-0 z-20 mt-1 min-w-[180px] rounded-xl border py-1 shadow-lg">
-                        <button
-                          onClick={() => {
-                            setShowImportDialog(true);
-                            setShowAddMenu(false);
-                          }}
-                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
-                        >
-                          <FileJson className="text-muted-foreground size-4 shrink-0" />
-                          <span className="text-foreground text-sm">
-                            {t.settings.mcpImportByJson}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setConfigDialog({
-                              ...initialConfigDialog,
-                              open: true,
-                            });
-                            setShowAddMenu(false);
-                          }}
-                          className="hover:bg-accent flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
-                        >
-                          <Settings2 className="text-muted-foreground size-4 shrink-0" />
-                          <span className="text-foreground text-sm">
-                            {t.settings.mcpDirectConfig}
-                          </span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                    >
+                      <Plus className="size-4" />
+                      {t.settings.add}
+                      <ChevronDown className="size-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[180px] rounded-xl p-1">
+                    <DropdownMenuItem
+                      onSelect={() => setShowImportDialog(true)}
+                      className="gap-3 px-3 py-2"
+                    >
+                      <FileJson className="text-muted-foreground size-4 shrink-0" />
+                      <span className="text-foreground text-sm">
+                        {t.settings.mcpImportByJson}
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setConfigDialog({
+                          ...initialConfigDialog,
+                          open: true,
+                        })
+                      }
+                      className="gap-3 px-3 py-2"
+                    >
+                      <Settings2 className="text-muted-foreground size-4 shrink-0" />
+                      <span className="text-foreground text-sm">
+                        {t.settings.mcpDirectConfig}
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* MCP Grid */}
               <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                {error ? (
+                {error && filteredServers.length === 0 ? (
                   <div className="flex h-32 items-center justify-center text-sm text-red-500">
                     {error}
                   </div>
@@ -709,13 +851,15 @@ export function MCPSettings(_props: SettingsTabProps) {
                     </h3>
                     <div className="mt-2 flex items-center gap-2">
                       <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
-                        {mcpDirs.app || '~/.VibeWork/mcp.json'}
+                        {settings?.mcpConfigPath || '~/.vibework/mcp/mcp.json'}
                       </code>
                       <button
-                        onClick={() => openFolderInSystem(mcpDirs.app)}
+                        onClick={() => {
+                          void handleOpenMcpFolder();
+                        }}
                         className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-8 w-8 items-center justify-center rounded transition-colors"
                       >
-                        <FileJson className="size-4" />
+                        <FolderOpen className="size-4" />
                       </button>
                     </div>
                   </div>

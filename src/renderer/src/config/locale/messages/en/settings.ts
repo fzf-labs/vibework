@@ -11,9 +11,6 @@ export default {
 
   // Account
   manageProfile: 'Manage your profile information',
-  avatar: 'Avatar',
-  clickToUpload: 'Click to upload a new avatar',
-  avatarRecommendation: 'Recommended: Square image, at least 100x100px',
   nickname: 'Nickname',
   enterNickname: 'Enter your nickname',
 
@@ -38,6 +35,10 @@ export default {
   cliRescan: 'Rescan',
   cliDetectError: 'Unable to detect CLI tools. Please try again.',
   cliEmpty: 'No CLI tools found.',
+  cliTool: 'Tool',
+  cliStatus: 'Status',
+  cliVersion: 'Version',
+  cliInstallPath: 'Install Path',
   enterPath: 'Enter path or browse...',
   browse: 'Browse',
   validate: 'Validate',
@@ -199,40 +200,38 @@ export default {
   // Data
   data: 'Data',
   dataDescription:
-    'Manage your data: export backups, import data, or clear all data.',
+    'Manage your data: export backups, import data, or delete data.',
   dataExport: 'Export Data',
   dataExportDescription:
-    'Export all tasks, messages, and settings to a JSON file.',
+    'Export ~/.vibework to a zip file.',
   dataExportButton: 'Export',
   dataExporting: 'Exporting...',
   dataImport: 'Import Data',
-  dataImportDescription: 'Import data from a previously exported JSON file.',
+  dataImportDescription:
+    'Import from a zip file and replace ~/.vibework (backup first).',
   dataImportButton: 'Import',
   dataImporting: 'Importing...',
-  dataClear: 'Clear Data',
+  dataClear: 'Delete Data',
   dataClearDescription:
-    'Permanently delete all data. This action cannot be undone.',
-  dataClearButton: 'Clear',
-  dataClearing: 'Clearing...',
+    'Permanently delete ~/.vibework. This action cannot be undone.',
+  dataClearButton: 'Delete',
+  dataClearing: 'Deleting...',
   dataSuccess: 'Success',
-  dataClearConfirmTitle: 'Clear Data',
-  dataClearConfirmDescription: 'Choose what data you want to clear:',
-  dataClearTasksOnly: 'Clear Tasks Only',
-  dataClearTasksOnlyDescription: 'Delete all tasks and messages, keep settings',
-  dataClearSettingsOnly: 'Clear Settings Only',
-  dataClearSettingsOnlyDescription:
-    'Reset all settings to defaults, keep tasks',
-  dataClearAll: 'Clear All Data',
-  dataClearAllDescription: 'Delete all tasks, messages, and settings',
-  dataClearTasksConfirm:
-    'Are you sure you want to delete all tasks and messages? This action cannot be undone.',
-  dataClearSettingsConfirm:
-    'Are you sure you want to reset all settings to defaults? This action cannot be undone.',
-  dataClearAllConfirm:
-    'Are you sure you want to delete ALL data including tasks, messages, and settings? This action cannot be undone.',
   dataConfirmTitle: 'Confirm',
-  dataConfirmClear: 'Yes, Clear',
+  dataConfirmClear: 'Yes, Delete',
   dataCancel: 'Cancel',
+  dataImportConfirmTitle: 'Import Data',
+  dataImportConfirmDescription:
+    'This will back up your current data and replace it with the imported zip.',
+  dataImportConfirmBackupLabel: 'Backup file',
+  dataImportConfirmTargetLabel: 'Restore target',
+  dataImportConfirmButton: 'Yes, Import',
+  dataDeleteConfirmTitle: 'Delete Data',
+  dataDeleteConfirmDescription:
+    'This will permanently delete ~/.vibework. This action cannot be undone.',
+  dataDeleteConfirmButton: 'Yes, Delete',
+  dataDirectoryMissing: 'Data directory not found.',
+  dataNotSupported: 'Data operations are not supported in this environment.',
 
   // About
   aiPlatform: 'Desktop Universal Agent',

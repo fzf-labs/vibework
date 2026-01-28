@@ -502,10 +502,13 @@ app.whenReady().then(() => {
   ipcMain.handle(
     'claudeCode:startSession',
     (_, sessionId: string, workdir: string, options?: ClaudeCodeSessionOptions) => {
+      console.log('[IPC] claudeCode:startSession called:', sessionId, workdir)
       try {
         claudeCodeService.startSession(sessionId, workdir, options)
+        console.log('[IPC] claudeCode:startSession success')
         return { success: true }
       } catch (error) {
+        console.error('[IPC] claudeCode:startSession error:', error)
         return { success: false, error: String(error) }
       }
     }
@@ -557,8 +560,10 @@ app.whenReady().then(() => {
   const logStreamSubscriptions = new Map<string, () => void>()
 
   ipcMain.handle('logStream:subscribe', (event, sessionId: string) => {
+    console.log('[IPC] logStream:subscribe called:', sessionId)
     const webContents = event.sender
     const unsubscribe = claudeCodeService.subscribeToSession(sessionId, (msg) => {
+      console.log('[IPC] logStream:message sending:', sessionId, msg.type)
       if (!webContents.isDestroyed()) {
         webContents.send('logStream:message', sessionId, msg)
       }
@@ -567,8 +572,10 @@ app.whenReady().then(() => {
     if (unsubscribe) {
       const key = `${webContents.id}-${sessionId}`
       logStreamSubscriptions.set(key, unsubscribe)
+      console.log('[IPC] logStream:subscribe success')
       return { success: true }
     }
+    console.log('[IPC] logStream:subscribe failed - session not found')
     return { success: false, error: 'Session not found' }
   })
 
@@ -583,7 +590,10 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('logStream:getHistory', (_, sessionId: string) => {
-    return claudeCodeService.getSessionLogHistory(sessionId)
+    console.log('[IPC] logStream:getHistory called:', sessionId)
+    const history = claudeCodeService.getSessionLogHistory(sessionId)
+    console.log('[IPC] logStream:getHistory returning:', history.length, 'messages')
+    return history
   })
 
   // IPC handlers for CLI tool detection

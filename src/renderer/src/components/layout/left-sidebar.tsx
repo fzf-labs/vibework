@@ -128,8 +128,7 @@ export function LeftSidebar({
   const { leftOpen, toggleLeft } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({
-    nickname: 'Guest User',
-    avatar: '',
+    nickname: 'Vibe User',
   });
   const { t } = useLanguage();
 
@@ -369,19 +368,11 @@ export function LeftSidebar({
                 <DropdownMenuTrigger asChild>
                   <button className="hover:bg-sidebar-accent group flex w-full cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors duration-200">
                     <div className="bg-sidebar-accent flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                      {profile.avatar ? (
-                        <img
-                          src={profile.avatar}
-                          alt={profile.nickname}
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <User className="text-sidebar-foreground/70 size-5" />
-                      )}
+                      <User className="text-sidebar-foreground/70 size-5" />
                     </div>
                     <div className="min-w-0 flex-1 text-left">
                       <p className="text-sidebar-foreground truncate text-sm font-medium">
-                        {profile.nickname || 'Guest User'}
+                        {profile.nickname || 'Vibe User'}
                       </p>
                     </div>
                     <ChevronsUpDown className="text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60 size-4" />
@@ -396,19 +387,11 @@ export function LeftSidebar({
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-3 px-2 py-2 text-left">
                       <div className="bg-muted flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                        {profile.avatar ? (
-                          <img
-                            src={profile.avatar}
-                            alt={profile.nickname}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <User className="text-muted-foreground size-5" />
-                        )}
+                        <User className="text-muted-foreground size-5" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
-                          {profile.nickname || 'Guest User'}
+                          {profile.nickname || 'Vibe User'}
                         </p>
                       </div>
                     </div>
@@ -624,15 +607,7 @@ export function LeftSidebar({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="bg-sidebar-accent hover:ring-sidebar-foreground/20 flex size-8 cursor-pointer items-center justify-center overflow-hidden rounded-lg transition-all hover:ring-2">
-                    {profile.avatar ? (
-                      <img
-                        src={profile.avatar}
-                        alt={profile.nickname}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <User className="text-sidebar-foreground/70 size-4" />
-                    )}
+                    <User className="text-sidebar-foreground/70 size-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -645,19 +620,11 @@ export function LeftSidebar({
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-3 px-2 py-2 text-left">
                       <div className="bg-muted flex size-9 items-center justify-center overflow-hidden rounded-lg">
-                        {profile.avatar ? (
-                          <img
-                            src={profile.avatar}
-                            alt={profile.nickname}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <User className="text-muted-foreground size-5" />
-                        )}
+                        <User className="text-muted-foreground size-5" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
-                          {profile.nickname || 'Guest User'}
+                          {profile.nickname || 'Vibe User'}
                         </p>
                       </div>
                     </div>

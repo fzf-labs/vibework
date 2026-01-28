@@ -45,6 +45,7 @@ export interface MCPServerUI {
   enabled: boolean;
   command?: string;
   args?: string[];
+  env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
   autoExecute?: boolean;

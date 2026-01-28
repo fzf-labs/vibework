@@ -79,7 +79,7 @@ export function SettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[600px] max-w-4xl gap-0 overflow-hidden p-0">
+      <DialogContent className="h-[680px] max-h-[85vh] max-w-5xl gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">{t.settings.title}</DialogTitle>
 
         <div className="flex h-full min-h-0">

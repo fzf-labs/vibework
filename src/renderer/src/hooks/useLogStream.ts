@@ -25,6 +25,7 @@ export interface UseLogStreamResult {
   isConnected: boolean
   error: string | null
   clearLogs: () => void
+  resubscribe: () => Promise<void>
 }
 
 /**
@@ -36,53 +37,75 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const sessionIdRef = useRef<string | null>(sessionId)
+
+  // 保持 sessionId ref 同步
+  useEffect(() => {
+    sessionIdRef.current = sessionId
+  }, [sessionId])
 
   const clearLogs = useCallback(() => {
     setRawLogs([])
     setNormalizedLogs([])
   }, [])
 
+  const processMessages = useCallback((messages: LogMsg[]) => {
+    const raw: LogMsg[] = []
+    const normalized: NormalizedEntry[] = []
+
+    for (const msg of messages) {
+      if (msg.type === 'stdout' || msg.type === 'stderr') {
+        raw.push(msg)
+      } else if (msg.type === 'normalized' && msg.entry) {
+        normalized.push(msg.entry)
+      }
+    }
+
+    setRawLogs((prev) => [...prev, ...raw])
+    setNormalizedLogs((prev) => [...prev, ...normalized])
+  }, [])
+
+  const subscribe = useCallback(async () => {
+    const currentSessionId = sessionIdRef.current
+    if (!currentSessionId) {
+      console.log('[useLogStream] No sessionId, skipping subscribe')
+      return
+    }
+
+    try {
+      // 获取历史日志
+      console.log('[useLogStream] Getting history for:', currentSessionId)
+      const history = await window.api.logStream.getHistory(currentSessionId)
+      console.log('[useLogStream] History received:', history?.length || 0, 'messages')
+      if (Array.isArray(history) && history.length > 0) {
+        processMessages(history)
+      }
+
+      // 订阅实时日志
+      console.log('[useLogStream] Subscribing to:', currentSessionId)
+      const result = await window.api.logStream.subscribe(currentSessionId)
+      console.log('[useLogStream] Subscribe result:', result)
+      if (result.success) {
+        setIsConnected(true)
+        setError(null)
+      } else {
+        setError(result.error || 'Failed to subscribe')
+      }
+    } catch (err) {
+      console.error('[useLogStream] Subscribe error:', err)
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    }
+  }, [processMessages])
+
+  const resubscribe = useCallback(async () => {
+    clearLogs()
+    await subscribe()
+  }, [clearLogs, subscribe])
+
   useEffect(() => {
     if (!sessionId) {
       setIsConnected(false)
       return
-    }
-
-    const subscribe = async () => {
-      try {
-        // 获取历史日志
-        const history = await window.api.logStream.getHistory(sessionId)
-        if (Array.isArray(history)) {
-          processMessages(history)
-        }
-
-        // 订阅实时日志
-        const result = await window.api.logStream.subscribe(sessionId)
-        if (result.success) {
-          setIsConnected(true)
-          setError(null)
-        } else {
-          setError(result.error || 'Failed to subscribe')
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error')
-      }
-    }
-
-    const processMessages = (messages: LogMsg[]) => {
-      const raw: LogMsg[] = []
-      const normalized: NormalizedEntry[] = []
-
-      for (const msg of messages) {
-        if (msg.type === 'stdout' || msg.type === 'stderr') {
-          raw.push(msg)
-        } else if (msg.type === 'normalized' && msg.entry) {
-          normalized.push(msg.entry)
-        }
-      }
-
-      setRawLogs((prev) => [...prev, ...raw])
-      setNormalizedLogs((prev) => [...prev, ...normalized])
     }
 
     // 监听实时消息
@@ -93,8 +116,7 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
     })
     unsubscribeRef.current = removeListener
 
-    // 清空并订阅
-    clearLogs()
+    // 初始订阅
     subscribe()
 
     return () => {
@@ -106,13 +128,14 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
       }
       setIsConnected(false)
     }
-  }, [sessionId, clearLogs])
+  }, [sessionId, processMessages, subscribe])
 
   return {
     rawLogs,
     normalizedLogs,
     isConnected,
     error,
-    clearLogs
+    clearLogs,
+    resubscribe
   }
 }

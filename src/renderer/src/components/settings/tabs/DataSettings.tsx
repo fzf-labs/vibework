@@ -260,6 +260,9 @@ export function DataSettings() {
         return;
       }
 
+      // Preload zip to validate file exists
+      await fs.readFile(filePath as string);
+
       const vibeworkDir = await getResolvedVibeworkDir();
       const backupPath = buildBackupPath(vibeworkDir);
       const backupDisplayPath = await getDisplayPath(backupPath);
@@ -269,9 +272,6 @@ export function DataSettings() {
       setPendingBackupDisplayPath(backupDisplayPath);
       setShowImportConfirm(true);
       setImportStatus('idle');
-
-      // Preload zip to validate file exists
-      await fs.readFile(filePath as string);
     } catch (error) {
       console.error('[DataSettings] Import failed:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Import failed');

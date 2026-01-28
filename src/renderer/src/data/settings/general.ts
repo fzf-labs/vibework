@@ -117,7 +117,7 @@ export const defaultProviders: AIProvider[] = [
 ];
 
 export const defaultSettings: Settings = {
-  profile: { nickname: 'Guest User', avatar: '' },
+  profile: { nickname: 'Vibe User' },
   providers: defaultProviders,
   defaultProvider: 'default',
   defaultModel: '',
@@ -201,6 +201,9 @@ export async function getSettingsAsync(): Promise<Settings> {
       if ('mcpEnabled' in loadedSettings) {
         delete (loadedSettings as { mcpEnabled?: boolean }).mcpEnabled;
       }
+      if (loadedSettings.profile && typeof loadedSettings.profile === 'object') {
+        delete (loadedSettings.profile as { avatar?: string }).avatar;
+      }
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
           loadedSettings.providers.push(defaultProvider);
@@ -226,6 +229,9 @@ export function getSettings(): Settings {
       const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
       if ('mcpEnabled' in loadedSettings) {
         delete (loadedSettings as { mcpEnabled?: boolean }).mcpEnabled;
+      }
+      if (loadedSettings.profile && typeof loadedSettings.profile === 'object') {
+        delete (loadedSettings.profile as { avatar?: string }).avatar;
       }
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
@@ -258,8 +264,12 @@ export function saveSettings(settings: Settings): void {
   }
 
   try {
-    const sanitized = { ...settings } as Settings & { mcpEnabled?: boolean };
+    const sanitized = {
+      ...settings,
+      profile: { ...settings.profile },
+    } as Settings & { mcpEnabled?: boolean };
     if ('mcpEnabled' in sanitized) delete sanitized.mcpEnabled;
+    delete (sanitized.profile as { avatar?: string }).avatar;
     localStorage.setItem('VibeWork_settings', JSON.stringify(sanitized));
   } catch (error) {
     console.error('[Settings] Failed to save to localStorage:', error);
@@ -284,7 +294,10 @@ export async function initializeSettings(): Promise<Settings> {
   const settings = await getSettingsAsync();
 
   if (!settings.workDir) settings.workDir = appDataDir;
-  if (!settings.mcpConfigPath) settings.mcpConfigPath = mcpConfigPath;
+  const legacyMcpPath = `${appDataDir}/mcp.json`;
+  if (!settings.mcpConfigPath || settings.mcpConfigPath === legacyMcpPath) {
+    settings.mcpConfigPath = mcpConfigPath;
+  }
   const legacySkillsDir = `${settings.workDir}/skills`;
   if (!settings.skillsPath || settings.skillsPath === legacySkillsDir) {
     settings.skillsPath = skillsDir;

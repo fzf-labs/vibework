@@ -14,6 +14,7 @@ export interface CLIToolInfo {
   description: string
   installed: boolean
   version?: string
+  installPath?: string
   configValid: boolean
   configPath?: string
   detectionCommand: string
@@ -80,15 +81,36 @@ export class CLIToolDetectorService {
     try {
       const { stdout } = await execAsync(tool.detectionCommand)
       tool.installed = true
-      tool.version = stdout.trim()
+      tool.version = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0)
+      tool.installPath = await this.resolveInstallPath(tool.command)
       tool.configValid = await this.checkConfig(tool)
     } catch {
       tool.installed = false
       tool.version = undefined
+      tool.installPath = undefined
       tool.configValid = false
     }
 
     return { ...tool }
+  }
+
+  private async resolveInstallPath(command: string): Promise<string | undefined> {
+    const platform = os.platform()
+    const lookupCommand = platform === 'win32' ? `where ${command}` : `which ${command}`
+
+    try {
+      const { stdout } = await execAsync(lookupCommand)
+      const resolvedPath = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.length > 0)
+      return resolvedPath || undefined
+    } catch {
+      return undefined
+    }
   }
 
   private async checkConfig(tool: CLIToolInfo): Promise<boolean> {

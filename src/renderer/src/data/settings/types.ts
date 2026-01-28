@@ -56,7 +56,6 @@ export interface AgentRuntimeSetting {
 
 export interface UserProfile {
   nickname: string;
-  avatar: string;
 }
 
 export type AccentColor =

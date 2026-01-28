@@ -35,7 +35,7 @@ export function ClaudeCodeSession({
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
 
   // 使用新的日志流 hook - 始终传入 sessionId 以加载历史日志
-  const { rawLogs, normalizedLogs, isConnected, clearLogs } = useLogStream(sessionId)
+  const { rawLogs, normalizedLogs, isConnected, clearLogs, resubscribe } = useLogStream(sessionId)
 
   // 将 rawLogs 转换为 TerminalLine 格式
   const terminalLines = useMemo<TerminalLine[]>(() => {
@@ -107,13 +107,19 @@ export function ClaudeCodeSession({
 
   const startSession = async () => {
     try {
+      console.log('[ClaudeCodeSession] Starting session:', sessionId, 'workdir:', workdir)
       setLines([])
       clearLogs()
       setStatus('running')
-      await window.api.claudeCode.startSession(sessionId, workdir)
+      const result = await window.api.claudeCode.startSession(sessionId, workdir)
+      console.log('[ClaudeCodeSession] startSession result:', result)
+      // session 启动后重新订阅日志流
+      console.log('[ClaudeCodeSession] Resubscribing to log stream...')
+      await resubscribe()
+      console.log('[ClaudeCodeSession] Resubscribe complete')
     } catch (error) {
       setStatus('error')
-      console.error('Failed to start session:', error)
+      console.error('[ClaudeCodeSession] Failed to start session:', error)
     }
   }
 

@@ -85,6 +85,8 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   startSession(sessionId: string, workdir: string, options?: { model?: string }): void {
+    console.log('[ClaudeCodeService] Starting session:', sessionId, 'workdir:', workdir)
+
     if (this.sessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} already exists`)
     }
@@ -97,13 +99,22 @@ export class ClaudeCodeService extends EventEmitter {
       args.push('--model', options?.model || this.config.defaultModel!)
     }
 
-    const childProcess = spawn(command, args, {
+    console.log('[ClaudeCodeService] Spawning command:', command, 'args:', args)
+
+    // 获取 claude 的完整路径
+    const homeDir = process.env.HOME || os.homedir()
+    const claudePath = `${homeDir}/.local/bin/claude`
+    const actualCommand = command === 'claude' ? claudePath : command
+
+    console.log('[ClaudeCodeService] Using actual command path:', actualCommand)
+
+    const childProcess = spawn(actualCommand, args, {
       cwd: workdir,
-      shell: true, // 使用系统默认 shell
+      shell: false, // 不使用 shell，直接执行
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        PATH: `${process.env.HOME}/.local/bin:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}`
+        PATH: `${homeDir}/.local/bin:/opt/homebrew/bin:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}`
       }
     })
 
@@ -122,6 +133,7 @@ export class ClaudeCodeService extends EventEmitter {
     // 监听输出
     childProcess.stdout?.on('data', (data) => {
       const output = data.toString()
+      console.log('[ClaudeCodeService] stdout:', output.substring(0, 200))
       session.output.push(output)
 
       // 推送到 MsgStore
@@ -150,6 +162,7 @@ export class ClaudeCodeService extends EventEmitter {
 
     childProcess.stderr?.on('data', (data) => {
       const output = data.toString()
+      console.log('[ClaudeCodeService] stderr:', output.substring(0, 200))
       session.output.push(output)
 
       // 推送到 MsgStore
@@ -163,6 +176,7 @@ export class ClaudeCodeService extends EventEmitter {
     })
 
     childProcess.on('close', (code) => {
+      console.log('[ClaudeCodeService] Process closed with code:', code)
       session.status = code === 0 ? 'stopped' : 'error'
 
       // 推送完成消息
@@ -176,11 +190,13 @@ export class ClaudeCodeService extends EventEmitter {
     })
 
     childProcess.on('error', (error) => {
+      console.error('[ClaudeCodeService] Process error:', error.message)
       session.status = 'error'
       this.emit('error', { sessionId, error: error.message })
     })
 
     this.sessions.set(sessionId, session)
+    console.log('[ClaudeCodeService] Session created and stored:', sessionId)
   }
 
   stopSession(sessionId: string): void {

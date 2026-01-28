@@ -89,8 +89,8 @@ export async function getSessionsDir(): Promise<string> {
  * Get the default MCP config path
  */
 export async function getMcpConfigPath(): Promise<string> {
-  const appDir = await getAppDataDir();
-  return `${appDir}/mcp.json`;
+  const appDir = await getVibeworkDataDir();
+  return `${appDir}/mcp/mcp.json`;
 }
 
 /**

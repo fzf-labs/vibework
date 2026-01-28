@@ -13,6 +13,8 @@ interface CLIToolInfo {
   name: string;
   displayName: string;
   installed: boolean;
+  version?: string;
+  installPath?: string;
 }
 
 export function CLISettings({
@@ -60,6 +62,13 @@ export function CLISettings({
       ? t.settings?.cliInstalled || 'Installed'
       : t.settings?.cliNotInstalled || 'Not installed';
 
+  const columnLabels = {
+    tool: t.settings?.cliTool || 'Tool',
+    status: t.settings?.cliStatus || 'Status',
+    version: t.settings?.cliVersion || 'Version',
+    path: t.settings?.cliInstallPath || 'Install Path',
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -92,10 +101,19 @@ export function CLISettings({
           {t.settings?.cliDetecting || 'Detecting...'}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {tools.map((tool) => (
-            <div key={tool.id} className="border-border rounded-lg border p-4">
-              <div className="flex items-center justify-between gap-3">
+        <div className="border-border overflow-hidden rounded-lg border">
+          <div className="bg-muted/40 text-muted-foreground hidden grid-cols-[minmax(180px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(220px,2fr)] gap-4 px-4 py-2 text-xs font-medium sm:grid">
+            <span>{columnLabels.tool}</span>
+            <span>{columnLabels.status}</span>
+            <span>{columnLabels.version}</span>
+            <span>{columnLabels.path}</span>
+          </div>
+          <div className="divide-border divide-y">
+            {tools.map((tool) => (
+              <div
+                key={tool.id}
+                className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(180px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(220px,2fr)] sm:gap-4"
+              >
                 <div className="flex items-center gap-3">
                   <div className="bg-muted/60 text-muted-foreground flex size-9 items-center justify-center rounded-md">
                     <Terminal className="size-4" />
@@ -109,23 +127,47 @@ export function CLISettings({
                     </p>
                   </div>
                 </div>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                    tool.installed
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
-                      : 'border-rose-500/30 bg-rose-500/10 text-rose-600'
-                  }`}
-                >
-                  {tool.installed ? (
-                    <Check className="size-3" />
-                  ) : (
-                    <AlertCircle className="size-3" />
-                  )}
-                  {statusLabel(tool.installed)}
-                </span>
+
+                <div className="flex items-center justify-between gap-3 sm:block">
+                  <span className="text-muted-foreground text-xs sm:hidden">
+                    {columnLabels.status}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      tool.installed
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
+                        : 'border-rose-500/30 bg-rose-500/10 text-rose-600'
+                    }`}
+                  >
+                    {tool.installed ? (
+                      <Check className="size-3" />
+                    ) : (
+                      <AlertCircle className="size-3" />
+                    )}
+                    {statusLabel(tool.installed)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 sm:block">
+                  <span className="text-muted-foreground text-xs sm:hidden">
+                    {columnLabels.version}
+                  </span>
+                  <span className="text-foreground text-xs font-mono">
+                    {tool.version || '—'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 sm:block">
+                  <span className="text-muted-foreground text-xs sm:hidden">
+                    {columnLabels.path}
+                  </span>
+                  <span className="text-foreground text-xs font-mono break-all">
+                    {tool.installPath || '—'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
