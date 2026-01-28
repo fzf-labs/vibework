@@ -79,7 +79,7 @@ interface ClaudeCodeAPI {
   startSession: (
     sessionId: string,
     workdir: string,
-    options?: { model?: string }
+    options?: { model?: string; prompt?: string }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>

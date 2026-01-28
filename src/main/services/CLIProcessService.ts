@@ -1,11 +1,14 @@
 import { spawn, ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
+import { DataBatcher } from './DataBatcher'
 
 interface Session {
   id: string
   process: ChildProcess
   output: string[]
   status: 'running' | 'stopped' | 'error'
+  stdoutBatcher: DataBatcher
+  stderrBatcher: DataBatcher
 }
 
 export class CLIProcessService extends EventEmitter {
@@ -21,26 +24,40 @@ export class CLIProcessService extends EventEmitter {
       shell: true
     })
 
+    // 创建批处理器
+    const stdoutBatcher = new DataBatcher((data) => {
+      session.output.push(data)
+      this.emit('output', { sessionId, type: 'stdout', content: data })
+    })
+
+    const stderrBatcher = new DataBatcher((data) => {
+      session.output.push(data)
+      this.emit('output', { sessionId, type: 'stderr', content: data })
+    })
+
     const session: Session = {
       id: sessionId,
       process: childProcess,
       output: [],
-      status: 'running'
+      status: 'running',
+      stdoutBatcher,
+      stderrBatcher
     }
 
+    // 使用批处理器处理输出
     childProcess.stdout?.on('data', (data) => {
-      const output = data.toString()
-      session.output.push(output)
-      this.emit('output', { sessionId, type: 'stdout', content: output })
+      session.stdoutBatcher.write(data)
     })
 
     childProcess.stderr?.on('data', (data) => {
-      const output = data.toString()
-      session.output.push(output)
-      this.emit('output', { sessionId, type: 'stderr', content: output })
+      session.stderrBatcher.write(data)
     })
 
     childProcess.on('close', (code) => {
+      // 刷新批处理器
+      session.stdoutBatcher.destroy()
+      session.stderrBatcher.destroy()
+
       session.status = code === 0 ? 'stopped' : 'error'
       this.emit('close', { sessionId, code })
     })

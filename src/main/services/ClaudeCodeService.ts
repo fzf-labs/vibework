@@ -7,6 +7,7 @@ import { MsgStoreService } from './MsgStoreService'
 import { LogNormalizerService } from './LogNormalizerService'
 import { ClaudeCodeNormalizer } from './normalizers/ClaudeCodeNormalizer'
 import { LogMsg } from '../types/log'
+import { DataBatcher } from './DataBatcher'
 
 interface MCPServer {
   name: string
@@ -35,6 +36,8 @@ interface ClaudeCodeSession {
   output: string[]
   startTime: Date
   msgStore: MsgStoreService
+  stdoutBatcher: DataBatcher
+  stderrBatcher: DataBatcher
 }
 
 export class ClaudeCodeService extends EventEmitter {
@@ -84,7 +87,7 @@ export class ClaudeCodeService extends EventEmitter {
     return { ...this.config }
   }
 
-  startSession(sessionId: string, workdir: string, options?: { model?: string }): void {
+  startSession(sessionId: string, workdir: string, options?: { model?: string; prompt?: string }): void {
     console.log('[ClaudeCodeService] Starting session:', sessionId, 'workdir:', workdir)
 
     if (this.sessions.has(sessionId)) {
@@ -94,9 +97,21 @@ export class ClaudeCodeService extends EventEmitter {
     const command = this.config.executablePath || 'claude'
     const args: string[] = []
 
+    // 使用 -p (print) 模式 + stream-json 格式进行双向通信
+    // 注意：--output-format 和 --input-format 只在 -p 模式下工作
+    args.push('-p')
+    args.push('--output-format', 'stream-json')
+    args.push('--input-format', 'stream-json')
+    args.push('--verbose')
+
     // 添加模型参数
     if (options?.model || this.config.defaultModel) {
       args.push('--model', options?.model || this.config.defaultModel!)
+    }
+
+    // prompt 作为命令行参数传递
+    if (options?.prompt) {
+      args.push(options.prompt)
     }
 
     console.log('[ClaudeCodeService] Spawning command:', command, 'args:', args)
@@ -106,7 +121,21 @@ export class ClaudeCodeService extends EventEmitter {
     const claudePath = `${homeDir}/.local/bin/claude`
     const actualCommand = command === 'claude' ? claudePath : command
 
+    console.log('[ClaudeCodeService] HOME:', homeDir)
     console.log('[ClaudeCodeService] Using actual command path:', actualCommand)
+    console.log('[ClaudeCodeService] CWD:', workdir)
+
+    // 检查文件是否存在
+    const fileExists = fs.existsSync(actualCommand)
+    console.log('[ClaudeCodeService] Command file exists:', fileExists)
+
+    // 检查并创建工作目录
+    const cwdExists = fs.existsSync(workdir)
+    console.log('[ClaudeCodeService] CWD exists:', cwdExists)
+    if (!cwdExists) {
+      console.log('[ClaudeCodeService] Creating CWD:', workdir)
+      fs.mkdirSync(workdir, { recursive: true })
+    }
 
     const childProcess = spawn(actualCommand, args, {
       cwd: workdir,
@@ -118,7 +147,57 @@ export class ClaudeCodeService extends EventEmitter {
       }
     })
 
+    console.log('[ClaudeCodeService] Process spawned, PID:', childProcess.pid)
+    console.log('[ClaudeCodeService] stdout available:', !!childProcess.stdout)
+    console.log('[ClaudeCodeService] stderr available:', !!childProcess.stderr)
+
     const msgStore = new MsgStoreService(undefined, sessionId)
+
+    // 创建 stdout 批处理器
+    const stdoutBatcher = new DataBatcher((data) => {
+      session.output.push(data)
+
+      // 推送到 MsgStore
+      const stdoutMsg: LogMsg = {
+        type: 'stdout',
+        content: data,
+        timestamp: Date.now()
+      }
+      msgStore.push(stdoutMsg)
+
+      // 尝试解析为结构化日志
+      const lines = data.split('\n')
+      for (const line of lines) {
+        const result = this.normalizer.normalize('claude-code', line)
+        if (result) {
+          // 处理单个条目或数组
+          const entries = Array.isArray(result) ? result : [result]
+          for (const entry of entries) {
+            msgStore.push({
+              type: 'normalized',
+              entry,
+              timestamp: Date.now()
+            })
+          }
+        }
+      }
+
+      this.emit('output', { sessionId, type: 'stdout', content: data })
+    })
+
+    // 创建 stderr 批处理器
+    const stderrBatcher = new DataBatcher((data) => {
+      session.output.push(data)
+
+      // 推送到 MsgStore
+      msgStore.push({
+        type: 'stderr',
+        content: data,
+        timestamp: Date.now()
+      })
+
+      this.emit('output', { sessionId, type: 'stderr', content: data })
+    })
 
     const session: ClaudeCodeSession = {
       id: sessionId,
@@ -127,56 +206,29 @@ export class ClaudeCodeService extends EventEmitter {
       status: 'running',
       output: [],
       startTime: new Date(),
-      msgStore
+      msgStore,
+      stdoutBatcher,
+      stderrBatcher
     }
 
-    // 监听输出
+    // 监听输出 - 使用批处理器
     childProcess.stdout?.on('data', (data) => {
-      const output = data.toString()
-      console.log('[ClaudeCodeService] stdout:', output.substring(0, 200))
-      session.output.push(output)
-
-      // 推送到 MsgStore
-      const stdoutMsg: LogMsg = {
-        type: 'stdout',
-        content: output,
-        timestamp: Date.now()
-      }
-      msgStore.push(stdoutMsg)
-
-      // 尝试解析为结构化日志
-      const lines = output.split('\n')
-      for (const line of lines) {
-        const entry = this.normalizer.normalize('claude-code', line)
-        if (entry) {
-          msgStore.push({
-            type: 'normalized',
-            entry,
-            timestamp: Date.now()
-          })
-        }
-      }
-
-      this.emit('output', { sessionId, type: 'stdout', content: output })
+      console.log('[ClaudeCodeService] stdout chunk:', data.length, 'bytes')
+      session.stdoutBatcher.write(data)
     })
 
     childProcess.stderr?.on('data', (data) => {
-      const output = data.toString()
-      console.log('[ClaudeCodeService] stderr:', output.substring(0, 200))
-      session.output.push(output)
-
-      // 推送到 MsgStore
-      msgStore.push({
-        type: 'stderr',
-        content: output,
-        timestamp: Date.now()
-      })
-
-      this.emit('output', { sessionId, type: 'stderr', content: output })
+      console.log('[ClaudeCodeService] stderr chunk:', data.length, 'bytes')
+      session.stderrBatcher.write(data)
     })
 
     childProcess.on('close', (code) => {
       console.log('[ClaudeCodeService] Process closed with code:', code)
+
+      // 刷新批处理器中的剩余数据
+      session.stdoutBatcher.destroy()
+      session.stderrBatcher.destroy()
+
       session.status = code === 0 ? 'stopped' : 'error'
 
       // 推送完成消息
@@ -197,6 +249,7 @@ export class ClaudeCodeService extends EventEmitter {
 
     this.sessions.set(sessionId, session)
     console.log('[ClaudeCodeService] Session created and stored:', sessionId)
+    // -p 模式下，prompt 已作为命令行参数传递，无需额外初始化
   }
 
   stopSession(sessionId: string): void {

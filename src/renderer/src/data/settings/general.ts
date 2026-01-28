@@ -137,6 +137,10 @@ export const defaultSettings: Settings = {
   accentColor: 'orange',
   backgroundStyle: 'default',
   language: '',
+  editor: {
+    editorType: 'vscode',
+    customCommand: '',
+  },
   claudeCodePath: '',
   codexCliPath: '',
 };

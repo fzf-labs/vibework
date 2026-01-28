@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import {
+  Code,
   Database,
   Info,
   Plug,
@@ -19,6 +20,7 @@ export const categoryIcons: Record<
 > = {
   account: User,
   general: Settings,
+  editor: Code,
   cli: Terminal,
   mcp: Server,
   skills: Sparkles,

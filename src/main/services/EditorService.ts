@@ -6,7 +6,7 @@ import { platform } from 'os'
 const execAsync = promisify(exec)
 
 export interface EditorInfo {
-  type: 'vscode' | 'cursor' | 'webstorm' | 'idea' | 'other'
+  type: 'vscode' | 'cursor' | 'webstorm' | 'idea' | 'goland' | 'xcode' | 'antigravity' | 'other'
   name: string
   path: string
   command: string
@@ -35,6 +35,10 @@ export class EditorService {
     const cursor = await this.detectCursor(os)
     if (cursor) editors.push(cursor)
 
+    // Google Antigravity
+    const antigravity = await this.detectAntigravity(os)
+    if (antigravity) editors.push(antigravity)
+
     // WebStorm
     const webstorm = await this.detectWebStorm(os)
     if (webstorm) editors.push(webstorm)
@@ -42,6 +46,14 @@ export class EditorService {
     // IntelliJ IDEA
     const idea = await this.detectIdea(os)
     if (idea) editors.push(idea)
+
+    // GoLand
+    const goland = await this.detectGoLand(os)
+    if (goland) editors.push(goland)
+
+    // Xcode
+    const xcode = await this.detectXcode(os)
+    if (xcode) editors.push(xcode)
 
     this.detectedEditors = editors
   }
@@ -176,6 +188,106 @@ export class EditorService {
   }
 
   /**
+   * 检测 Google Antigravity
+   */
+  private async detectAntigravity(os: string): Promise<EditorInfo | null> {
+    const paths = this.getAntigravityPaths(os)
+
+    for (const path of paths) {
+      if (existsSync(path)) {
+        return {
+          type: 'antigravity',
+          name: 'Google Antigravity',
+          path,
+          command: path,
+          available: true
+        }
+      }
+    }
+
+    try {
+      await execAsync(os === 'win32' ? 'where antigravity' : 'which antigravity')
+      return {
+        type: 'antigravity',
+        name: 'Google Antigravity',
+        path: 'antigravity',
+        command: 'antigravity',
+        available: true
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 检测 GoLand
+   */
+  private async detectGoLand(os: string): Promise<EditorInfo | null> {
+    const paths = this.getGoLandPaths(os)
+
+    for (const path of paths) {
+      if (existsSync(path)) {
+        return {
+          type: 'goland',
+          name: 'GoLand',
+          path,
+          command: 'goland',
+          available: true
+        }
+      }
+    }
+
+    try {
+      await execAsync(os === 'win32' ? 'where goland' : 'which goland')
+      return {
+        type: 'goland',
+        name: 'GoLand',
+        path: 'goland',
+        command: 'goland',
+        available: true
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 检测 Xcode
+   */
+  private async detectXcode(os: string): Promise<EditorInfo | null> {
+    const paths = this.getXcodePaths(os)
+
+    for (const path of paths) {
+      if (existsSync(path)) {
+        return {
+          type: 'xcode',
+          name: 'Xcode',
+          path,
+          command: os === 'darwin' ? 'xed' : path,
+          available: true
+        }
+      }
+    }
+
+    if (os === 'darwin') {
+      try {
+        await execAsync('which xed')
+        return {
+          type: 'xcode',
+          name: 'Xcode',
+          path: 'xed',
+          command: 'xed',
+          available: true
+        }
+      } catch {
+        return null
+      }
+    }
+
+    return null
+  }
+
+  /**
    * 获取 VSCode 可能的路径
    */
   private getVSCodePaths(os: string): string[] {
@@ -240,6 +352,51 @@ export class EditorService {
   }
 
   /**
+   * 获取 Google Antigravity 可能的路径
+   */
+  private getAntigravityPaths(os: string): string[] {
+    if (os === 'darwin') {
+      return [
+        '/Applications/Google Antigravity.app/Contents/MacOS/Google Antigravity',
+        '/Applications/Antigravity.app/Contents/MacOS/Antigravity'
+      ]
+    } else if (os === 'win32') {
+      return [
+        'C:\\Program Files\\Google\\Antigravity\\antigravity.exe',
+        'C:\\Program Files (x86)\\Google\\Antigravity\\antigravity.exe'
+      ]
+    } else {
+      return ['/usr/bin/antigravity', '/usr/local/bin/antigravity']
+    }
+  }
+
+  /**
+   * 获取 GoLand 可能的路径
+   */
+  private getGoLandPaths(os: string): string[] {
+    if (os === 'darwin') {
+      return ['/Applications/GoLand.app/Contents/MacOS/goland']
+    } else if (os === 'win32') {
+      return [
+        'C:\\Program Files\\JetBrains\\GoLand\\bin\\goland64.exe',
+        'C:\\Program Files (x86)\\JetBrains\\GoLand\\bin\\goland.exe'
+      ]
+    } else {
+      return ['/usr/bin/goland', '/usr/local/bin/goland']
+    }
+  }
+
+  /**
+   * 获取 Xcode 可能的路径
+   */
+  private getXcodePaths(os: string): string[] {
+    if (os === 'darwin') {
+      return ['/Applications/Xcode.app']
+    }
+    return []
+  }
+
+  /**
    * 获取所有检测到的编辑器
    */
   getAvailableEditors(): EditorInfo[] {
@@ -251,7 +408,11 @@ export class EditorService {
    */
   async openProject(projectPath: string, editorCommand: string): Promise<void> {
     try {
-      await execAsync(`${editorCommand} "${projectPath}"`)
+      let command = editorCommand.trim()
+      if (existsSync(command) && command.includes(' ')) {
+        command = `"${command}"`
+      }
+      await execAsync(`${command} "${projectPath}"`)
     } catch (error) {
       throw new Error(`Failed to open project: ${error}`)
     }

@@ -69,6 +69,22 @@ export type AccentColor =
 
 export type BackgroundStyle = 'default' | 'warm' | 'cool';
 
+export type EditorType =
+  | 'vscode'
+  | 'cursor'
+  | 'antigravity'
+  | 'webstorm'
+  | 'idea'
+  | 'goland'
+  | 'xcode'
+  | 'custom'
+  | 'other';
+
+export interface EditorSettings {
+  editorType: EditorType;
+  customCommand: string;
+}
+
 export interface Settings {
   profile: UserProfile;
   providers: AIProvider[];
@@ -90,6 +106,7 @@ export interface Settings {
   accentColor: AccentColor;
   backgroundStyle: BackgroundStyle;
   language: string;
+  editor: EditorSettings;
   // CLI tool paths
   claudeCodePath: string;
   codexCliPath: string;

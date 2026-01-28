@@ -5,7 +5,7 @@ import { NormalizedEntry } from '../types/log'
  */
 export interface LogNormalizerAdapter {
   toolId: string
-  parse(line: string): NormalizedEntry | null
+  parse(line: string): NormalizedEntry | NormalizedEntry[] | null
 }
 
 /**
@@ -31,7 +31,7 @@ export class LogNormalizerService {
   /**
    * 标准化日志行
    */
-  normalize(toolId: string, line: string): NormalizedEntry | null {
+  normalize(toolId: string, line: string): NormalizedEntry | NormalizedEntry[] | null {
     const adapter = this.adapters.get(toolId)
     if (!adapter) {
       return null

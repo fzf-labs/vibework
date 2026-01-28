@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, GitBranch, Clock, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getSettings } from '@/data/settings';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { useProjects } from '@/hooks/useProjects';
@@ -148,6 +149,58 @@ export function BoardPage() {
   const handleOpenInIDE = async () => {
     if (currentProject?.path) {
       try {
+        const settings = getSettings();
+        const editorType = settings.editor?.editorType ?? 'vscode';
+        const customCommand = settings.editor?.customCommand?.trim();
+        const defaultCommandMap: Record<string, string> = {
+          vscode: 'code',
+          cursor: 'cursor',
+          antigravity: 'antigravity',
+          webstorm: 'webstorm',
+          idea: 'idea',
+          goland: 'goland',
+          xcode: 'xed',
+        };
+        let editorCommand: string | null = null;
+
+        if (editorType === 'custom') {
+          editorCommand = customCommand || null;
+        } else if (window.api?.editor?.getAvailable) {
+          const available = await window.api.editor.getAvailable();
+          const editors = Array.isArray(available) ? available : [];
+          const matched = editors.find((editor) => editor.type === editorType);
+          editorCommand =
+            matched?.path ??
+            matched?.command ??
+            editors[0]?.path ??
+            editors[0]?.command ??
+            null;
+        }
+
+        if (!editorCommand && editorType !== 'custom') {
+          editorCommand = defaultCommandMap[editorType] ?? null;
+        }
+
+        if (editorCommand && window.api?.editor?.openProject) {
+          try {
+            console.log(
+              '[BoardPage] Opening in editor with command:',
+              editorCommand,
+              currentProject.path
+            );
+            await window.api.editor.openProject(
+              currentProject.path,
+              editorCommand
+            );
+            return;
+          } catch (openError) {
+            console.error(
+              '[BoardPage] Failed to open via editor command:',
+              openError
+            );
+          }
+        }
+
         await window.api.shell.openPath(currentProject.path);
       } catch (error) {
         console.error('Failed to open in IDE:', error);

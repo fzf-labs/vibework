@@ -4,6 +4,7 @@ export default {
   // Categories
   account: 'Account',
   general: 'General',
+  editor: 'Editor',
   cli: 'Agent CLI',
   mcp: 'MCP',
   connector: 'Connector',
@@ -22,6 +23,20 @@ export default {
   dark: 'Dark',
   system: 'System',
   backgroundStyle: 'Background Style',
+
+  // Editor
+  editorDescription: 'Choose the editor VibeWork uses to open files and projects.',
+  editorDefault: 'Default Editor',
+  editorCustomOption: 'Custom',
+  editorCustomCommand: 'Custom Command',
+  editorCustomCommandPlaceholder: 'e.g., code',
+  editorCustomCommandDesc: 'Enter the command used to launch your editor.',
+  editorDetecting: 'Detecting editors...',
+  editorEmpty: 'No editors detected',
+  editorDetectError:
+    'Unable to detect editors. You can still use a custom command.',
+  editorMissingOption: 'Unavailable',
+  editorMissingHelper: 'The selected editor was not detected on this machine.',
 
   // CLI Tools
   cliDescription: 'Check whether Agent CLI tools are installed on this machine.',

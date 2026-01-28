@@ -6,6 +6,7 @@ export type { SettingsType };
 export type SettingsCategory =
   | 'account'
   | 'general'
+  | 'editor'
   | 'cli'
   | 'mcp'
   | 'skills'

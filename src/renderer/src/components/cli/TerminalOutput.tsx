@@ -1,5 +1,6 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { VirtualizedLogList, LogEntry } from './VirtualizedLogList'
 
 interface TerminalLine {
   type: 'stdout' | 'stderr'
@@ -11,6 +12,8 @@ interface TerminalOutputProps {
   lines: TerminalLine[]
   className?: string
   autoScroll?: boolean
+  /** 使用虚拟化渲染（推荐用于大量日志） */
+  virtualized?: boolean
 }
 
 // ANSI 颜色代码映射
@@ -113,16 +116,40 @@ function AnsiText({ content }: { content: string }) {
 export function TerminalOutput({
   lines,
   className,
-  autoScroll = true
+  autoScroll = true,
+  virtualized = false
 }: TerminalOutputProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // 转换为 LogEntry 格式
+  const logEntries: LogEntry[] = useMemo(
+    () =>
+      lines.map((line) => ({
+        type: line.type,
+        content: line.content,
+        timestamp: line.timestamp
+      })),
+    [lines]
+  )
+
   useEffect(() => {
-    if (autoScroll && containerRef.current) {
+    if (autoScroll && containerRef.current && !virtualized) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [lines, autoScroll])
+  }, [lines, autoScroll, virtualized])
 
+  // 使用虚拟化渲染
+  if (virtualized) {
+    return (
+      <VirtualizedLogList
+        logs={logEntries}
+        className={cn('h-full', className)}
+        autoScroll={autoScroll}
+      />
+    )
+  }
+
+  // 传统渲染方式
   return (
     <div
       ref={containerRef}

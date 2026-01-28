@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL } from '@/config';
+import { getSettings } from '@/data/settings';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
@@ -251,7 +252,56 @@ export function ArtifactPreview({
     if (!artifact?.path) return;
 
     try {
-      console.log('[ArtifactPreview] Opening in editor:', artifact.path);
+      const settings = getSettings();
+      const editorType = settings.editor?.editorType ?? 'vscode';
+      const customCommand = settings.editor?.customCommand?.trim();
+      const defaultCommandMap: Record<string, string> = {
+        vscode: 'code',
+        cursor: 'cursor',
+        antigravity: 'antigravity',
+        webstorm: 'webstorm',
+        idea: 'idea',
+        goland: 'goland',
+        xcode: 'xed',
+      };
+      let editorCommand: string | null = null;
+
+      if (editorType === 'custom') {
+        editorCommand = customCommand || null;
+      } else if (window.api?.editor?.getAvailable) {
+        const available = await window.api.editor.getAvailable();
+        const editors = Array.isArray(available) ? available : [];
+        const matched = editors.find((editor) => editor.type === editorType);
+          editorCommand =
+            matched?.path ??
+            matched?.command ??
+            editors[0]?.path ??
+            editors[0]?.command ??
+            null;
+      }
+
+      if (!editorCommand && editorType !== 'custom') {
+        editorCommand = defaultCommandMap[editorType] ?? null;
+      }
+
+      if (editorCommand && window.api?.editor?.openProject) {
+        console.log(
+          '[ArtifactPreview] Opening in editor with command:',
+          editorCommand,
+          artifact.path
+        );
+        try {
+          await window.api.editor.openProject(artifact.path, editorCommand);
+          return;
+        } catch (error) {
+          console.error(
+            '[ArtifactPreview] Failed to open via editor command:',
+            error
+          );
+        }
+      }
+
+      console.log('[ArtifactPreview] Opening in editor via API:', artifact.path);
       const response = await fetch(`${API_BASE_URL}/files/open-in-editor`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

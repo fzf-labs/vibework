@@ -11,6 +11,8 @@ export type {
   UserProfile,
   AccentColor,
   BackgroundStyle,
+  EditorType,
+  EditorSettings,
   Settings,
 } from './types';
 

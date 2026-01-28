@@ -16,6 +16,7 @@ import { AboutSettings } from './tabs/AboutSettings';
 import { AccountSettings } from './tabs/AccountSettings';
 import { CLISettings } from './tabs/CLISettings';
 import { DataSettings } from './tabs/DataSettings';
+import { EditorSettings } from './tabs/EditorSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
@@ -49,6 +50,7 @@ export function SettingsModal({
   const categories: SettingsCategory[] = [
     'account',
     'general',
+    'editor',
     'cli',
     'mcp',
     'skills',
@@ -138,6 +140,13 @@ export function SettingsModal({
 
               {activeCategory === 'general' && (
                 <GeneralSettings
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                />
+              )}
+
+              {activeCategory === 'editor' && (
+                <EditorSettings
                   settings={settings}
                   onSettingsChange={handleSettingsChange}
                 />

@@ -204,3 +204,29 @@ code {
 .dark code {
   @apply bg-muted;
 }
+
+/* ANSI color classes for fancy-ansi */
+.ansi-black { color: #1e293b; }
+.ansi-red { color: #ef4444; }
+.ansi-green { color: #22c55e; }
+.ansi-yellow { color: #eab308; }
+.ansi-blue { color: #3b82f6; }
+.ansi-magenta { color: #d946ef; }
+.ansi-cyan { color: #06b6d4; }
+.ansi-white { color: #f8fafc; }
+
+/* Bright ANSI colors */
+.ansi-bright-black { color: #64748b; }
+.ansi-bright-red { color: #f87171; }
+.ansi-bright-green { color: #4ade80; }
+.ansi-bright-yellow { color: #facc15; }
+.ansi-bright-blue { color: #60a5fa; }
+.ansi-bright-magenta { color: #e879f9; }
+.ansi-bright-cyan { color: #22d3ee; }
+.ansi-bright-white { color: #ffffff; }
+
+/* ANSI text styles */
+.ansi-bold { font-weight: 700; }
+.ansi-italic { font-style: italic; }
+.ansi-underline { text-decoration: underline; }
+.ansi-strikethrough { text-decoration: line-through; }

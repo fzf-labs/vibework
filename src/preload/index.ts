@@ -74,7 +74,7 @@ const api = {
     getConfig: () => ipcRenderer.invoke('claudeCode:getConfig'),
     saveConfig: (config: Record<string, unknown>) =>
       ipcRenderer.invoke('claudeCode:saveConfig', config),
-    startSession: (sessionId: string, workdir: string, options?: { model?: string }) =>
+    startSession: (sessionId: string, workdir: string, options?: { model?: string; prompt?: string }) =>
       ipcRenderer.invoke('claudeCode:startSession', sessionId, workdir, options),
     stopSession: (sessionId: string) => ipcRenderer.invoke('claudeCode:stopSession', sessionId),
     sendInput: (sessionId: string, input: string) =>

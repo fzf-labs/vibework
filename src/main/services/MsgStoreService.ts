@@ -12,16 +12,23 @@ export class MsgStoreService extends EventEmitter {
   private history: StoredMsg[] = []
   private totalBytes = 0
   private config: MsgStoreConfig
-  private sessionId: string | null = null
+  private _sessionId: string | null = null
   private logFilePath: string | null = null
 
   constructor(config?: Partial<MsgStoreConfig>, sessionId?: string) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
     if (sessionId) {
-      this.sessionId = sessionId
+      this._sessionId = sessionId
       this.logFilePath = getAppPaths().getSessionLogFile(sessionId)
     }
+  }
+
+  /**
+   * 获取会话 ID
+   */
+  getSessionId(): string | null {
+    return this._sessionId
   }
 
   /**
@@ -97,6 +104,50 @@ export class MsgStoreService extends EventEmitter {
       messageCount: this.history.length,
       totalBytes: this.totalBytes
     }
+  }
+
+  /**
+   * 获取历史记录 + 实时流的组合
+   * 先返回所有历史消息，然后订阅新消息
+   */
+  historyPlusStream(callback: (msg: LogMsg) => void): () => void {
+    // 先发送历史记录
+    const history = this.getHistory()
+    for (const msg of history) {
+      callback(msg)
+    }
+
+    // 然后订阅实时流
+    return this.subscribe(callback)
+  }
+
+  /**
+   * 获取 stdout 行流
+   * 按行分割 stdout 内容，确保 JSON 解析的准确性
+   */
+  stdoutLinesStream(callback: (line: string) => void): () => void {
+    let lineBuffer = ''
+
+    const handleMessage = (msg: LogMsg): void => {
+      if (msg.type !== 'stdout') return
+
+      lineBuffer += msg.content
+
+      // 按换行符分割
+      const lines = lineBuffer.split('\n')
+
+      // 最后一个元素可能是不完整的行，保留在缓冲区
+      lineBuffer = lines.pop() || ''
+
+      // 推送完整的行
+      for (const line of lines) {
+        if (line.trim()) {
+          callback(line)
+        }
+      }
+    }
+
+    return this.subscribe(handleMessage)
   }
 
   /**

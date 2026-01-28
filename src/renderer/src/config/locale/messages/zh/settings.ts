@@ -4,6 +4,7 @@ export default {
   // Categories
   account: '账号',
   general: '通用',
+  editor: '编辑器',
   cli: 'Agent CLI',
   mcp: 'MCP',
   connector: '连接器',
@@ -22,6 +23,19 @@ export default {
   dark: '深色',
   system: '跟随系统',
   backgroundStyle: '背景风格',
+
+  // Editor
+  editorDescription: '选择 VibeWork 打开文件和项目时使用的编辑器。',
+  editorDefault: '默认编辑器',
+  editorCustomOption: '自定义',
+  editorCustomCommand: '自定义命令',
+  editorCustomCommandPlaceholder: '例如: code',
+  editorCustomCommandDesc: '输入用于启动编辑器的命令。',
+  editorDetecting: '检测编辑器中...',
+  editorEmpty: '未检测到编辑器',
+  editorDetectError: '检测编辑器失败，仍可使用自定义命令。',
+  editorMissingOption: '不可用',
+  editorMissingHelper: '所选编辑器未在此设备上检测到。',
 
   // CLI Tools
   cliDescription: '查看本机是否已安装 Agent CLI 工具。',

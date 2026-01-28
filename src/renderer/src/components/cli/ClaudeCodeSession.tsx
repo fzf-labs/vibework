@@ -4,7 +4,7 @@ import { NormalizedLogView } from './NormalizedLogView'
 import { useLogStream } from '@/hooks/useLogStream'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Play, Square, Send, Terminal, List } from 'lucide-react'
+import { Play, Square, Terminal, List } from 'lucide-react'
 
 interface TerminalLine {
   type: 'stdout' | 'stderr'
@@ -17,6 +17,7 @@ type ViewMode = 'raw' | 'structured'
 interface ClaudeCodeSessionProps {
   sessionId: string
   workdir: string
+  prompt?: string
   className?: string
   onClose?: () => void
   defaultViewMode?: ViewMode
@@ -25,13 +26,13 @@ interface ClaudeCodeSessionProps {
 export function ClaudeCodeSession({
   sessionId,
   workdir,
+  prompt,
   className,
   onClose,
   defaultViewMode = 'raw'
 }: ClaudeCodeSessionProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'stopped' | 'error'>('idle')
   const [lines, setLines] = useState<TerminalLine[]>([])
-  const [input, setInput] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
 
   // 使用新的日志流 hook - 始终传入 sessionId 以加载历史日志
@@ -107,11 +108,11 @@ export function ClaudeCodeSession({
 
   const startSession = async () => {
     try {
-      console.log('[ClaudeCodeSession] Starting session:', sessionId, 'workdir:', workdir)
+      console.log('[ClaudeCodeSession] Starting session:', sessionId, 'workdir:', workdir, 'prompt:', prompt)
       setLines([])
       clearLogs()
       setStatus('running')
-      const result = await window.api.claudeCode.startSession(sessionId, workdir)
+      const result = await window.api.claudeCode.startSession(sessionId, workdir, { prompt })
       console.log('[ClaudeCodeSession] startSession result:', result)
       // session 启动后重新订阅日志流
       console.log('[ClaudeCodeSession] Resubscribing to log stream...')
@@ -129,27 +130,6 @@ export function ClaudeCodeSession({
       setStatus('stopped')
     } catch (error) {
       console.error('Failed to stop session:', error)
-    }
-  }
-
-  const sendInput = async () => {
-    if (!input.trim()) return
-    try {
-      await window.api.claudeCode.sendInput(sessionId, input)
-      setLines((prev) => [
-        ...prev,
-        { type: 'stdout', content: `> ${input}`, timestamp: new Date() }
-      ])
-      setInput('')
-    } catch (error) {
-      console.error('Failed to send input:', error)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendInput()
     }
   }
 
@@ -218,26 +198,10 @@ export function ClaudeCodeSession({
       </div>
 
       {viewMode === 'raw' ? (
-        <TerminalOutput lines={terminalLines} className="h-80" />
+        <TerminalOutput lines={terminalLines} className="h-80" virtualized />
       ) : (
         <div className="bg-zinc-900 rounded-lg h-80 overflow-auto p-2">
           <NormalizedLogView entries={normalizedLogs} />
-        </div>
-      )}
-
-      {status === 'running' && (
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            className="flex-1 px-3 py-2 text-sm bg-zinc-800 text-zinc-100 rounded-md border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-          <Button size="sm" onClick={sendInput} disabled={!input.trim()}>
-            <Send className="w-4 h-4" />
-          </Button>
         </div>
       )}
     </div>

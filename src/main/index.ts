@@ -3,6 +3,7 @@ import { join } from 'path'
 import { readFile, writeFile, stat, rm, access, readdir, realpath, mkdir } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import iconMac from '../../resources/icon-mac.png?asset'
 import { getAppPaths } from './services/AppPaths'
 import { ProjectService } from './services/ProjectService'
 import { GitService } from './services/GitService'
@@ -95,7 +96,7 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId(APP_IDENTIFIER)
 
   if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(icon)
+    app.dock.setIcon(iconMac)
   }
 
   // Default open or close DevTools by F12 in development

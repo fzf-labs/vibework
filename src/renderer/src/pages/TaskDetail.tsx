@@ -714,6 +714,7 @@ function TaskDetailContent() {
                 <ClaudeCodeSession
                   sessionId={taskId || ''}
                   workdir={workingDir}
+                  prompt={displayPrompt}
                   className="h-full"
                 />
               )}
