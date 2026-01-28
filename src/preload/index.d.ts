@@ -50,6 +50,10 @@ interface GitAPI {
     force?: boolean
   ) => Promise<unknown>
   getCommitLog: (repoPath: string, limit?: number) => Promise<unknown>
+  getParsedDiff: (repoPath: string, filePath?: string) => Promise<unknown>
+  getParsedStagedDiff: (repoPath: string, filePath?: string) => Promise<unknown>
+  checkoutBranch: (repoPath: string, branchName: string) => Promise<unknown>
+  createBranch: (repoPath: string, branchName: string) => Promise<unknown>
 }
 
 interface CLIAPI {
@@ -75,6 +79,12 @@ interface ClaudeCodeAPI {
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getOutput: (sessionId: string) => Promise<string[]>
   getSessions: () => Promise<unknown[]>
+  getSession: (sessionId: string) => Promise<unknown>
+  onOutput: (
+    callback: (data: { sessionId: string; type: string; content: string }) => void
+  ) => () => void
+  onClose: (callback: (data: { sessionId: string; code: number }) => void) => () => void
+  onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void
 }
 
 interface CLIToolsAPI {
@@ -165,6 +175,7 @@ interface DatabaseAPI {
   updateTask: (id: string, updates: unknown) => Promise<unknown>
   deleteTask: (id: string) => Promise<boolean>
   getTasksBySessionId: (sessionId: string) => Promise<unknown[]>
+  getTasksByProjectId: (projectId: string) => Promise<unknown[]>
   // Message
   createMessage: (input: unknown) => Promise<unknown>
   getMessagesByTaskId: (taskId: string) => Promise<unknown[]>
@@ -226,6 +237,39 @@ interface SettingsAPI {
   reset: () => Promise<AppSettings>
 }
 
+interface TaskWithWorktree {
+  id: string
+  sessionId: string
+  taskIndex: number
+  prompt: string
+  status: string
+  projectId: string | null
+  worktreePath: string | null
+  branchName: string | null
+  cost: number | null
+  duration: number | null
+  favorite: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+interface TaskAPI {
+  create: (options: {
+    sessionId: string
+    taskIndex: number
+    prompt: string
+    projectId?: string
+    projectPath?: string
+    createWorktree?: boolean
+  }) => Promise<{ success: boolean; data?: TaskWithWorktree; error?: string }>
+  get: (id: string) => Promise<TaskWithWorktree | null>
+  getAll: () => Promise<TaskWithWorktree[]>
+  getBySession: (sessionId: string) => Promise<TaskWithWorktree[]>
+  getByProject: (projectId: string) => Promise<TaskWithWorktree[]>
+  updateStatus: (id: string, status: string) => Promise<TaskWithWorktree | null>
+  delete: (id: string, removeWorktree?: boolean) => Promise<{ success: boolean; error?: string }>
+}
+
 interface API {
   projects: ProjectAPI
   git: GitAPI
@@ -245,6 +289,7 @@ interface API {
   path: PathAPI
   app: AppAPI
   settings: SettingsAPI
+  task: TaskAPI
 }
 
 declare global {

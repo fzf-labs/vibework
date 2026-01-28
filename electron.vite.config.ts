@@ -9,6 +9,9 @@ export default defineConfig({
     define: {
       __BUILD_DATE__: JSON.stringify(new Date().toISOString().split('T')[0])
     },
+    server: {
+      port: 3000
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

@@ -17,6 +17,7 @@ import { PreviewService } from './services/PreviewService'
 import { NotificationService } from './services/NotificationService'
 import { DatabaseService } from './services/DatabaseService'
 import { SettingsService } from './services/SettingsService'
+import { TaskService } from './services/TaskService'
 
 let projectService: ProjectService
 let gitService: GitService
@@ -31,6 +32,7 @@ let previewService: PreviewService
 let notificationService: NotificationService
 let databaseService: DatabaseService
 let settingsService: SettingsService
+let taskService: TaskService
 
 type CLIToolConfigInput = Parameters<CLIToolConfigService['saveConfig']>[1]
 type ClaudeCodeConfigUpdate = Parameters<ClaudeCodeService['saveConfig']>[0]
@@ -41,9 +43,11 @@ type PipelineStages = Parameters<PipelineService['executePipeline']>[1]
 type PreviewConfigInput = Parameters<PreviewConfigService['addConfig']>[0]
 type PreviewConfigUpdates = Parameters<PreviewConfigService['updateConfig']>[1]
 
-function createWindow(): void {
+let mainWindow: BrowserWindow | null = null
+
+function createWindow(): BrowserWindow {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
     show: false,
@@ -56,7 +60,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -71,6 +75,8 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return mainWindow
 }
 
 // This method will be called when Electron has finished
@@ -109,6 +115,26 @@ app.whenReady().then(() => {
   previewService = new PreviewService()
   notificationService = new NotificationService()
   settingsService = new SettingsService()
+  taskService = new TaskService(databaseService, gitService)
+
+  // Forward ClaudeCode events to renderer
+  claudeCodeService.on('output', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('claudeCode:output', data)
+    }
+  })
+
+  claudeCodeService.on('close', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('claudeCode:close', data)
+    }
+  })
+
+  claudeCodeService.on('error', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('claudeCode:error', data)
+    }
+  })
 
   // IPC handlers for project management
   ipcMain.handle('projects:getAll', () => {
@@ -380,6 +406,42 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('git:getParsedDiff', async (_, repoPath: string, filePath?: string) => {
+    try {
+      const diffs = await gitService.getParsedDiff(repoPath, filePath)
+      return { success: true, data: diffs }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:getParsedStagedDiff', async (_, repoPath: string, filePath?: string) => {
+    try {
+      const diffs = await gitService.getParsedStagedDiff(repoPath, filePath)
+      return { success: true, data: diffs }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:checkoutBranch', async (_, repoPath: string, branchName: string) => {
+    try {
+      await gitService.checkoutBranch(repoPath, branchName)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:createBranch', async (_, repoPath: string, branchName: string) => {
+    try {
+      await gitService.createBranch(repoPath, branchName)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
   // IPC handlers for CLI process management
   ipcMain.handle(
     'cli:startSession',
@@ -466,6 +528,17 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claudeCode:getSessions', () => {
     return claudeCodeService.getAllSessions()
+  })
+
+  ipcMain.handle('claudeCode:getSession', (_, sessionId: string) => {
+    const session = claudeCodeService.getSession(sessionId)
+    if (!session) return null
+    return {
+      id: session.id,
+      status: session.status,
+      workdir: session.workdir,
+      startTime: session.startTime
+    }
   })
 
   // IPC handlers for CLI tool detection
@@ -774,6 +847,15 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('db:getTasksByProjectId', (_, projectId: string) => {
+    try {
+      return databaseService.getTasksByProjectId(projectId)
+    } catch (error) {
+      console.error('Failed to get tasks by project:', error)
+      throw error
+    }
+  })
+
   // Message operations
   ipcMain.handle('db:createMessage', (_, input) => {
     try {
@@ -999,6 +1081,45 @@ app.whenReady().then(() => {
 
   ipcMain.handle('settings:reset', () => {
     return settingsService.resetSettings()
+  })
+
+  // IPC handlers for task service
+  ipcMain.handle('task:create', async (_, options) => {
+    try {
+      const task = await taskService.createTask(options)
+      return { success: true, data: task }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('task:get', (_, id: string) => {
+    return taskService.getTask(id)
+  })
+
+  ipcMain.handle('task:getAll', () => {
+    return taskService.getAllTasks()
+  })
+
+  ipcMain.handle('task:getBySession', (_, sessionId: string) => {
+    return taskService.getTasksBySessionId(sessionId)
+  })
+
+  ipcMain.handle('task:getByProject', (_, projectId: string) => {
+    return taskService.getTasksByProjectId(projectId)
+  })
+
+  ipcMain.handle('task:updateStatus', (_, id: string, status: string) => {
+    return taskService.updateTaskStatus(id, status as any)
+  })
+
+  ipcMain.handle('task:delete', async (_, id: string, removeWorktree?: boolean) => {
+    try {
+      const result = await taskService.deleteTask(id, removeWorktree)
+      return { success: result }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   })
 
   // IPC handlers for app operations

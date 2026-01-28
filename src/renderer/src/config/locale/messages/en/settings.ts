@@ -4,6 +4,7 @@ export default {
   // Categories
   account: 'Account',
   general: 'General',
+  cli: 'CLI Tools',
   mcp: 'MCP',
   connector: 'Connector',
   about: 'About',
@@ -24,6 +25,17 @@ export default {
   dark: 'Dark',
   system: 'System',
   backgroundStyle: 'Background Style',
+
+  // CLI Tools
+  cliDescription: 'Configure paths to CLI tools used by VibeWork.',
+  claudeCodePath: 'Claude Code Path',
+  claudeCodePathDesc: 'Path to the Claude Code CLI executable. Leave empty to use system PATH.',
+  codexCliPath: 'Codex CLI Path',
+  codexCliPathDesc: 'Path to the OpenAI Codex CLI executable. Leave empty to use system PATH.',
+  enterPath: 'Enter path or browse...',
+  browse: 'Browse',
+  validate: 'Validate',
+  validating: 'Validating...',
 
   // Skills
   skills: 'Skills',

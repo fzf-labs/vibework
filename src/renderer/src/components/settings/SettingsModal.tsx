@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { categoryIcons } from './constants';
 import { AboutSettings } from './tabs/AboutSettings';
 import { AccountSettings } from './tabs/AccountSettings';
+import { CLISettings } from './tabs/CLISettings';
 import { DataSettings } from './tabs/DataSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
@@ -48,6 +49,7 @@ export function SettingsModal({
   const categories: SettingsCategory[] = [
     'account',
     'general',
+    'cli',
     'mcp',
     'skills',
     'data',
@@ -136,6 +138,13 @@ export function SettingsModal({
 
               {activeCategory === 'general' && (
                 <GeneralSettings
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                />
+              )}
+
+              {activeCategory === 'cli' && (
+                <CLISettings
                   settings={settings}
                   onSettingsChange={handleSettingsChange}
                 />

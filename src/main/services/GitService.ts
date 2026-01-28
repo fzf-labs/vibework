@@ -10,6 +10,31 @@ interface WorktreeInfo {
   detached?: boolean
 }
 
+export interface DiffHunk {
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  lines: DiffLine[]
+}
+
+export interface DiffLine {
+  type: 'add' | 'delete' | 'context'
+  content: string
+  oldLineNumber?: number
+  newLineNumber?: number
+}
+
+export interface FileDiff {
+  oldPath: string
+  newPath: string
+  hunks: DiffHunk[]
+  isBinary: boolean
+  isNew: boolean
+  isDeleted: boolean
+  isRenamed: boolean
+}
+
 export class GitService {
   async clone(remoteUrl: string, targetPath: string): Promise<void> {
     try {
@@ -421,6 +446,128 @@ export class GitService {
       return commits
     } catch (error) {
       throw new Error(`Failed to get commit log: ${error}`)
+    }
+  }
+
+  /**
+   * 解析 diff 输出为结构化数据
+   */
+  parseDiff(diffOutput: string): FileDiff[] {
+    const files: FileDiff[] = []
+    const fileChunks = diffOutput.split(/^diff --git /m).filter((chunk) => chunk.trim())
+
+    for (const chunk of fileChunks) {
+      const lines = chunk.split('\n')
+      const headerMatch = lines[0].match(/a\/(.+) b\/(.+)/)
+      if (!headerMatch) continue
+
+      const fileDiff: FileDiff = {
+        oldPath: headerMatch[1],
+        newPath: headerMatch[2],
+        hunks: [],
+        isBinary: chunk.includes('Binary files'),
+        isNew: chunk.includes('new file mode'),
+        isDeleted: chunk.includes('deleted file mode'),
+        isRenamed: chunk.includes('rename from')
+      }
+
+      if (fileDiff.isBinary) {
+        files.push(fileDiff)
+        continue
+      }
+
+      // Parse hunks
+      let currentHunk: DiffHunk | null = null
+      let oldLineNum = 0
+      let newLineNum = 0
+
+      for (const line of lines) {
+        const hunkMatch = line.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/)
+        if (hunkMatch) {
+          if (currentHunk) {
+            fileDiff.hunks.push(currentHunk)
+          }
+          oldLineNum = parseInt(hunkMatch[1], 10)
+          newLineNum = parseInt(hunkMatch[3], 10)
+          currentHunk = {
+            oldStart: oldLineNum,
+            oldLines: parseInt(hunkMatch[2] || '1', 10),
+            newStart: newLineNum,
+            newLines: parseInt(hunkMatch[4] || '1', 10),
+            lines: []
+          }
+          continue
+        }
+
+        if (!currentHunk) continue
+
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentHunk.lines.push({
+            type: 'add',
+            content: line.substring(1),
+            newLineNumber: newLineNum++
+          })
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentHunk.lines.push({
+            type: 'delete',
+            content: line.substring(1),
+            oldLineNumber: oldLineNum++
+          })
+        } else if (line.startsWith(' ')) {
+          currentHunk.lines.push({
+            type: 'context',
+            content: line.substring(1),
+            oldLineNumber: oldLineNum++,
+            newLineNumber: newLineNum++
+          })
+        }
+      }
+
+      if (currentHunk) {
+        fileDiff.hunks.push(currentHunk)
+      }
+
+      files.push(fileDiff)
+    }
+
+    return files
+  }
+
+  /**
+   * 获取解析后的 diff 数据
+   */
+  async getParsedDiff(repoPath: string, filePath?: string): Promise<FileDiff[]> {
+    const diffOutput = await this.getDiff(repoPath, filePath)
+    return this.parseDiff(diffOutput)
+  }
+
+  /**
+   * 获取解析后的已暂存 diff 数据
+   */
+  async getParsedStagedDiff(repoPath: string, filePath?: string): Promise<FileDiff[]> {
+    const diffOutput = await this.getStagedDiff(repoPath, filePath)
+    return this.parseDiff(diffOutput)
+  }
+
+  /**
+   * 切换分支
+   */
+  async checkoutBranch(repoPath: string, branchName: string): Promise<void> {
+    try {
+      await execAsync(`git -C "${repoPath}" checkout "${branchName}"`)
+    } catch (error) {
+      throw new Error(`Failed to checkout branch: ${error}`)
+    }
+  }
+
+  /**
+   * 创建新分支
+   */
+  async createBranch(repoPath: string, branchName: string): Promise<void> {
+    try {
+      await execAsync(`git -C "${repoPath}" checkout -b "${branchName}"`)
+    } catch (error) {
+      throw new Error(`Failed to create branch: ${error}`)
     }
   }
 }

@@ -36,6 +36,8 @@ import {
 } from 'lucide-react';
 
 import type { Artifact, ArtifactType } from '@/components/artifacts';
+import type { Task } from '@/data';
+import { TaskMetadataPanel } from './TaskMetadataPanel';
 
 const API_URL = API_BASE_URL;
 
@@ -74,6 +76,12 @@ interface RightSidebarProps {
   onSelectWorkingFile?: (file: WorkingFile) => void;
   // Version number to trigger file refresh when attachments are saved
   filesVersion?: number;
+  // Task data for metadata display
+  task?: Task | null;
+  // Callback when task status changes
+  onTaskStatusChange?: (status: Task['status']) => void;
+  // Callback to open worktree folder
+  onOpenWorktree?: () => void;
 }
 
 // Get file icon based on file extension
@@ -994,6 +1002,9 @@ export function RightSidebar({
   sessionFolder: _sessionFolder,
   onSelectWorkingFile,
   filesVersion = 0,
+  task,
+  onTaskStatusChange,
+  onOpenWorktree,
 }: RightSidebarProps) {
   const { t } = useLanguage();
   const [selectedTool, setSelectedTool] = useState<ToolUsage | null>(null);
@@ -1220,6 +1231,20 @@ export function RightSidebar({
 
   return (
     <div className="bg-background flex h-full flex-col overflow-x-hidden overflow-y-auto">
+      {/* 0. Task Info Section - only show if task has worktree info */}
+      {task && (task.worktree_path || task.branch_name) && (
+        <CollapsibleSection
+          title={t.task.taskInfo || 'Task Info'}
+          defaultExpanded={true}
+        >
+          <TaskMetadataPanel
+            task={task}
+            onStatusChange={onTaskStatusChange}
+            onOpenWorktree={onOpenWorktree}
+          />
+        </CollapsibleSection>
+      )}
+
       {/* 1. Workspace Section */}
       <CollapsibleSection
         title={t.task.workspace || 'Workspace'}

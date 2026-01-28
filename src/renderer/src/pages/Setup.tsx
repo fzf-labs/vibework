@@ -10,7 +10,6 @@ import { saveSettingItem } from '@/data/settings';
 import { useLanguage } from '@/providers/language-provider';
 import { ArrowRight } from 'lucide-react';
 
-import { clearDependencyCache } from '@/components/shared/SetupGuard';
 
 interface SetupPageProps {
   /** Called when user skips setup (used by SetupGuard) */
@@ -26,7 +25,6 @@ export function SetupPage({ onSkip }: SetupPageProps = {}) {
     // Mark setup as completed
     await saveSettingItem('setupCompleted', 'true');
     // Clear the dependency cache so SetupGuard will re-check
-    clearDependencyCache();
 
     // If called from SetupGuard, use callback
     if (onSkip) {

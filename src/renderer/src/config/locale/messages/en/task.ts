@@ -29,6 +29,8 @@ export default {
   retry: 'Retry',
   openInFinder: 'Open in Finder',
   apiKeyError: 'Model configuration error. Please check your API Key',
+  // Task Info
+  taskInfo: 'Task Info',
   // Plan
   executionPlan: 'Execution Plan',
   pendingApproval: 'Pending',

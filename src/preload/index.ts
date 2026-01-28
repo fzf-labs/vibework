@@ -54,7 +54,15 @@ const api = {
     pushBranch: (repoPath: string, branchName: string, remoteName?: string, force?: boolean) =>
       ipcRenderer.invoke('git:pushBranch', repoPath, branchName, remoteName, force),
     getCommitLog: (repoPath: string, limit?: number) =>
-      ipcRenderer.invoke('git:getCommitLog', repoPath, limit)
+      ipcRenderer.invoke('git:getCommitLog', repoPath, limit),
+    getParsedDiff: (repoPath: string, filePath?: string) =>
+      ipcRenderer.invoke('git:getParsedDiff', repoPath, filePath),
+    getParsedStagedDiff: (repoPath: string, filePath?: string) =>
+      ipcRenderer.invoke('git:getParsedStagedDiff', repoPath, filePath),
+    checkoutBranch: (repoPath: string, branchName: string) =>
+      ipcRenderer.invoke('git:checkoutBranch', repoPath, branchName),
+    createBranch: (repoPath: string, branchName: string) =>
+      ipcRenderer.invoke('git:createBranch', repoPath, branchName)
   },
   cli: {
     startSession: (sessionId: string, command: string, args: string[], cwd?: string) =>
@@ -72,7 +80,24 @@ const api = {
     sendInput: (sessionId: string, input: string) =>
       ipcRenderer.invoke('claudeCode:sendInput', sessionId, input),
     getOutput: (sessionId: string) => ipcRenderer.invoke('claudeCode:getOutput', sessionId),
-    getSessions: () => ipcRenderer.invoke('claudeCode:getSessions')
+    getSessions: () => ipcRenderer.invoke('claudeCode:getSessions'),
+    getSession: (sessionId: string) => ipcRenderer.invoke('claudeCode:getSession', sessionId),
+    onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
+        callback(data)
+      ipcRenderer.on('claudeCode:output', listener)
+      return () => ipcRenderer.removeListener('claudeCode:output', listener)
+    },
+    onClose: (callback: (data: { sessionId: string; code: number }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; code: number }) => callback(data)
+      ipcRenderer.on('claudeCode:close', listener)
+      return () => ipcRenderer.removeListener('claudeCode:close', listener)
+    },
+    onError: (callback: (data: { sessionId: string; error: string }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; error: string }) => callback(data)
+      ipcRenderer.on('claudeCode:error', listener)
+      return () => ipcRenderer.removeListener('claudeCode:error', listener)
+    }
   },
   cliTools: {
     getAll: () => ipcRenderer.invoke('cliTools:getAll'),
@@ -160,6 +185,8 @@ const api = {
     deleteTask: (id: string) => ipcRenderer.invoke('db:deleteTask', id),
     getTasksBySessionId: (sessionId: string) =>
       ipcRenderer.invoke('db:getTasksBySessionId', sessionId),
+    getTasksByProjectId: (projectId: string) =>
+      ipcRenderer.invoke('db:getTasksByProjectId', projectId),
     // Message operations
     createMessage: (input: unknown) => ipcRenderer.invoke('db:createMessage', input),
     getMessagesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getMessagesByTaskId', taskId),
@@ -205,6 +232,23 @@ const api = {
     get: () => ipcRenderer.invoke('settings:get'),
     update: (updates: unknown) => ipcRenderer.invoke('settings:update', updates),
     reset: () => ipcRenderer.invoke('settings:reset')
+  },
+  task: {
+    create: (options: {
+      sessionId: string
+      taskIndex: number
+      prompt: string
+      projectId?: string
+      projectPath?: string
+      createWorktree?: boolean
+    }) => ipcRenderer.invoke('task:create', options),
+    get: (id: string) => ipcRenderer.invoke('task:get', id),
+    getAll: () => ipcRenderer.invoke('task:getAll'),
+    getBySession: (sessionId: string) => ipcRenderer.invoke('task:getBySession', sessionId),
+    getByProject: (projectId: string) => ipcRenderer.invoke('task:getByProject', projectId),
+    updateStatus: (id: string, status: string) => ipcRenderer.invoke('task:updateStatus', id, status),
+    delete: (id: string, removeWorktree?: boolean) =>
+      ipcRenderer.invoke('task:delete', id, removeWorktree)
   }
 }
 

@@ -93,4 +93,7 @@ export interface Settings {
   accentColor: AccentColor;
   backgroundStyle: BackgroundStyle;
   language: string;
+  // CLI tool paths
+  claudeCodePath: string;
+  codexCliPath: string;
 }

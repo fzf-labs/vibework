@@ -1,6 +1,13 @@
 // Database types for sessions, tasks and messages
 
-export type TaskStatus = 'running' | 'completed' | 'error' | 'stopped';
+// Execution status (CLI process state)
+export type TaskExecutionStatus = 'running' | 'completed' | 'error' | 'stopped';
+
+// Pipeline status (workflow state) - matches design.md
+export type TaskPipelineStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
+
+// Combined task status
+export type TaskStatus = TaskExecutionStatus | TaskPipelineStatus;
 
 // Project represents a workspace/repository
 export interface Project {
@@ -36,6 +43,9 @@ export interface Task {
   cost: number | null;
   duration: number | null;
   favorite?: boolean; // Whether task is favorited
+  project_id?: string | null; // Associated project
+  worktree_path?: string | null; // Git worktree path for isolated work
+  branch_name?: string | null; // Git branch name for this task
   created_at: string;
   updated_at: string;
 }

@@ -3,6 +3,9 @@ export { ToolExecutionItem } from './ToolExecutionItem';
 export { RightSidebar, type Artifact } from './RightSidebar';
 export { PlanApproval } from './PlanApproval';
 export { QuestionInput } from './QuestionInput';
+export { TaskList } from './TaskList';
+export { CreateTaskDialog } from './CreateTaskDialog';
+export { TaskMetadataPanel } from './TaskMetadataPanel';
 
 // Components moved from pages/task-detail
 export { ToolSelectionContext, useToolSelection } from './context';

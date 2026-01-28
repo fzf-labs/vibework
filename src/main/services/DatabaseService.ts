@@ -43,6 +43,9 @@ interface CreateTaskInput {
   session_id: string
   task_index: number
   prompt: string
+  project_id?: string
+  worktree_path?: string
+  branch_name?: string
 }
 
 interface Task {
@@ -50,7 +53,10 @@ interface Task {
   session_id: string
   task_index: number
   prompt: string
-  status: 'running' | 'completed' | 'error' | 'stopped'
+  status: 'pending' | 'running' | 'completed' | 'error' | 'stopped'
+  project_id: string | null
+  worktree_path: string | null
+  branch_name: string | null
   cost: number | null
   duration: number | null
   favorite: boolean
@@ -59,7 +65,9 @@ interface Task {
 }
 
 interface UpdateTaskInput {
-  status?: 'running' | 'completed' | 'error' | 'stopped'
+  status?: 'pending' | 'running' | 'completed' | 'error' | 'stopped'
+  worktree_path?: string | null
+  branch_name?: string | null
   cost?: number | null
   duration?: number | null
   favorite?: boolean
@@ -160,13 +168,17 @@ export class DatabaseService {
         session_id TEXT NOT NULL,
         task_index INTEGER NOT NULL,
         prompt TEXT NOT NULL,
-        status TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        project_id TEXT,
+        worktree_path TEXT,
+        branch_name TEXT,
         cost REAL,
         duration REAL,
         favorite INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
       )
     `)
 
@@ -256,10 +268,20 @@ export class DatabaseService {
   createTask(input: CreateTaskInput): Task {
     const now = new Date().toISOString()
     const stmt = this.db.prepare(`
-      INSERT INTO tasks (id, session_id, task_index, prompt, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, 'running', ?, ?)
+      INSERT INTO tasks (id, session_id, task_index, prompt, status, project_id, worktree_path, branch_name, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
     `)
-    stmt.run(input.id, input.session_id, input.task_index, input.prompt, now, now)
+    stmt.run(
+      input.id,
+      input.session_id,
+      input.task_index,
+      input.prompt,
+      input.project_id || null,
+      input.worktree_path || null,
+      input.branch_name || null,
+      now,
+      now
+    )
     return this.getTask(input.id)!
   }
 
@@ -286,6 +308,14 @@ export class DatabaseService {
     return tasks.map((t) => ({ ...t, favorite: Boolean(t.favorite) }))
   }
 
+  getTasksByProjectId(projectId: string): Task[] {
+    const stmt = this.db.prepare(
+      'SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at DESC'
+    )
+    const tasks = stmt.all(projectId) as any[]
+    return tasks.map((t) => ({ ...t, favorite: Boolean(t.favorite) }))
+  }
+
   updateTask(id: string, updates: UpdateTaskInput): Task | null {
     const now = new Date().toISOString()
     const fields: string[] = []
@@ -294,6 +324,14 @@ export class DatabaseService {
     if (updates.status !== undefined) {
       fields.push('status = ?')
       values.push(updates.status)
+    }
+    if (updates.worktree_path !== undefined) {
+      fields.push('worktree_path = ?')
+      values.push(updates.worktree_path)
+    }
+    if (updates.branch_name !== undefined) {
+      fields.push('branch_name = ?')
+      values.push(updates.branch_name)
     }
     if (updates.cost !== undefined) {
       fields.push('cost = ?')

@@ -6,6 +6,7 @@ import {
   Server,
   Settings,
   Sparkles,
+  Terminal,
   User,
 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ export const categoryIcons: Record<
 > = {
   account: User,
   general: Settings,
+  cli: Terminal,
   mcp: Server,
   skills: Sparkles,
   connector: Plug,

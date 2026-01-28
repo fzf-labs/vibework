@@ -288,6 +288,32 @@ function TaskDetailContent() {
     setSelectedArtifact(null);
   }, []);
 
+  // Handle task status change
+  const handleTaskStatusChange = useCallback(
+    async (status: Task['status']) => {
+      if (!taskId) return;
+      try {
+        const updatedTask = await db.updateTask(taskId, { status });
+        if (updatedTask) {
+          setTask(updatedTask);
+        }
+      } catch (error) {
+        console.error('Failed to update task status:', error);
+      }
+    },
+    [taskId]
+  );
+
+  // Handle open worktree folder
+  const handleOpenWorktree = useCallback(async () => {
+    if (!task?.worktree_path) return;
+    try {
+      await window.api?.shell?.openPath?.(task.worktree_path);
+    } catch (error) {
+      console.error('Failed to open worktree folder:', error);
+    }
+  }, [task?.worktree_path]);
+
   // Selected tool operation index for syncing with virtual computer
   const [selectedToolIndex, setSelectedToolIndex] = useState<number | null>(
     null
@@ -880,6 +906,9 @@ function TaskDetailContent() {
               workingDir={workingDir}
               sessionFolder={sessionFolder || undefined}
               filesVersion={filesVersion}
+              task={task}
+              onTaskStatusChange={handleTaskStatusChange}
+              onOpenWorktree={handleOpenWorktree}
             />
           </div>
         </div>

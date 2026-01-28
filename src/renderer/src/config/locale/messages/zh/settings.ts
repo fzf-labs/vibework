@@ -4,6 +4,7 @@ export default {
   // Categories
   account: '账号',
   general: '通用',
+  cli: 'CLI 工具',
   mcp: 'MCP',
   connector: '连接器',
   about: '关于',
@@ -24,6 +25,17 @@ export default {
   dark: '深色',
   system: '跟随系统',
   backgroundStyle: '背景风格',
+
+  // CLI Tools
+  cliDescription: '配置 VibeWork 使用的 CLI 工具路径。',
+  claudeCodePath: 'Claude Code 路径',
+  claudeCodePathDesc: 'Claude Code CLI 可执行文件路径。留空则使用系统 PATH。',
+  codexCliPath: 'Codex CLI 路径',
+  codexCliPathDesc: 'OpenAI Codex CLI 可执行文件路径。留空则使用系统 PATH。',
+  enterPath: '输入路径或浏览...',
+  browse: '浏览',
+  validate: '验证',
+  validating: '验证中...',
 
   // Skills
   skills: 'Skills',

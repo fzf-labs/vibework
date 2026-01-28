@@ -139,6 +139,8 @@ export const defaultSettings: Settings = {
   accentColor: 'orange',
   backgroundStyle: 'default',
   language: '',
+  claudeCodePath: '',
+  codexCliPath: '',
 };
 
 // ============ Theme Constants ============
