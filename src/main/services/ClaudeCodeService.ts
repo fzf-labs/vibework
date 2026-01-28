@@ -97,22 +97,19 @@ export class ClaudeCodeService extends EventEmitter {
     const command = this.config.executablePath || 'claude'
     const args: string[] = []
 
-    // 使用 -p (print) 模式 + stream-json 格式进行双向通信
-    // 注意：--output-format 和 --input-format 只在 -p 模式下工作
+    // 使用 -p 模式 + stream-json 双向通信（参考 vibe-kanban）
     args.push('-p')
-    args.push('--output-format', 'stream-json')
-    args.push('--input-format', 'stream-json')
     args.push('--verbose')
+    args.push('--output-format=stream-json')
+    args.push('--input-format=stream-json')
 
     // 添加模型参数
     if (options?.model || this.config.defaultModel) {
       args.push('--model', options?.model || this.config.defaultModel!)
     }
 
-    // prompt 作为命令行参数传递
-    if (options?.prompt) {
-      args.push(options.prompt)
-    }
+    // 注意：使用 --input-format=stream-json 时，prompt 通过 stdin 发送，不作为命令行参数
+    const prompt = options?.prompt
 
     console.log('[ClaudeCodeService] Spawning command:', command, 'args:', args)
 
@@ -139,7 +136,7 @@ export class ClaudeCodeService extends EventEmitter {
 
     const childProcess = spawn(actualCommand, args, {
       cwd: workdir,
-      shell: false, // 不使用 shell，直接执行
+      shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -222,6 +219,11 @@ export class ClaudeCodeService extends EventEmitter {
       session.stderrBatcher.write(data)
     })
 
+    // 添加 spawn 事件监听
+    childProcess.on('spawn', () => {
+      console.log('[ClaudeCodeService] Process spawn event fired')
+    })
+
     childProcess.on('close', (code) => {
       console.log('[ClaudeCodeService] Process closed with code:', code)
 
@@ -249,7 +251,51 @@ export class ClaudeCodeService extends EventEmitter {
 
     this.sessions.set(sessionId, session)
     console.log('[ClaudeCodeService] Session created and stored:', sessionId)
-    // -p 模式下，prompt 已作为命令行参数传递，无需额外初始化
+
+    // 通过 stdin 发送 Initialize 和 User 消息（参考 vibe-kanban）
+    this.initializeSession(childProcess, prompt)
+  }
+
+  /**
+   * 初始化 Claude CLI 会话
+   * 发送 Initialize 控制请求和用户消息
+   */
+  private initializeSession(childProcess: ChildProcess, prompt?: string): void {
+    const stdin = childProcess.stdin
+    if (!stdin) {
+      console.error('[ClaudeCodeService] No stdin available')
+      return
+    }
+
+    // 生成唯一的 request_id
+    const requestId = `init-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // 1. 发送 Initialize 控制请求
+    const initMessage = JSON.stringify({
+      type: 'control_request',
+      request_id: requestId,
+      request: {
+        subtype: 'initialize'
+      }
+    })
+    console.log('[ClaudeCodeService] Sending initialize message')
+    stdin.write(initMessage + '\n')
+
+    // 2. 如果有 prompt，发送用户消息
+    if (prompt) {
+      // 稍微延迟发送用户消息，确保初始化完成
+      setTimeout(() => {
+        const userMessage = JSON.stringify({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: prompt
+          }
+        })
+        console.log('[ClaudeCodeService] Sending user message')
+        stdin.write(userMessage + '\n')
+      }, 100)
+    }
   }
 
   stopSession(sessionId: string): void {
