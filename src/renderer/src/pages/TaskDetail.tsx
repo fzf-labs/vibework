@@ -109,10 +109,15 @@ function TaskDetailContent() {
     null
   );
 
-  // Working directory state - use sessionFolder (show full session directory tree)
-  // Only depend on sessionFolder and artifacts, not messages (to avoid frequent recalculations)
+  // Working directory state - prioritize task.worktree_path (project directory)
+  // Fallback to sessionFolder for backward compatibility
   const workingDir = useMemo(() => {
-    // Use sessionFolder from useAgent if available
+    // Use task's worktree_path if available (actual project directory)
+    if (task?.worktree_path) {
+      return task.worktree_path;
+    }
+
+    // Fallback to sessionFolder from useAgent
     if (sessionFolder) {
       return sessionFolder;
     }
@@ -128,7 +133,7 @@ function TaskDetailContent() {
     }
 
     return '';
-  }, [sessionFolder, artifacts]);
+  }, [task?.worktree_path, sessionFolder, artifacts]);
 
   // Live preview state
   const {
@@ -646,20 +651,20 @@ function TaskDetailContent() {
             }}
           >
             {/* Header - Full width */}
-            <header className="border-border/50 bg-background z-10 flex shrink-0 items-center gap-2 border-none px-4 py-3">
+            <header className="border-border/50 bg-background z-10 flex shrink-0 items-center gap-2 border-none px-3 py-2">
               <button
                 onClick={() => navigate('/board')}
                 className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-2 transition-colors duration-200"
                 title="返回看板"
               >
-                <ArrowLeft className="size-5" />
+                <ArrowLeft className="size-4" />
               </button>
 
               <button
                 onClick={toggleLeft}
                 className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-2 transition-colors duration-200 md:hidden"
               >
-                <PanelLeft className="size-5" />
+                <PanelLeft className="size-4" />
               </button>
 
               <div className="min-w-0 flex-1">
@@ -701,7 +706,7 @@ function TaskDetailContent() {
             {/* CLI Output Area */}
             <div
               ref={messagesContainerRef}
-              className="relative flex-1 overflow-hidden"
+              className="relative min-h-0 flex-1 overflow-hidden"
             >
               {isLoading ? (
                 <div className="flex h-full items-center justify-center">
@@ -716,18 +721,20 @@ function TaskDetailContent() {
                   workdir={workingDir}
                   prompt={displayPrompt}
                   className="h-full"
+                  compact
                 />
               )}
             </div>
 
             {/* Chat Input */}
-            <div className="border-t bg-background shrink-0 px-4 py-3">
+            <div className="border-t bg-background shrink-0 py-2">
               <ChatInput
                 variant="reply"
                 placeholder={t.home.reply}
                 isRunning={isRunning}
                 onSubmit={handleReply}
                 onStop={stopAgent}
+                className="rounded-none border-0 shadow-none"
               />
             </div>
           </div>

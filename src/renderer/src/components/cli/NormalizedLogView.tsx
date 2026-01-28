@@ -47,15 +47,15 @@ const TYPE_CONFIG: Record<
   NormalizedEntryType,
   { icon: React.ElementType; label: string; color: string }
 > = {
-  assistant_message: { icon: Bot, label: 'Assistant', color: 'text-blue-400' },
-  user_message: { icon: User, label: 'User', color: 'text-green-400' },
-  system_message: { icon: MessageSquare, label: 'System', color: 'text-zinc-400' },
-  tool_use: { icon: Wrench, label: 'Tool', color: 'text-purple-400' },
-  tool_result: { icon: CheckCircle, label: 'Result', color: 'text-cyan-400' },
-  command_run: { icon: Terminal, label: 'Command', color: 'text-yellow-400' },
-  file_edit: { icon: FileEdit, label: 'Edit', color: 'text-orange-400' },
-  file_read: { icon: FileText, label: 'Read', color: 'text-zinc-300' },
-  error: { icon: AlertCircle, label: 'Error', color: 'text-red-400' }
+  assistant_message: { icon: Bot, label: 'Assistant', color: 'text-blue-600' },
+  user_message: { icon: User, label: 'User', color: 'text-emerald-600' },
+  system_message: { icon: MessageSquare, label: 'System', color: 'text-slate-500' },
+  tool_use: { icon: Wrench, label: 'Tool', color: 'text-violet-600' },
+  tool_result: { icon: CheckCircle, label: 'Result', color: 'text-teal-600' },
+  command_run: { icon: Terminal, label: 'Command', color: 'text-amber-600' },
+  file_edit: { icon: FileEdit, label: 'Edit', color: 'text-orange-600' },
+  file_read: { icon: FileText, label: 'Read', color: 'text-slate-600' },
+  error: { icon: AlertCircle, label: 'Error', color: 'text-red-600' }
 }
 
 function formatTime(timestamp: number): string {
@@ -80,7 +80,7 @@ function LogEntry({ entry }: { entry: NormalizedEntry }) {
   }, [entry.metadata])
 
   return (
-    <div className="flex gap-3 py-2 px-3 hover:bg-zinc-800/50 rounded-md transition-colors">
+    <div className="flex gap-3 py-2 px-3 hover:bg-accent/50 rounded-md transition-colors">
       <div className={cn('flex-shrink-0 mt-0.5', config.color)}>
         <Icon className="w-4 h-4" />
       </div>
@@ -88,18 +88,18 @@ function LogEntry({ entry }: { entry: NormalizedEntry }) {
         <div className="flex items-center gap-2 mb-1">
           <span className={cn('text-xs font-medium', config.color)}>{config.label}</span>
           {subtitle && (
-            <span className="text-xs text-zinc-500 truncate font-mono">{subtitle}</span>
+            <span className="text-xs text-muted-foreground truncate font-mono">{subtitle}</span>
           )}
-          <span className="text-xs text-zinc-600 ml-auto">{formatTime(entry.timestamp)}</span>
+          <span className="text-xs text-muted-foreground/70 ml-auto">{formatTime(entry.timestamp)}</span>
         </div>
-        <div className="text-sm text-zinc-200 whitespace-pre-wrap break-words">
+        <div className="text-sm text-foreground whitespace-pre-wrap break-words">
           {entry.content}
         </div>
         {entry.metadata?.exitCode !== undefined && (
           <div
             className={cn(
-              'text-xs mt-1',
-              entry.metadata.exitCode === 0 ? 'text-green-500' : 'text-red-500'
+              'text-xs mt-1 font-medium',
+              entry.metadata.exitCode === 0 ? 'text-emerald-600' : 'text-red-600'
             )}
           >
             Exit code: {entry.metadata.exitCode}
@@ -113,7 +113,7 @@ function LogEntry({ entry }: { entry: NormalizedEntry }) {
 export function NormalizedLogView({ entries, className }: NormalizedLogViewProps) {
   if (entries.length === 0) {
     return (
-      <div className={cn('flex items-center justify-center text-zinc-500 italic py-8', className)}>
+      <div className={cn('flex items-center justify-center text-muted-foreground italic py-8', className)}>
         No structured logs available
       </div>
     )
