@@ -81,11 +81,11 @@ export const db = {
     return window.api.database.getAllFiles() as Promise<LibraryFile[]>
   },
 
-  toggleFileFavorite: (fileId: number): Promise<LibraryFile | null> => {
+  toggleFileFavorite: (fileId: string): Promise<LibraryFile | null> => {
     return window.api.database.toggleFileFavorite(fileId) as Promise<LibraryFile | null>
   },
 
-  deleteFile: (fileId: number): Promise<boolean> => {
+  deleteFile: (fileId: string): Promise<boolean> => {
     return window.api.database.deleteFile(fileId)
   },
 

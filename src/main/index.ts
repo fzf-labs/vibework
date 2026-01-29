@@ -175,6 +175,10 @@ app.whenReady().then(() => {
     return projectService.deleteProject(id)
   })
 
+  ipcMain.handle('projects:checkPath', (_, id: string) => {
+    return projectService.checkProjectPath(id)
+  })
+
   // IPC handlers for Git operations
   ipcMain.handle('git:clone', async (_, remoteUrl: string, targetPath: string) => {
     try {
@@ -968,7 +972,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('db:toggleFileFavorite', (_, fileId: number) => {
+  ipcMain.handle('db:toggleFileFavorite', (_, fileId: string) => {
     try {
       return databaseService.toggleFileFavorite(fileId)
     } catch (error) {
@@ -977,7 +981,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('db:deleteFile', (_, fileId: number) => {
+  ipcMain.handle('db:deleteFile', (_, fileId: string) => {
     try {
       return databaseService.deleteFile(fileId)
     } catch (error) {

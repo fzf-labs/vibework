@@ -1,24 +1,11 @@
+import { decodeTime } from 'ulid';
+import { newUlid } from './ids';
+
 /**
  * Session management utilities
  *
- * Session ID format: 20260112112244_how-to-use-xxx
- * - Timestamp prefix for sorting (YYYYMMDDHHmmss)
- * - Slug suffix for human readability (auto-generated from prompt)
+ * Session ID format: ULID (26-character Crockford Base32, uppercase)
  */
-
-/**
- * Generate a timestamp string in format YYYYMMDDHHmmss
- */
-function generateTimestamp(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  return `${year}${month}${day}${hours}${minutes}${seconds}`;
-}
 
 /**
  * Common words to exclude from slug generation
@@ -465,14 +452,14 @@ export function promptToSlug(prompt: string, maxLength: number = 50): string {
   return slug;
 }
 
+const ULID_REGEX = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
 /**
  * Generate a new session ID
- * Format: YYYYMMDDHHmmss_slug-from-prompt
+ * Format: ULID
  */
-export function generateSessionId(prompt: string): string {
-  const timestamp = generateTimestamp();
-  const slug = promptToSlug(prompt);
-  return `${timestamp}_${slug}`;
+export function generateSessionId(_prompt?: string): string {
+  return newUlid();
 }
 
 /**
@@ -491,6 +478,15 @@ export function parseSessionId(sessionId: string): {
   slug: string;
   date: Date;
 } {
+  if (ULID_REGEX.test(sessionId)) {
+    try {
+      const time = decodeTime(sessionId);
+      return { timestamp: '', slug: '', date: new Date(time) };
+    } catch {
+      return { timestamp: '', slug: '', date: new Date() };
+    }
+  }
+
   const parts = sessionId.split('_');
   const timestamp = parts[0] || '';
   const slug = parts.slice(1).join('_');
@@ -523,6 +519,10 @@ export function getSessionDisplayName(sessionId: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  if (!slug) {
+    return `Session ${sessionId.slice(0, 8)} (${dateStr})`;
+  }
 
   // Convert slug to title case
   const title = slug

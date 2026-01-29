@@ -42,6 +42,7 @@ export function createProject(input: CreateProjectInput): Project {
     name: input.name,
     path: input.path,
     description: input.description,
+    project_type: input.project_type || 'normal',
     created_at: now,
     updated_at: now,
   };

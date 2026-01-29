@@ -6,6 +6,7 @@ export interface Project {
   path: string;
   description?: string;
   config: Record<string, unknown>;
+  projectType: 'normal' | 'git';
   createdAt: string;
   updatedAt: string;
 }
@@ -15,6 +16,7 @@ export interface CreateProjectInput {
   path: string;
   description?: string;
   config?: Record<string, unknown>;
+  projectType?: 'normal' | 'git';
 }
 
 const CURRENT_PROJECT_KEY = 'vibework_current_project';
@@ -46,6 +48,16 @@ export function useProjects() {
     fetchProjects();
   }, [fetchProjects]);
 
+  useEffect(() => {
+    const handleProjectsChanged = () => {
+      fetchProjects();
+    };
+    window.addEventListener('projects:changed', handleProjectsChanged);
+    return () => {
+      window.removeEventListener('projects:changed', handleProjectsChanged);
+    };
+  }, [fetchProjects]);
+
   const setCurrentProjectId = useCallback((id: string | null) => {
     setCurrentProjectIdState(id);
     if (id) {
@@ -59,11 +71,13 @@ export function useProjects() {
     const result = await window.api.projects.add({
       ...input,
       config: {},
+      projectType: input.projectType,
     }) as { success: boolean; error?: string; data: Project };
     if (!result.success) {
       throw new Error(result.error || '添加项目失败');
     }
     await fetchProjects();
+    window.dispatchEvent(new Event('projects:changed'));
     return result.data;
   }, [fetchProjects]);
 
@@ -71,9 +85,23 @@ export function useProjects() {
     async (id: string, updates: Partial<Project>): Promise<Project | null> => {
       const result = await window.api.projects.update(id, updates) as Project | null;
       await fetchProjects();
+      window.dispatchEvent(new Event('projects:changed'));
       return result;
     },
     [fetchProjects]
+  );
+
+  const checkProjectPath = useCallback(
+    async (
+      id: string
+    ): Promise<{ exists: boolean; projectType?: 'normal' | 'git'; updated: boolean }> => {
+      return window.api.projects.checkPath(id) as Promise<{
+        exists: boolean;
+        projectType?: 'normal' | 'git';
+        updated: boolean;
+      }>;
+    },
+    []
   );
 
   const deleteProject = useCallback(
@@ -83,6 +111,7 @@ export function useProjects() {
         setCurrentProjectId(null);
       }
       await fetchProjects();
+      window.dispatchEvent(new Event('projects:changed'));
       return result;
     },
     [fetchProjects, currentProjectId, setCurrentProjectId]
@@ -98,6 +127,7 @@ export function useProjects() {
     addProject,
     updateProject,
     deleteProject,
+    checkProjectPath,
     refresh: fetchProjects,
   };
 }

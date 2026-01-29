@@ -15,6 +15,7 @@ export interface Project {
   name: string;
   path: string;
   description?: string;
+  project_type: 'normal' | 'git';
   created_at: string;
   updated_at: string;
 }
@@ -23,11 +24,12 @@ export interface CreateProjectInput {
   name: string;
   path: string;
   description?: string;
+  project_type?: 'normal' | 'git';
 }
 
 // Session represents a conversation context that can contain multiple tasks
 export interface Session {
-  id: string; // Format: YYYYMMDDHHmmss_slug
+  id: string; // ULID
   prompt: string; // Original prompt that started the session
   task_count: number; // Number of tasks in this session
   created_at: string;
@@ -60,7 +62,7 @@ export type MessageType =
   | 'plan';
 
 export interface Message {
-  id: number;
+  id: string;
   task_id: string;
   type: MessageType;
   content: string | null;
@@ -120,7 +122,7 @@ export type FileType =
   | 'websearch';
 
 export interface LibraryFile {
-  id: number;
+  id: string;
   task_id: string;
   name: string;
   type: FileType;

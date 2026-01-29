@@ -15,6 +15,7 @@ import {
   updateBackgroundTaskStatus,
   type BackgroundTask,
 } from '@/lib/background-tasks';
+import { newUlid } from '@/lib/ids';
 import { getAppDataDir } from '@/lib/paths';
 
 // Import from agent modules
@@ -874,7 +875,7 @@ export function useAgent(): UseAgentReturn {
       }
 
       // Create or use existing task
-      const currentTaskId = existingTaskId || Date.now().toString();
+      const currentTaskId = existingTaskId || newUlid();
       setTaskId(currentTaskId);
       activeTaskIdRef.current = currentTaskId; // Set as active task for stream isolation
 

@@ -1,3 +1,5 @@
+import { existsSync } from 'fs'
+import { join } from 'path'
 import {
   DatabaseService,
   Project as DbProject,
@@ -11,6 +13,7 @@ export interface Project {
   path: string
   description?: string
   config: Record<string, unknown>
+  projectType: 'normal' | 'git'
   createdAt: string
   updatedAt: string
 }
@@ -20,6 +23,7 @@ export interface CreateProjectOptions {
   path: string
   description?: string
   config?: Record<string, unknown>
+  projectType?: 'normal' | 'git'
 }
 
 export class ProjectService {
@@ -36,9 +40,14 @@ export class ProjectService {
       path: dbProject.path,
       description: dbProject.description || undefined,
       config: dbProject.config ? JSON.parse(dbProject.config) : {},
+      projectType: dbProject.project_type || 'normal',
       createdAt: dbProject.created_at,
       updatedAt: dbProject.updated_at
     }
+  }
+
+  private detectProjectType(projectPath: string): 'normal' | 'git' {
+    return existsSync(join(projectPath, '.git')) ? 'git' : 'normal'
   }
 
   getAllProjects(): Project[] {
@@ -61,11 +70,13 @@ export class ProjectService {
       throw new Error(`项目路径已存在: ${options.path}`)
     }
 
+    const projectType = options.projectType ?? this.detectProjectType(options.path)
     const input: CreateProjectInput = {
       name: options.name,
       path: options.path,
       description: options.description,
-      config: options.config
+      config: options.config,
+      project_type: projectType
     }
 
     const created = this.db.createProject(input)
@@ -77,6 +88,7 @@ export class ProjectService {
     if (updates.name !== undefined) input.name = updates.name
     if (updates.description !== undefined) input.description = updates.description
     if (updates.config !== undefined) input.config = updates.config
+    if (updates.projectType !== undefined) input.project_type = updates.projectType
 
     const updated = this.db.updateProject(id, input)
     return updated ? this.toProject(updated) : null
@@ -84,5 +96,28 @@ export class ProjectService {
 
   deleteProject(id: string): boolean {
     return this.db.deleteProject(id)
+  }
+
+  checkProjectPath(id: string): {
+    exists: boolean
+    projectType?: 'normal' | 'git'
+    updated: boolean
+  } {
+    const project = this.db.getProject(id)
+    if (!project) {
+      return { exists: false, updated: false }
+    }
+
+    if (!existsSync(project.path)) {
+      return { exists: false, updated: false }
+    }
+
+    const detectedType = this.detectProjectType(project.path)
+    if (project.project_type !== detectedType) {
+      this.db.updateProject(id, { project_type: detectedType })
+      return { exists: true, projectType: detectedType, updated: true }
+    }
+
+    return { exists: true, projectType: detectedType, updated: false }
   }
 }

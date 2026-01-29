@@ -9,7 +9,8 @@ const api = {
     add: (project: Record<string, unknown>) => ipcRenderer.invoke('projects:add', project),
     update: (id: string, updates: Record<string, unknown>) =>
       ipcRenderer.invoke('projects:update', id, updates),
-    delete: (id: string) => ipcRenderer.invoke('projects:delete', id)
+    delete: (id: string) => ipcRenderer.invoke('projects:delete', id),
+    checkPath: (id: string) => ipcRenderer.invoke('projects:checkPath', id)
   },
   git: {
     clone: (remoteUrl: string, targetPath: string) =>
@@ -206,8 +207,8 @@ const api = {
     createFile: (input: unknown) => ipcRenderer.invoke('db:createFile', input),
     getFilesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getFilesByTaskId', taskId),
     getAllFiles: () => ipcRenderer.invoke('db:getAllFiles'),
-    toggleFileFavorite: (fileId: number) => ipcRenderer.invoke('db:toggleFileFavorite', fileId),
-    deleteFile: (fileId: number) => ipcRenderer.invoke('db:deleteFile', fileId)
+    toggleFileFavorite: (fileId: string) => ipcRenderer.invoke('db:toggleFileFavorite', fileId),
+    deleteFile: (fileId: string) => ipcRenderer.invoke('db:deleteFile', fileId)
   },
   fs: {
     readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),

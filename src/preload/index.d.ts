@@ -14,6 +14,9 @@ interface ProjectAPI {
   add: (project: UnknownRecord) => Promise<unknown>
   update: (id: string, updates: UnknownRecord) => Promise<unknown>
   delete: (id: string) => Promise<boolean>
+  checkPath: (
+    id: string
+  ) => Promise<{ exists: boolean; projectType?: 'normal' | 'git'; updated: boolean }>
 }
 
 interface GitAPI {
@@ -190,8 +193,8 @@ interface DatabaseAPI {
   createFile: (input: unknown) => Promise<unknown>
   getFilesByTaskId: (taskId: string) => Promise<unknown[]>
   getAllFiles: () => Promise<unknown[]>
-  toggleFileFavorite: (fileId: number) => Promise<unknown>
-  deleteFile: (fileId: number) => Promise<boolean>
+  toggleFileFavorite: (fileId: string) => Promise<unknown>
+  deleteFile: (fileId: string) => Promise<boolean>
 }
 
 interface FSAPI {

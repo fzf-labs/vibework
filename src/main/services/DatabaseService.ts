@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { getAppPaths } from './AppPaths'
+import { isUlid, newUlid } from '../utils/ids'
 
 // 类型定义
 export interface Project {
@@ -8,6 +9,7 @@ export interface Project {
   path: string
   description: string | null
   config: string | null
+  project_type: 'normal' | 'git'
   created_at: string
   updated_at: string
 }
@@ -17,12 +19,14 @@ export interface CreateProjectInput {
   path: string
   description?: string
   config?: Record<string, unknown>
+  project_type?: 'normal' | 'git'
 }
 
 export interface UpdateProjectInput {
   name?: string
   description?: string
   config?: Record<string, unknown>
+  project_type?: 'normal' | 'git'
 }
 
 interface CreateSessionInput {
@@ -87,7 +91,7 @@ interface CreateMessageInput {
 }
 
 interface Message {
-  id: number
+  id: string
   task_id: string
   type: string
   content: string | null
@@ -111,7 +115,7 @@ interface CreateFileInput {
 }
 
 interface LibraryFile {
-  id: number
+  id: string
   task_id: string
   name: string
   type: string
@@ -145,6 +149,7 @@ export class DatabaseService {
         path TEXT NOT NULL UNIQUE,
         description TEXT,
         config TEXT,
+        project_type TEXT NOT NULL DEFAULT 'normal',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -185,7 +190,7 @@ export class DatabaseService {
     // 创建 messages 表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL,
         type TEXT NOT NULL,
         content TEXT,
@@ -204,7 +209,7 @@ export class DatabaseService {
     // 创建 files 表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS files (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         task_id TEXT NOT NULL,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
@@ -217,7 +222,13 @@ export class DatabaseService {
       )
     `)
 
-    // 创建索引
+    this.migrateSchema()
+    this.createIndexes()
+
+    console.log('[DatabaseService] Tables created successfully')
+  }
+
+  private createIndexes(): void {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
       CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id);
@@ -225,19 +236,17 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_messages_task_id ON messages(task_id);
       CREATE INDEX IF NOT EXISTS idx_files_task_id ON files(task_id);
     `)
-
-    this.migrateSchema()
-
-    console.log('[DatabaseService] Tables created successfully')
   }
 
   private migrateSchema(): void {
+    this.ensureColumn('projects', 'project_type', "TEXT NOT NULL DEFAULT 'normal'")
     this.ensureColumn('tasks', 'project_id', 'TEXT')
     this.ensureColumn('tasks', 'worktree_path', 'TEXT')
     this.ensureColumn('tasks', 'branch_name', 'TEXT')
     this.ensureColumn('tasks', 'cost', 'REAL')
     this.ensureColumn('tasks', 'duration', 'REAL')
     this.ensureColumn('tasks', 'favorite', 'INTEGER DEFAULT 0')
+    this.migrateToUlidIdentifiers()
   }
 
   private ensureColumn(table: string, column: string, definition: string): void {
@@ -249,6 +258,294 @@ export class DatabaseService {
 
     console.log(`[DatabaseService] Adding missing column ${table}.${column}`)
     this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+
+  private migrateToUlidIdentifiers(): void {
+    const shouldMigrate = this.shouldMigrateToUlid()
+    if (!shouldMigrate) {
+      this.setSchemaVersion(2)
+      return
+    }
+
+    console.log('[DatabaseService] Migrating identifiers to ULID...')
+
+    const foreignKeys = this.db.pragma('foreign_keys', { simple: true }) as number
+    this.db.pragma('foreign_keys = OFF')
+
+    const migrate = this.db.transaction(() => {
+      this.db.exec(`
+        CREATE TABLE projects_ulid (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          path TEXT NOT NULL UNIQUE,
+          description TEXT,
+          config TEXT,
+          project_type TEXT NOT NULL DEFAULT 'normal',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE sessions_ulid (
+          id TEXT PRIMARY KEY,
+          prompt TEXT NOT NULL,
+          task_count INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE tasks_ulid (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          task_index INTEGER NOT NULL,
+          prompt TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          project_id TEXT,
+          worktree_path TEXT,
+          branch_name TEXT,
+          cost REAL,
+          duration REAL,
+          favorite INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES sessions_ulid(id) ON DELETE CASCADE,
+          FOREIGN KEY (project_id) REFERENCES projects_ulid(id) ON DELETE SET NULL
+        );
+        CREATE TABLE messages_ulid (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          type TEXT NOT NULL,
+          content TEXT,
+          tool_name TEXT,
+          tool_input TEXT,
+          tool_output TEXT,
+          tool_use_id TEXT,
+          subtype TEXT,
+          error_message TEXT,
+          attachments TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks_ulid(id) ON DELETE CASCADE
+        );
+        CREATE TABLE files_ulid (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL,
+          path TEXT NOT NULL,
+          preview TEXT,
+          thumbnail TEXT,
+          is_favorite INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks_ulid(id) ON DELETE CASCADE
+        );
+      `)
+
+      const projectRows = this.db.prepare('SELECT * FROM projects').all() as any[]
+      const projectIdMap = new Map<string, string>()
+      const insertProject = this.db.prepare(`
+        INSERT INTO projects_ulid (id, name, path, description, config, project_type, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      for (const row of projectRows) {
+        const newId = newUlid()
+        projectIdMap.set(String(row.id), newId)
+        insertProject.run(
+          newId,
+          row.name,
+          row.path,
+          row.description ?? null,
+          row.config ?? null,
+          row.project_type ?? 'normal',
+          row.created_at,
+          row.updated_at
+        )
+      }
+
+      const sessionRows = this.db.prepare('SELECT * FROM sessions').all() as any[]
+      const sessionIdMap = new Map<string, string>()
+      const insertSession = this.db.prepare(`
+        INSERT INTO sessions_ulid (id, prompt, task_count, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+      for (const row of sessionRows) {
+        const newId = newUlid()
+        sessionIdMap.set(String(row.id), newId)
+        insertSession.run(newId, row.prompt, row.task_count ?? 0, row.created_at, row.updated_at)
+      }
+
+      const taskRows = this.db.prepare('SELECT * FROM tasks').all() as any[]
+      const taskIdMap = new Map<string, string>()
+      const insertTask = this.db.prepare(`
+        INSERT INTO tasks_ulid (
+          id, session_id, task_index, prompt, status, project_id, worktree_path, branch_name,
+          cost, duration, favorite, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      for (const row of taskRows) {
+        const newId = newUlid()
+        const mappedSessionId = sessionIdMap.get(String(row.session_id))
+        if (!mappedSessionId) {
+          throw new Error(`Missing session mapping for task ${row.id}`)
+        }
+        const mappedProjectId = row.project_id
+          ? projectIdMap.get(String(row.project_id))
+          : null
+        if (row.project_id && !mappedProjectId) {
+          console.warn(
+            `[DatabaseService] Missing project mapping for task ${row.id}, clearing project_id`
+          )
+        }
+
+        taskIdMap.set(String(row.id), newId)
+        insertTask.run(
+          newId,
+          mappedSessionId,
+          row.task_index,
+          row.prompt,
+          row.status,
+          mappedProjectId ?? null,
+          row.worktree_path ?? null,
+          row.branch_name ?? null,
+          row.cost ?? null,
+          row.duration ?? null,
+          row.favorite ?? 0,
+          row.created_at,
+          row.updated_at
+        )
+      }
+
+      const messageRows = this.db.prepare('SELECT * FROM messages').all() as any[]
+      const insertMessage = this.db.prepare(`
+        INSERT INTO messages_ulid (
+          id, task_id, type, content, tool_name, tool_input, tool_output,
+          tool_use_id, subtype, error_message, attachments, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      for (const row of messageRows) {
+        const mappedTaskId = taskIdMap.get(String(row.task_id))
+        if (!mappedTaskId) {
+          throw new Error(`Missing task mapping for message ${row.id}`)
+        }
+        insertMessage.run(
+          newUlid(),
+          mappedTaskId,
+          row.type,
+          row.content ?? null,
+          row.tool_name ?? null,
+          row.tool_input ?? null,
+          row.tool_output ?? null,
+          row.tool_use_id ?? null,
+          row.subtype ?? null,
+          row.error_message ?? null,
+          row.attachments ?? null,
+          row.created_at
+        )
+      }
+
+      const fileRows = this.db.prepare('SELECT * FROM files').all() as any[]
+      const insertFile = this.db.prepare(`
+        INSERT INTO files_ulid (
+          id, task_id, name, type, path, preview, thumbnail, is_favorite, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      for (const row of fileRows) {
+        const mappedTaskId = taskIdMap.get(String(row.task_id))
+        if (!mappedTaskId) {
+          throw new Error(`Missing task mapping for file ${row.id}`)
+        }
+        insertFile.run(
+          newUlid(),
+          mappedTaskId,
+          row.name,
+          row.type,
+          row.path,
+          row.preview ?? null,
+          row.thumbnail ?? null,
+          row.is_favorite ?? 0,
+          row.created_at
+        )
+      }
+
+      this.assertRowCounts('projects', projectRows.length, 'projects_ulid')
+      this.assertRowCounts('sessions', sessionRows.length, 'sessions_ulid')
+      this.assertRowCounts('tasks', taskRows.length, 'tasks_ulid')
+      this.assertRowCounts('messages', messageRows.length, 'messages_ulid')
+      this.assertRowCounts('files', fileRows.length, 'files_ulid')
+
+      this.db.exec(`
+        DROP TABLE messages;
+        DROP TABLE files;
+        DROP TABLE tasks;
+        DROP TABLE sessions;
+        DROP TABLE projects;
+      `)
+      this.db.exec(`
+        ALTER TABLE projects_ulid RENAME TO projects;
+        ALTER TABLE sessions_ulid RENAME TO sessions;
+        ALTER TABLE tasks_ulid RENAME TO tasks;
+        ALTER TABLE messages_ulid RENAME TO messages;
+        ALTER TABLE files_ulid RENAME TO files;
+      `)
+
+    })
+    try {
+      migrate()
+    } finally {
+      this.db.pragma(`foreign_keys = ${foreignKeys}`)
+    }
+    this.setSchemaVersion(2)
+  }
+
+  private shouldMigrateToUlid(): boolean {
+    const schemaVersion = this.db.pragma('user_version', { simple: true }) as number
+    if (schemaVersion >= 2) return false
+
+    const tables = ['projects', 'sessions', 'tasks', 'messages', 'files']
+    for (const table of tables) {
+      if (!this.tableExists(table)) return false
+    }
+
+    if (this.getIdColumnType('messages') !== 'TEXT') return true
+    if (this.getIdColumnType('files') !== 'TEXT') return true
+
+    return tables.some((table) => this.tableHasNonUlidIds(table))
+  }
+
+  private tableHasNonUlidIds(table: string): boolean {
+    const rows = this.db.prepare(`SELECT id FROM ${table}`).all() as Array<{ id: unknown }>
+    return rows.some((row) => !isUlid(row.id))
+  }
+
+  private getIdColumnType(table: string): string {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+      name: string
+      type: string
+    }>
+    const idColumn = columns.find((col) => col.name === 'id')
+    return idColumn?.type?.toUpperCase() ?? ''
+  }
+
+  private tableExists(table: string): boolean {
+    const row = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table) as { name?: string } | undefined
+    return !!row?.name
+  }
+
+  private assertRowCounts(
+    sourceTable: string,
+    expected: number,
+    targetTable: string
+  ): void {
+    const row = this.db.prepare(`SELECT COUNT(*) as count FROM ${targetTable}`).get() as {
+      count: number
+    }
+    if (row.count !== expected) {
+      throw new Error(
+        `Row count mismatch for ${sourceTable} -> ${targetTable}: ${expected} vs ${row.count}`
+      )
+    }
+  }
+
+  private setSchemaVersion(version: number): void {
+    this.db.pragma(`user_version = ${version}`)
   }
 
   // ============ Session 操作 ============
@@ -387,13 +684,15 @@ export class DatabaseService {
   // ============ Message 操作 ============
   createMessage(input: CreateMessageInput): Message {
     const now = new Date().toISOString()
+    const id = newUlid()
     const stmt = this.db.prepare(`
       INSERT INTO messages (
-        task_id, type, content, tool_name, tool_input, tool_output,
+        id, task_id, type, content, tool_name, tool_input, tool_output,
         tool_use_id, subtype, error_message, attachments, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    const result = stmt.run(
+    stmt.run(
+      id,
       input.task_id,
       input.type,
       input.content || null,
@@ -406,10 +705,10 @@ export class DatabaseService {
       input.attachments ? JSON.stringify(input.attachments) : null,
       now
     )
-    return this.getMessage(result.lastInsertRowid as number)!
+    return this.getMessage(id)!
   }
 
-  getMessage(id: number): Message | null {
+  getMessage(id: string): Message | null {
     const stmt = this.db.prepare('SELECT * FROM messages WHERE id = ?')
     const msg = stmt.get(id) as any
     if (msg && msg.attachments) {
@@ -438,11 +737,13 @@ export class DatabaseService {
   // ============ File 操作 ============
   createFile(input: CreateFileInput): LibraryFile {
     const now = new Date().toISOString()
+    const id = newUlid()
     const stmt = this.db.prepare(`
-      INSERT INTO files (task_id, name, type, path, preview, thumbnail, is_favorite, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+      INSERT INTO files (id, task_id, name, type, path, preview, thumbnail, is_favorite, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
     `)
-    const result = stmt.run(
+    stmt.run(
+      id,
       input.task_id,
       input.name,
       input.type,
@@ -451,10 +752,10 @@ export class DatabaseService {
       input.thumbnail || null,
       now
     )
-    return this.getFile(result.lastInsertRowid as number)!
+    return this.getFile(id)!
   }
 
-  getFile(id: number): LibraryFile | null {
+  getFile(id: string): LibraryFile | null {
     const stmt = this.db.prepare('SELECT * FROM files WHERE id = ?')
     const file = stmt.get(id) as any
     if (file) {
@@ -475,7 +776,7 @@ export class DatabaseService {
     return files.map((f) => ({ ...f, is_favorite: Boolean(f.is_favorite) }))
   }
 
-  toggleFileFavorite(fileId: number): LibraryFile | null {
+  toggleFileFavorite(fileId: string): LibraryFile | null {
     const file = this.getFile(fileId)
     if (!file) return null
 
@@ -484,7 +785,7 @@ export class DatabaseService {
     return this.getFile(fileId)
   }
 
-  deleteFile(fileId: number): boolean {
+  deleteFile(fileId: string): boolean {
     const stmt = this.db.prepare('DELETE FROM files WHERE id = ?')
     const result = stmt.run(fileId)
     return result.changes > 0
@@ -493,10 +794,10 @@ export class DatabaseService {
   // ============ Project 操作 ============
   createProject(input: CreateProjectInput): Project {
     const now = new Date().toISOString()
-    const id = crypto.randomUUID()
+    const id = newUlid()
     const stmt = this.db.prepare(`
-      INSERT INTO projects (id, name, path, description, config, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, name, path, description, config, project_type, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
     stmt.run(
       id,
@@ -504,6 +805,7 @@ export class DatabaseService {
       input.path,
       input.description || null,
       input.config ? JSON.stringify(input.config) : null,
+      input.project_type || 'normal',
       now,
       now
     )
@@ -541,6 +843,10 @@ export class DatabaseService {
     if (updates.config !== undefined) {
       fields.push('config = ?')
       values.push(JSON.stringify(updates.config))
+    }
+    if (updates.project_type !== undefined) {
+      fields.push('project_type = ?')
+      values.push(updates.project_type)
     }
 
     if (fields.length === 0) return this.getProject(id)

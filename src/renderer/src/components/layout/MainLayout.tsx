@@ -1,7 +1,18 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { LeftSidebar, SidebarProvider } from '@/components/layout';
 
 export function MainLayout() {
+  const location = useLocation();
+  const isProjectsRoute = location.pathname === '/projects';
+
+  if (isProjectsRoute) {
+    return (
+      <div className="bg-background h-screen">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <div className="bg-sidebar flex h-screen overflow-hidden">

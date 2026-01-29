@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { db } from '@/data';
 import type { MessageAttachment } from '@/hooks/useAgent';
+import { newUlid } from '@/lib/ids';
 import { generateSessionId } from '@/lib/session';
 import { useLanguage } from '@/providers/language-provider';
 
@@ -25,7 +26,7 @@ export function HomePage() {
       console.error('[Home] Failed to create session:', error);
     }
 
-    const taskId = Date.now().toString();
+    const taskId = newUlid();
     navigate(`/task/${taskId}`, {
       state: { prompt, sessionId, taskIndex: 1, attachments },
     });

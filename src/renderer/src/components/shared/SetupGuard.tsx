@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
+import { ProjectGuard } from './ProjectGuard';
 
 interface SetupGuardProps {
   children: ReactNode;
 }
 
 export function SetupGuard({ children }: SetupGuardProps) {
-  return <>{children}</>;
+  return <ProjectGuard>{children}</ProjectGuard>;
 }

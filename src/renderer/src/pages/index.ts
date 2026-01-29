@@ -6,3 +6,4 @@ export { DashboardPage } from './dashboard/DashboardPage';
 export { BoardPage } from './board/BoardPage';
 export { SkillsPage } from './skills/SkillsPage';
 export { McpPage } from './mcp/McpPage';
+export { ProjectsPage } from './projects/ProjectsPage';

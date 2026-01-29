@@ -11,7 +11,7 @@ import {
 
 interface FileCardProps {
   file: LibraryFile;
-  onToggleFavorite?: (fileId: number) => void;
+  onToggleFavorite?: (fileId: string) => void;
 }
 
 // Get icon for file type

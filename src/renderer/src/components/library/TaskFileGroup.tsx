@@ -9,7 +9,7 @@ interface TaskFileGroupProps {
   task: Task;
   files: LibraryFile[];
   viewMode: 'grid' | 'list';
-  onToggleFavorite?: (fileId: number) => void;
+  onToggleFavorite?: (fileId: string) => void;
 }
 
 // Format date to display

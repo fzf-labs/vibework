@@ -8,6 +8,7 @@ import {
   BoardPage,
   SkillsPage,
   McpPage,
+  ProjectsPage,
 } from '@/pages';
 
 import { SetupGuard } from '@/components/shared/SetupGuard';
@@ -43,6 +44,10 @@ export const router = createBrowserRouter([
         element: <McpPage />,
       },
       {
+        path: 'projects',
+        element: <ProjectsPage />,
+      },
+      {
         path: 'home',
         element: <HomePage />,
       },
@@ -66,6 +71,10 @@ export const router = createBrowserRouter([
   },
   {
     path: '/setup',
-    element: <SetupPage />,
+    element: (
+      <SetupGuard>
+        <SetupPage />
+      </SetupGuard>
+    ),
   },
 ]);

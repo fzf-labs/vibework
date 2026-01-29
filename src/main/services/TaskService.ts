@@ -1,6 +1,7 @@
 import * as path from 'path'
 import { DatabaseService } from './DatabaseService'
 import { GitService } from './GitService'
+import { newUlid } from '../utils/ids'
 
 interface CreateTaskOptions {
   sessionId: string
@@ -37,7 +38,7 @@ export class TaskService {
   }
 
   async createTask(options: CreateTaskOptions): Promise<TaskWithWorktree> {
-    const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const taskId = newUlid()
     let worktreePath: string | null = null
     let branchName: string | null = null
 

@@ -1,9 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useAgent, type MessageAttachment } from '@/hooks/useAgent';
 import { cn } from '@/lib/utils';
+import { newUlid } from '@/lib/ids';
 import { useLanguage } from '@/providers/language-provider';
 import { FileText, Globe, Palette, Smartphone } from 'lucide-react';
-import { nanoid } from 'nanoid';
 
 import { ChatInput } from '@/components/shared/ChatInput';
 
@@ -52,9 +52,9 @@ export function TaskInput() {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
     // Generate session info
-    const sessionId = nanoid(10);
+    const sessionId = newUlid();
     const taskIndex = 1;
-    const taskId = `${sessionId}-task-${String(taskIndex).padStart(2, '0')}`;
+    const taskId = newUlid();
 
     // Set session info before running agent
     setSessionInfo(sessionId, taskIndex);
