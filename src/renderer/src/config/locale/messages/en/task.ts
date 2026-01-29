@@ -29,6 +29,11 @@ export default {
   retry: 'Retry',
   openInFinder: 'Open in Finder',
   apiKeyError: 'Model configuration error. Please check your API Key',
+  detailCli: 'CLI Tool',
+  detailPipeline: 'Pipeline',
+  detailBranch: 'Branch',
+  detailExpand: 'Show details',
+  detailCollapse: 'Hide details',
   // Task Info
   taskInfo: 'Task Info',
   // Plan
