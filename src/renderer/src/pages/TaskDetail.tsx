@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { db, type Task } from '@/data';
 import {
   useAgent,
@@ -16,14 +16,14 @@ import { useVitePreview } from '@/hooks/useVitePreview';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
-  ArrowLeft,
   CheckCircle,
-  ChevronDown,
   Clock,
+  ListChecks,
+  MoreHorizontal,
   PanelLeft,
   Play,
-  Square,
-  XCircle,
+  Terminal,
+  GitBranch,
 } from 'lucide-react';
 
 import {
@@ -42,6 +42,20 @@ import {
   MessageList,
   RunningIndicator,
 } from '@/components/task';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 // Re-export useToolSelection for external use
 export { useToolSelection };
@@ -74,8 +88,10 @@ interface CLIToolInfo {
   displayName?: string;
 }
 
+type PipelineDisplayStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
+
 const statusConfig: Record<
-  Task['status'],
+  PipelineDisplayStatus,
   { icon: typeof Clock; label: string; color: string }
 > = {
   todo: {
@@ -98,26 +114,6 @@ const statusConfig: Record<
     label: 'Done',
     color: 'text-green-500 bg-green-500/10',
   },
-  running: {
-    icon: Play,
-    label: 'Running',
-    color: 'text-blue-500 bg-blue-500/10',
-  },
-  completed: {
-    icon: CheckCircle,
-    label: 'Completed',
-    color: 'text-green-500 bg-green-500/10',
-  },
-  error: {
-    icon: XCircle,
-    label: 'Error',
-    color: 'text-red-500 bg-red-500/10',
-  },
-  stopped: {
-    icon: Square,
-    label: 'Stopped',
-    color: 'text-zinc-500 bg-zinc-500/10',
-  },
 };
 
 export function TaskDetailPage() {
@@ -130,7 +126,6 @@ export function TaskDetailPage() {
 
 function TaskDetailContent() {
   const { t } = useLanguage();
-  const navigate = useNavigate();
   const { taskId } = useParams();
   const location = useLocation();
   const state = location.state as LocationState | null;
@@ -145,7 +140,6 @@ function TaskDetailContent() {
     isRunning,
     runAgent,
     continueConversation,
-    stopAgent,
     loadTask,
     loadMessages,
     phase,
@@ -158,11 +152,18 @@ function TaskDetailContent() {
   const isInitializingRef = useRef(false);
   const [task, setTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const useClaudeCli = task?.cli_tool_id === 'claude-code';
   const [pipelineTemplate, setPipelineTemplate] =
     useState<PipelineTemplate | null>(null);
   const [cliTools, setCliTools] = useState<CLIToolInfo[]>([]);
-  const [isMetaCollapsed, setIsMetaCollapsed] = useState(false);
   const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
+  const [hasStartedOnce, setHasStartedOnce] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPrompt, setEditPrompt] = useState('');
+  const [editCliToolId, setEditCliToolId] = useState('');
+  const [editPipelineTemplateId, setEditPipelineTemplateId] = useState('');
+  const [pipelineTemplates, setPipelineTemplates] = useState<PipelineTemplate[]>([]);
   const [pipelineStageIndex, setPipelineStageIndex] = useState(0);
   const [pipelineStatus, setPipelineStatus] = useState<
     'idle' | 'running' | 'waiting_approval' | 'failed' | 'completed'
@@ -278,6 +279,43 @@ function TaskDetailContent() {
     }
     setIsEditingTitle(false);
   }, [taskId, editedTitle, task?.title, task?.prompt, initialPrompt]);
+
+  const handleOpenEdit = useCallback(() => {
+    if (!task) return;
+    setEditTitle(task.title || task.prompt || initialPrompt);
+    setEditPrompt(task.prompt || '');
+    setEditCliToolId(task.cli_tool_id || '');
+    setEditPipelineTemplateId(task.pipeline_template_id || '');
+    setIsEditOpen(true);
+  }, [initialPrompt, task]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!taskId) return;
+    const trimmedTitle = editTitle.trim();
+    const trimmedPrompt = editPrompt.trim();
+    if (!trimmedTitle || !trimmedPrompt) return;
+
+    try {
+      const updatedTask = await db.updateTask(taskId, {
+        title: trimmedTitle,
+        prompt: trimmedPrompt,
+        cli_tool_id: editCliToolId || null,
+        pipeline_template_id: editPipelineTemplateId || null,
+      });
+      if (updatedTask) {
+        setTask(updatedTask);
+      }
+      setIsEditOpen(false);
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    }
+  }, [
+    editCliToolId,
+    editPipelineTemplateId,
+    editPrompt,
+    editTitle,
+    taskId,
+  ]);
 
   // Handle title input key down
   const handleTitleKeyDown = useCallback(
@@ -534,6 +572,7 @@ function TaskDetailContent() {
         // Only reset UI state here - loadTask will handle task switching
         setTask(null);
         setHasStarted(false);
+        setHasStartedOnce(false);
         isInitializingRef.current = false; // Reset for new task
 
         // Reset preview and artifact state
@@ -541,7 +580,6 @@ function TaskDetailContent() {
         setSelectedArtifact(null);
         setArtifacts([]);
         setSelectedToolIndex(null);
-        setIsMetaCollapsed(false);
         setLocalMessages([]);
 
         // Stop live preview if running
@@ -550,6 +588,18 @@ function TaskDetailContent() {
       prevTaskIdRef.current = taskId;
     }
   }, [taskId, stopPreview]);
+
+  useEffect(() => {
+    if (task?.status && task.status !== 'todo') {
+      setHasStartedOnce(true);
+    }
+  }, [task?.status]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setHasStartedOnce(true);
+    }
+  }, [messages.length]);
 
   // Load existing task or start new one
   useEffect(() => {
@@ -629,6 +679,34 @@ function TaskDetailContent() {
       active = false;
     };
   }, [task?.pipeline_template_id]);
+
+  useEffect(() => {
+    if (!isEditOpen) return;
+    let active = true;
+
+    const loadTemplates = async () => {
+      if (!task?.project_id) {
+        setPipelineTemplates([]);
+        return;
+      }
+      try {
+        const templates = await db.getPipelineTemplatesByProject(task.project_id);
+        if (active) {
+          setPipelineTemplates(templates as PipelineTemplate[]);
+        }
+      } catch (error) {
+        console.error('Failed to load pipeline templates:', error);
+        if (active) {
+          setPipelineTemplates([]);
+        }
+      }
+    };
+
+    loadTemplates();
+    return () => {
+      active = false;
+    };
+  }, [isEditOpen, task?.project_id]);
 
   useEffect(() => {
     let active = true;
@@ -795,8 +873,6 @@ function TaskDetailContent() {
     t.task.stageLabel,
   ]);
 
-  const useClaudeCli = task?.cli_tool_id === 'claude-code';
-
   // Handle reply submission from ChatInput
   const handleReply = useCallback(
     async (text: string, messageAttachments?: MessageAttachment[]) => {
@@ -883,6 +959,67 @@ function TaskDetailContent() {
     ]
   );
 
+  const handleStartTask = useCallback(async () => {
+    if (!taskId) return;
+    setHasStartedOnce(true);
+    if (task?.pipeline_template_id) {
+      if (!pipelineTemplate) return;
+      if (pipelineStatus !== 'idle' || isRunning) return;
+      await startPipelineStage(0);
+      return;
+    }
+
+    if (useClaudeCli) {
+      try {
+        await window.api?.claudeCode?.startSession?.(
+          taskId,
+          workingDir || '',
+          { prompt: task?.prompt || initialPrompt }
+        );
+      } catch (error) {
+        console.error('Failed to start Claude Code session:', error);
+        setLocalMessages((prev) => [
+          ...prev,
+          {
+            type: 'error',
+            message:
+              t.common.errors.serverNotRunning ||
+              'Claude Code session is not running.',
+          },
+        ]);
+      }
+      return;
+    }
+
+    const sessionInfo =
+      task?.session_id && task?.task_index
+        ? { sessionId: task.session_id, taskIndex: task.task_index }
+        : undefined;
+
+    await runAgent(
+      task?.prompt || initialPrompt,
+      taskId,
+      sessionInfo,
+      undefined,
+      workingDir || undefined
+    );
+  }, [
+    initialPrompt,
+    isRunning,
+    pipelineStatus,
+    pipelineTemplate,
+    runAgent,
+    startPipelineStage,
+    task?.prompt,
+    task?.pipeline_template_id,
+    task?.session_id,
+    task?.task_index,
+    taskId,
+    t.common.errors.serverNotRunning,
+    useClaudeCli,
+    workingDir,
+  ]);
+
   const displayTitle = task?.title || task?.prompt || initialPrompt;
   const pipelineBanner = useMemo(() => {
     if (!pipelineTemplate) return null;
@@ -923,65 +1060,92 @@ function TaskDetailContent() {
     return null;
   }, [pipelineTemplate?.name, task?.pipeline_template_id, t.common.loading]);
 
+  const startDisabled = useMemo(() => {
+    if (!taskId) return true;
+    if (task?.pipeline_template_id) {
+      return !pipelineTemplate || pipelineStatus !== 'idle' || isRunning;
+    }
+    return !useClaudeCli && isRunning;
+  }, [isRunning, pipelineStatus, pipelineTemplate, task?.pipeline_template_id, taskId, useClaudeCli]);
+
+  const hasExecuted = useMemo(() => {
+    if (messages.length > 0) return true;
+    if (hasStartedOnce) return true;
+    if (isRunning) return true;
+    if (!task) return false;
+    if (task.status && task.status !== 'todo') return true;
+    return false;
+  }, [hasStartedOnce, isRunning, messages.length, task, task?.status]);
+
+  const showStartButton = !hasExecuted;
+
+  const displayStatus = useMemo<PipelineDisplayStatus | null>(() => {
+    if (!task?.status) return null;
+    if (['todo', 'in_progress', 'in_review', 'done'].includes(task.status)) {
+      return task.status as PipelineDisplayStatus;
+    }
+    switch (task.status) {
+      case 'running':
+        return 'in_progress';
+      case 'completed':
+        return 'done';
+      case 'stopped':
+      case 'error':
+      default:
+        return 'todo';
+    }
+  }, [task?.status]);
+
+  const statusInfo = displayStatus ? statusConfig[displayStatus] : null;
+  const StatusIcon = statusInfo?.icon || Clock;
+
   const metaRows = useMemo(
     () => [
       {
         key: 'cli',
-        label: t.task.detailCli || 'CLI',
+        icon: Terminal,
         value: cliToolName ? (
           <span className="text-foreground text-xs font-medium">
             {cliToolName}
           </span>
         ) : null,
-        primary: true,
         visible: Boolean(cliToolName),
       },
       {
         key: 'pipeline',
-        label: t.task.detailPipeline || 'Pipeline',
+        icon: ListChecks,
         value: pipelineName ? (
           <span className="text-foreground text-xs font-medium">
             {pipelineName}
           </span>
         ) : null,
-        primary: false,
         visible: Boolean(pipelineName),
       },
       {
         key: 'branch',
-        label: t.task.detailBranch || 'Branch',
+        icon: GitBranch,
         value: task?.branch_name ? (
           <code className="bg-muted rounded px-1.5 py-0.5 text-xs">
             {task.branch_name}
           </code>
         ) : null,
-        primary: false,
         visible: Boolean(task?.branch_name),
       },
+      {
+        key: 'status',
+        icon: StatusIcon,
+        value: statusInfo ? (
+          <span className="text-foreground text-xs font-medium">
+            {statusInfo.label}
+          </span>
+        ) : null,
+        visible: Boolean(statusInfo),
+      },
     ],
-    [
-      cliToolName,
-      pipelineName,
-      task?.branch_name,
-      t.task.detailCli,
-      t.task.detailPipeline,
-      t.task.detailBranch,
-    ]
+    [cliToolName, pipelineName, statusInfo, StatusIcon, task?.branch_name]
   );
 
   const visibleMetaRows = metaRows.filter((row) => row.visible);
-  const primaryMetaRows = visibleMetaRows.filter((row) => row.primary);
-  const secondaryMetaRows = visibleMetaRows.filter((row) => !row.primary);
-  const showMetaToggle =
-    primaryMetaRows.length > 0 && secondaryMetaRows.length > 0;
-  const metaRowsToShow =
-    primaryMetaRows.length === 0
-      ? visibleMetaRows
-      : isMetaCollapsed
-        ? primaryMetaRows
-        : [...primaryMetaRows, ...secondaryMetaRows];
-  const statusInfo = task ? statusConfig[task.status] : null;
-  const StatusIcon = statusInfo?.icon || Clock;
 
   return (
     <ToolSelectionContext.Provider value={toolSelectionValue}>
@@ -1011,14 +1175,6 @@ function TaskDetailContent() {
             {/* Top Section - Task Details */}
             <div className="border-border/50 bg-background z-10 shrink-0 border-b px-3 py-2">
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => navigate('/board')}
-                  className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-2 transition-colors duration-200"
-                  title="返回看板"
-                >
-                  <ArrowLeft className="size-4" />
-                </button>
-
                 <button
                   onClick={toggleLeft}
                   className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-2 transition-colors duration-200 md:hidden"
@@ -1055,17 +1211,35 @@ function TaskDetailContent() {
                   )}
                 </div>
 
-                {task && (
-                  <span
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-                      statusInfo?.color
-                    )}
+                {showStartButton && (
+                  <Button
+                    size="sm"
+                    onClick={handleStartTask}
+                    disabled={startDisabled}
                   >
-                    <StatusIcon className="size-3" />
-                    {statusInfo?.label || task.status}
-                  </span>
+                    {t.task.startExecution || t.common.start || 'Start'}
+                  </Button>
                 )}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
+                      type="button"
+                      aria-label="Task actions"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={handleOpenEdit}
+                      className="cursor-pointer"
+                    >
+                      {t.common.edit}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {isRunning && (
                   <span className="text-primary flex items-center gap-2 text-sm">
@@ -1075,38 +1249,19 @@ function TaskDetailContent() {
               </div>
 
               {visibleMetaRows.length > 0 && (
-                <div className="bg-muted/40 mt-2 space-y-1.5 rounded-lg px-2.5 py-2">
-                  {metaRowsToShow.map((row) => (
-                    <div
-                      key={row.key}
-                      className="flex items-center justify-between gap-3 text-xs"
-                    >
-                      <span className="text-muted-foreground shrink-0">
-                        {row.label}
-                      </span>
-                      <div className="min-w-0 flex-1 truncate text-right">
-                        {row.value}
+                <div className="bg-muted/40 mt-2 flex flex-wrap gap-2 rounded-lg px-2.5 py-2">
+                  {visibleMetaRows.map((row) => {
+                    const Icon = row.icon;
+                    return (
+                      <div
+                        key={row.key}
+                        className="flex items-center gap-2 rounded-md bg-background/60 px-2 py-1 text-xs"
+                      >
+                        <Icon className="text-muted-foreground size-3.5 shrink-0" />
+                        <div className="min-w-0 truncate">{row.value}</div>
                       </div>
-                    </div>
-                  ))}
-
-                  {showMetaToggle && (
-                    <button
-                      type="button"
-                      onClick={() => setIsMetaCollapsed((prev) => !prev)}
-                      className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-1 pt-1 text-xs transition-colors"
-                    >
-                      <ChevronDown
-                        className={cn(
-                          'size-3 transition-transform',
-                          !isMetaCollapsed && 'rotate-180'
-                        )}
-                      />
-                      {isMetaCollapsed
-                        ? t.task.detailExpand || 'Expand'
-                        : t.task.detailCollapse || 'Collapse'}
-                    </button>
-                  )}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1175,7 +1330,6 @@ function TaskDetailContent() {
                 placeholder={t.home.reply}
                 isRunning={isRunning}
                 onSubmit={handleReply}
-                onStop={stopAgent}
                 className="rounded-none border-0 shadow-none"
               />
             </div>
@@ -1213,6 +1367,85 @@ function TaskDetailContent() {
           )}
         </div>
       </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {`${t.common.edit} ${t.task.taskInfo || 'Task'}`}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {t.task.createTitleLabel}
+              </label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {t.task.createPromptLabel}
+              </label>
+              <textarea
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                className="border-input bg-background text-foreground w-full resize-none rounded-md border px-3 py-2 text-sm"
+                rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {t.task.createCliLabel}
+              </label>
+              <select
+                value={editCliToolId}
+                onChange={(e) => setEditCliToolId(e.target.value)}
+                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
+              >
+                <option value="">{t.task.createCliPlaceholder}</option>
+                {cliTools.map((tool) => (
+                  <option key={tool.id} value={tool.id}>
+                    {tool.displayName || tool.name || tool.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {t.task.createPipelineLabel}
+              </label>
+              <select
+                value={editPipelineTemplateId}
+                onChange={(e) => setEditPipelineTemplateId(e.target.value)}
+                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
+              >
+                <option value="">{t.task.createPipelineNone}</option>
+                {pipelineTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              {t.common.cancel}
+            </Button>
+            <Button onClick={handleSaveEdit}>{t.common.save}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ToolSelectionContext.Provider>
   );
 }

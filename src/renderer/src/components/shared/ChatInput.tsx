@@ -284,7 +284,8 @@ export function ChatInput({
   };
 
   const isHome = variant === 'home';
-  const canSubmit = (value.trim() || attachments.length > 0) && !disabled;
+  const canSubmit =
+    (value.trim() || attachments.length > 0) && !disabled && !isRunning;
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -425,7 +426,7 @@ export function ChatInput({
 
         {/* Submit/Stop Button */}
         <div className="flex items-center gap-1">
-          {isRunning ? (
+          {isRunning && onStop ? (
             <button
               type="button"
               onClick={onStop}
