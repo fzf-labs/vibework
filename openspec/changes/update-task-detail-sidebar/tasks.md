@@ -1,10 +1,10 @@
 ## 1. Implementation
-- [ ] 1.1 Review current task detail layout, metadata components, and reply flow to identify integration points.
-- [ ] 1.2 Add/adjust a task detail metadata section with required fields and conditional rows.
-- [ ] 1.3 Resolve CLI tool display name (with fallback to CLI tool id if not available).
-- [ ] 1.4 Add pipeline template name display when pipeline templates are associated.
-- [ ] 1.5 Implement metadata collapse/expand behavior for constrained layouts.
-- [ ] 1.6 Fix reply flow so submissions trigger streaming responses on the task detail page.
+- [x] 1.1 Review current task detail layout, metadata components, and reply flow to identify integration points.
+- [x] 1.2 Add/adjust a task detail metadata section with required fields and conditional rows.
+- [x] 1.3 Resolve CLI tool display name (with fallback to CLI tool id if not available).
+- [x] 1.4 Add pipeline template name display when pipeline templates are associated.
+- [x] 1.5 Implement metadata collapse/expand behavior for constrained layouts.
+- [x] 1.6 Fix reply flow so submissions trigger streaming responses on the task detail page.
 
 ## 2. Validation
 - [ ] 2.1 Manual QA: task detail page shows top/middle/bottom layout and required metadata fields.

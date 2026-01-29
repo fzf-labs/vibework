@@ -9,6 +9,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { db, type Task } from '@/data';
 import {
   useAgent,
+  type AgentMessage,
   type MessageAttachment,
 } from '@/hooks/useAgent';
 import { useVitePreview } from '@/hooks/useVitePreview';
@@ -32,6 +33,7 @@ import {
 } from '@/components/artifacts';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
+import { ClaudeCodeSession } from '@/components/cli';
 import {
   ToolSelectionContext,
   useToolSelection,
@@ -138,6 +140,7 @@ function TaskDetailContent() {
   const initialAttachments = state?.attachments;
 
   const {
+    taskId: activeTaskId,
     messages,
     isRunning,
     runAgent,
@@ -159,6 +162,7 @@ function TaskDetailContent() {
     useState<PipelineTemplate | null>(null);
   const [cliTools, setCliTools] = useState<CLIToolInfo[]>([]);
   const [isMetaCollapsed, setIsMetaCollapsed] = useState(false);
+  const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
   const [pipelineStageIndex, setPipelineStageIndex] = useState(0);
   const [pipelineStatus, setPipelineStatus] = useState<
     'idle' | 'running' | 'waiting_approval' | 'failed' | 'completed'
@@ -538,6 +542,7 @@ function TaskDetailContent() {
         setArtifacts([]);
         setSelectedToolIndex(null);
         setIsMetaCollapsed(false);
+        setLocalMessages([]);
 
         // Stop live preview if running
         stopPreview();
@@ -790,15 +795,49 @@ function TaskDetailContent() {
     t.task.stageLabel,
   ]);
 
+  const useClaudeCli = task?.cli_tool_id === 'claude-code';
+
   // Handle reply submission from ChatInput
   const handleReply = useCallback(
     async (text: string, messageAttachments?: MessageAttachment[]) => {
-      if (
-        (text.trim() ||
-          (messageAttachments && messageAttachments.length > 0)) &&
-        !isRunning &&
-        taskId
-      ) {
+      if ((text.trim() || (messageAttachments && messageAttachments.length > 0)) && taskId) {
+        if (!useClaudeCli && isRunning) {
+          return;
+        }
+        if (useClaudeCli) {
+          const content = text.trim();
+          if (content) {
+            setLocalMessages((prev) => [
+              ...prev,
+              { type: 'user', content },
+            ]);
+          }
+          try {
+            const payload = JSON.stringify({
+              type: 'user',
+              message: {
+                role: 'user',
+                content,
+              },
+            });
+            await window.api?.claudeCode?.sendInput?.(taskId, payload);
+          } catch (error) {
+            console.error('Failed to send Claude Code input:', error);
+            setLocalMessages((prev) => [
+              ...prev,
+              {
+                type: 'error',
+                message:
+                  t.common.errors.serverNotRunning ||
+                  'Claude Code session is not running.',
+              },
+            ]);
+          }
+          return;
+        }
+        if (activeTaskId !== taskId) {
+          await loadMessages(taskId);
+        }
         if (
           pipelineTemplate &&
           (pipelineStatus === 'waiting_approval' || pipelineStatus === 'failed')
@@ -830,12 +869,16 @@ function TaskDetailContent() {
       }
     },
     [
+      activeTaskId,
       isRunning,
       taskId,
+      useClaudeCli,
+      loadMessages,
       continueConversation,
       pipelineTemplate,
       pipelineStatus,
       startNextPipelineStage,
+      t.common.errors.serverNotRunning,
       workingDir,
     ]
   );
@@ -864,7 +907,6 @@ function TaskDetailContent() {
     t.task.pipelineStageFailed,
     t.task.stageLabel,
   ]);
-
   const cliToolName = useMemo(() => {
     if (!task?.cli_tool_id) return null;
     const match = cliTools.find((tool) => tool.id === task.cli_tool_id);
@@ -1089,7 +1131,24 @@ function TaskDetailContent() {
                     </div>
                   )}
 
-                  {messages.length === 0 && !isRunning ? (
+                  {useClaudeCli ? (
+                    <>
+                      {localMessages.length > 0 && (
+                        <div className="mb-3">
+                          <MessageList messages={localMessages} />
+                        </div>
+                      )}
+                      <div className="flex min-h-0 flex-1">
+                        <ClaudeCodeSession
+                          sessionId={taskId || ''}
+                          workdir={workingDir}
+                          prompt={task?.prompt || initialPrompt}
+                          className="h-full w-full"
+                          compact
+                        />
+                      </div>
+                    </>
+                  ) : messages.length === 0 && !isRunning ? (
                     <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">
                       {t.task.waitingForTask}
                     </div>
