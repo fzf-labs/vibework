@@ -36,6 +36,15 @@ export interface FileDiff {
 }
 
 export class GitService {
+  async isInstalled(): Promise<boolean> {
+    try {
+      await execAsync('git --version')
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async clone(remoteUrl: string, targetPath: string): Promise<void> {
     try {
       await execAsync(`git clone ${remoteUrl} "${targetPath}"`)
@@ -131,11 +140,14 @@ export class GitService {
     repoPath: string,
     worktreePath: string,
     branchName: string,
-    createBranch: boolean = true
+    createBranch: boolean = true,
+    baseBranch?: string
   ): Promise<void> {
     try {
       const command = createBranch
-        ? `git -C "${repoPath}" worktree add -b "${branchName}" "${worktreePath}"`
+        ? `git -C "${repoPath}" worktree add -b "${branchName}" "${worktreePath}"${
+            baseBranch ? ` "${baseBranch}"` : ''
+          }`
         : `git -C "${repoPath}" worktree add "${worktreePath}" "${branchName}"`
 
       await execAsync(command)

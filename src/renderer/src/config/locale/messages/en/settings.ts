@@ -6,6 +6,8 @@ export default {
   general: 'General',
   editor: 'Editor',
   cli: 'Agent CLI',
+  git: 'Git',
+  pipelineTemplates: 'Pipeline Templates',
   mcp: 'MCP',
   connector: 'Connector',
   about: 'About',
@@ -40,6 +42,9 @@ export default {
 
   // CLI Tools
   cliDescription: 'Check whether Agent CLI tools are installed on this machine.',
+  cliDefaultLabel: 'Default CLI',
+  cliDefaultPlaceholder: 'Select default CLI',
+  cliDefaultDescription: 'Used as the default CLI when creating new tasks.',
   claudeCodePath: 'Claude Code Path',
   claudeCodePathDesc: 'Path to the Claude Code CLI executable. Leave empty to use system PATH.',
   codexCliPath: 'Codex CLI Path',
@@ -58,6 +63,24 @@ export default {
   browse: 'Browse',
   validate: 'Validate',
   validating: 'Validating...',
+
+  // Git
+  gitDescription: 'Check Git installation status and configure worktree branch naming.',
+  gitInstallStatus: 'Git Installation',
+  gitInstallStatusDesc: 'Detects whether Git is available on this machine.',
+  gitChecking: 'Checking...',
+  gitInstalled: 'Installed',
+  gitNotInstalled: 'Not installed',
+  gitWorktreePrefixLabel: 'Worktree Branch Prefix',
+  gitWorktreePrefixPlaceholder: 'e.g., vw-',
+  gitWorktreePrefixDesc: 'Prefix used when creating new Git worktree branches.',
+  gitWorktreePrefixError: 'Prefix cannot be empty.',
+
+  // Pipeline Templates
+  globalPipelineTemplatesTitle: 'Global Pipeline Templates',
+  globalPipelineTemplatesDescription:
+    'Manage global templates that can be copied into projects.',
+  globalPipelineTemplatesEmpty: 'No global templates yet.',
 
   // Skills
   skills: 'Skills',
@@ -143,6 +166,7 @@ export default {
   mcpStoreDescription: 'Browse and install MCP servers from the marketplace',
   mcpSearch: 'Search MCP servers',
   mcpNoResults: 'No MCP servers match your search',
+  mcpCliEmpty: 'No CLI MCP servers found',
   mcpGoToConfigure: 'Go to configure',
   mcpInstall: 'Install',
   mcpInstalled: 'Installed',

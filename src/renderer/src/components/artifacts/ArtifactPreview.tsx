@@ -407,7 +407,7 @@ export function ArtifactPreview({
               <FileText className="text-muted-foreground/50 size-8" />
             </div>
             <h3 className="text-muted-foreground text-sm font-medium">
-              {t.library.noFiles}
+              {t.task.noArtifacts}
             </h3>
             <p className="text-muted-foreground/70 mt-1 text-xs">
               Select an artifact from the right panel to preview

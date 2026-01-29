@@ -7,6 +7,7 @@ interface Task {
   id: string
   sessionId: string
   taskIndex: number
+  title: string
   prompt: string
   status: string
   projectId: string | null
@@ -100,7 +101,7 @@ export function TaskList({ projectId, onTaskSelect, className }: TaskListProps) 
           >
             <StatusIcon className={cn('w-5 h-5 mt-0.5 shrink-0', statusColor)} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{task.prompt}</p>
+              <p className="text-sm font-medium truncate">{task.title || task.prompt}</p>
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                 {task.branchName && (
                   <span className="flex items-center gap-1">

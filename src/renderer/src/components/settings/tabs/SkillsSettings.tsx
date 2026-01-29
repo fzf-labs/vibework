@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
   ArrowLeftRight,
-  ChevronDown,
   FolderOpen,
   Github,
   Layers,

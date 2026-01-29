@@ -6,21 +6,31 @@ import { newUlid } from '../utils/ids'
 interface CreateTaskOptions {
   sessionId: string
   taskIndex: number
+  title: string
   prompt: string
   projectId?: string
   projectPath?: string
   createWorktree?: boolean
+  baseBranch?: string
+  worktreeBranchPrefix?: string
+  cliToolId?: string
+  pipelineTemplateId?: string
 }
 
 interface TaskWithWorktree {
   id: string
   sessionId: string
   taskIndex: number
+  title: string
   prompt: string
   status: string
   projectId: string | null
   worktreePath: string | null
   branchName: string | null
+  baseBranch: string | null
+  workspacePath: string | null
+  cliToolId: string | null
+  pipelineTemplateId: string | null
   cost: number | null
   duration: number | null
   favorite: boolean
@@ -29,6 +39,8 @@ interface TaskWithWorktree {
 }
 
 export class TaskService {
+  private static readonly DEFAULT_WORKTREE_PREFIX = 'vw-'
+
   private db: DatabaseService
   private git: GitService
 
@@ -41,22 +53,35 @@ export class TaskService {
     const taskId = newUlid()
     let worktreePath: string | null = null
     let branchName: string | null = null
+    let baseBranch: string | null = null
+    let workspacePath: string | null = options.projectPath || null
+
+    if (!options.title?.trim()) {
+      throw new Error('Task title is required')
+    }
 
     if (options.createWorktree && options.projectPath) {
-      branchName = `task-${taskId}`
-      worktreePath = path.join(options.projectPath, '.worktrees', branchName)
-
+      if (!options.baseBranch) {
+        throw new Error('Base branch is required for worktree creation')
+      }
       try {
+        baseBranch = options.baseBranch
+        const prefix =
+          options.worktreeBranchPrefix?.trim() || TaskService.DEFAULT_WORKTREE_PREFIX
+        branchName = `${prefix}${taskId}`
+        worktreePath = path.join(options.projectPath, '.worktrees', branchName)
+        workspacePath = worktreePath
+
         await this.git.addWorktree(
           options.projectPath,
           worktreePath,
           branchName,
-          true
+          true,
+          baseBranch
         )
       } catch (error) {
         console.error('Failed to create worktree:', error)
-        worktreePath = null
-        branchName = null
+        throw error
       }
     }
 
@@ -64,10 +89,15 @@ export class TaskService {
       id: taskId,
       session_id: options.sessionId,
       task_index: options.taskIndex,
+      title: options.title.trim(),
       prompt: options.prompt,
       project_id: options.projectId,
       worktree_path: worktreePath ?? undefined,
-      branch_name: branchName ?? undefined
+      branch_name: branchName ?? undefined,
+      base_branch: baseBranch ?? undefined,
+      workspace_path: workspacePath ?? undefined,
+      cli_tool_id: options.cliToolId,
+      pipeline_template_id: options.pipelineTemplateId
     })
 
     return this.mapTask(task)
@@ -92,7 +122,7 @@ export class TaskService {
 
   updateTaskStatus(
     id: string,
-    status: 'pending' | 'running' | 'completed' | 'error' | 'stopped'
+    status: string
   ): TaskWithWorktree | null {
     const task = this.db.updateTask(id, { status })
     return task ? this.mapTask(task) : null
@@ -119,11 +149,16 @@ export class TaskService {
       id: task.id,
       sessionId: task.session_id,
       taskIndex: task.task_index,
+      title: task.title ?? task.prompt,
       prompt: task.prompt,
       status: task.status,
       projectId: task.project_id,
       worktreePath: task.worktree_path,
       branchName: task.branch_name,
+      baseBranch: task.base_branch ?? null,
+      workspacePath: task.workspace_path ?? task.worktree_path ?? null,
+      cliToolId: task.cli_tool_id ?? null,
+      pipelineTemplateId: task.pipeline_template_id ?? null,
       cost: task.cost,
       duration: task.duration,
       favorite: task.favorite,

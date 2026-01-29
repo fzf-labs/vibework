@@ -20,6 +20,7 @@ interface ProjectAPI {
 }
 
 interface GitAPI {
+  checkInstalled: () => Promise<unknown>
   clone: (remoteUrl: string, targetPath: string) => Promise<unknown>
   init: (path: string) => Promise<unknown>
   listWorktrees: (repoPath: string) => Promise<unknown>
@@ -27,7 +28,8 @@ interface GitAPI {
     repoPath: string,
     worktreePath: string,
     branchName: string,
-    createBranch: boolean
+    createBranch: boolean,
+    baseBranch?: string
   ) => Promise<unknown>
   removeWorktree: (repoPath: string, worktreePath: string, force: boolean) => Promise<unknown>
   pruneWorktrees: (repoPath: string) => Promise<unknown>
@@ -94,6 +96,13 @@ interface ClaudeCodeAPI {
   ) => () => void
   onClose: (callback: (data: { sessionId: string; code: number }) => void) => () => void
   onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void
+}
+
+interface LogStreamAPI {
+  subscribe: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+  unsubscribe: (sessionId: string) => Promise<unknown>
+  getHistory: (sessionId: string) => Promise<unknown[]>
+  onMessage: (callback: (sessionId: string, msg: unknown) => void) => () => void
 }
 
 interface CLIToolsAPI {
@@ -185,16 +194,21 @@ interface DatabaseAPI {
   deleteTask: (id: string) => Promise<boolean>
   getTasksBySessionId: (sessionId: string) => Promise<unknown[]>
   getTasksByProjectId: (projectId: string) => Promise<unknown[]>
+  // Pipeline template
+  getPipelineTemplatesByProject: (projectId: string) => Promise<unknown[]>
+  getGlobalPipelineTemplates: () => Promise<unknown[]>
+  getPipelineTemplate: (templateId: string) => Promise<unknown>
+  createPipelineTemplate: (input: unknown) => Promise<unknown>
+  updatePipelineTemplate: (input: unknown) => Promise<unknown>
+  deletePipelineTemplate: (templateId: string, scope: string) => Promise<boolean>
+  createProjectTemplateFromGlobal: (
+    globalTemplateId: string,
+    projectId: string
+  ) => Promise<unknown>
   // Message
   createMessage: (input: unknown) => Promise<unknown>
   getMessagesByTaskId: (taskId: string) => Promise<unknown[]>
   deleteMessagesByTaskId: (taskId: string) => Promise<number>
-  // File
-  createFile: (input: unknown) => Promise<unknown>
-  getFilesByTaskId: (taskId: string) => Promise<unknown[]>
-  getAllFiles: () => Promise<unknown[]>
-  toggleFileFavorite: (fileId: string) => Promise<unknown>
-  deleteFile: (fileId: string) => Promise<boolean>
 }
 
 interface FSAPI {
@@ -256,11 +270,16 @@ interface TaskWithWorktree {
   id: string
   sessionId: string
   taskIndex: number
+  title: string
   prompt: string
   status: string
   projectId: string | null
   worktreePath: string | null
   branchName: string | null
+  baseBranch?: string | null
+  workspacePath?: string | null
+  cliToolId?: string | null
+  pipelineTemplateId?: string | null
   cost: number | null
   duration: number | null
   favorite: boolean
@@ -272,10 +291,15 @@ interface TaskAPI {
   create: (options: {
     sessionId: string
     taskIndex: number
+    title: string
     prompt: string
     projectId?: string
     projectPath?: string
     createWorktree?: boolean
+    baseBranch?: string
+    worktreeBranchPrefix?: string
+    cliToolId?: string
+    pipelineTemplateId?: string
   }) => Promise<{ success: boolean; data?: TaskWithWorktree; error?: string }>
   get: (id: string) => Promise<TaskWithWorktree | null>
   getAll: () => Promise<TaskWithWorktree[]>
@@ -290,6 +314,7 @@ interface API {
   git: GitAPI
   cli: CLIAPI
   claudeCode: ClaudeCodeAPI
+  logStream: LogStreamAPI
   cliTools: CLIToolsAPI
   cliToolConfig: CLIToolConfigAPI
   editor: EditorAPI

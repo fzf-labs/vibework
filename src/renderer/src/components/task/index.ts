@@ -17,7 +17,7 @@ export { RunningIndicator } from './RunningIndicator';
 export { TaskGroupComponent } from './TaskGroupComponent';
 
 // Utils
-export { convertFileType, getArtifactTypeFromExt } from './utils';
+export { getArtifactTypeFromExt } from './utils';
 
 // Re-export ArtifactPreview from its new location for backwards compatibility
 export { ArtifactPreview } from '@/components/artifacts';

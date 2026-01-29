@@ -107,6 +107,8 @@ export interface Settings {
   backgroundStyle: BackgroundStyle;
   language: string;
   editor: EditorSettings;
+  defaultCliToolId: string;
+  gitWorktreeBranchPrefix: string;
   // CLI tool paths
   claudeCodePath: string;
   codexCliPath: string;

@@ -10,7 +10,6 @@ interface ClaudeCodeSessionProps {
   workdir: string
   prompt?: string
   className?: string
-  onClose?: () => void
   compact?: boolean  // 精简模式：隐藏状态栏和控制按钮
 }
 
@@ -19,7 +18,6 @@ export function ClaudeCodeSession({
   workdir,
   prompt,
   className,
-  onClose,
   compact = false
 }: ClaudeCodeSessionProps) {
   const [status, setStatus] = useState<'idle' | 'running' | 'stopped' | 'error'>('idle')

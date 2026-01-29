@@ -155,7 +155,7 @@ export class ClaudeCodeNormalizer implements LogNormalizerAdapter {
             content: item.content,
             metadata: {
               toolUseId: item.tool_use_id,
-              isError: item.is_error
+              status: item.is_error ? 'failed' : 'success'
             }
           }
         }

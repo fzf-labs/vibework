@@ -1,1 +1,1 @@
-export { convertFileType, getArtifactTypeFromExt } from './artifactUtils';
+export { getArtifactTypeFromExt } from './artifactUtils';

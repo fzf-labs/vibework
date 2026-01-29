@@ -81,7 +81,7 @@ export function ImagePreview({ artifact }: PreviewComponentProps) {
           // Local file - use Electron fs API
           console.log('[Image Preview] Reading local image file...');
           const data = await fs.readFile(artifact.path);
-          blob = new Blob([data], { type: mimeType });
+          blob = new Blob([data.slice().buffer], { type: mimeType });
         }
 
         console.log('[Image Preview] Loaded', blob.size, 'bytes');

@@ -13,11 +13,16 @@ interface TaskWithWorktree {
   id: string;
   sessionId: string;
   taskIndex: number;
+  title: string;
   prompt: string;
   status: string;
   projectId: string | null;
   worktreePath: string | null;
   branchName: string | null;
+  baseBranch?: string | null;
+  workspacePath?: string | null;
+  cliToolId?: string | null;
+  pipelineTemplateId?: string | null;
   cost: number | null;
   duration: number | null;
   favorite: boolean;
@@ -238,6 +243,7 @@ export function BoardPage() {
         onOpenChange={setCreateDialogOpen}
         projectId={currentProject?.id}
         projectPath={currentProject?.path}
+        projectType={currentProject?.projectType}
         sessionId={generateSessionId()}
         onTaskCreated={handleTaskCreated}
       />
@@ -329,8 +335,8 @@ function TaskCard({ task, onDragStart, onClick }: TaskCardProps) {
         'active:cursor-grabbing'
       )}
     >
-      {/* Task prompt */}
-      <p className="line-clamp-2 text-sm">{task.prompt}</p>
+      {/* Task title */}
+      <p className="line-clamp-2 text-sm">{task.title || task.prompt}</p>
 
       {/* Task metadata */}
       <div className="text-muted-foreground mt-2 flex items-center gap-3 text-xs">

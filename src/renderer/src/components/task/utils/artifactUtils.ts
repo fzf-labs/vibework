@@ -1,27 +1,5 @@
 import type { Artifact } from '@/components/artifacts';
 
-// Helper to convert file type from LibraryFile to Artifact type
-export function convertFileType(fileType: string): Artifact['type'] {
-  switch (fileType) {
-    case 'presentation':
-      return 'presentation';
-    case 'spreadsheet':
-      return 'spreadsheet';
-    case 'document':
-      return 'document';
-    case 'image':
-      return 'image';
-    case 'code':
-      return 'code';
-    case 'website':
-      return 'html';
-    case 'websearch':
-      return 'websearch';
-    default:
-      return 'text';
-  }
-}
-
 // Helper to get artifact type from file extension
 export function getArtifactTypeFromExt(
   ext: string | undefined

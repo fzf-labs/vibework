@@ -57,7 +57,7 @@ export function DocxPreview({ artifact }: PreviewComponentProps) {
           arrayBuffer = await response.arrayBuffer();
         } else {
           const data = await fs.readFile(artifact.path);
-          arrayBuffer = data.buffer;
+          arrayBuffer = data.slice().buffer;
         }
 
         console.log('[DOCX Preview] Loaded', arrayBuffer.byteLength, 'bytes');

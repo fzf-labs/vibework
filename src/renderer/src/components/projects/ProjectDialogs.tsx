@@ -236,7 +236,7 @@ export function ProjectEditDialog({
     setLoading(true);
     try {
       await onUpdate(project.id, { name, description });
-      setIsEditing(false);
+      onOpenChange(false);
     } finally {
       setLoading(false);
     }

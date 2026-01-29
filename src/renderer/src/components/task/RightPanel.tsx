@@ -8,7 +8,6 @@ export type RightPanelTab = 'files' | 'server' | 'git';
 
 interface RightPanelProps {
   workingDir: string;
-  artifacts: Artifact[];
   selectedArtifact: Artifact | null;
   onSelectArtifact: (artifact: Artifact) => void;
   // Live preview props
@@ -29,7 +28,6 @@ const tabs: { id: RightPanelTab; label: string; icon: typeof FileText }[] = [
 
 export function RightPanel({
   workingDir,
-  artifacts,
   livePreviewUrl,
   livePreviewStatus,
   livePreviewError,

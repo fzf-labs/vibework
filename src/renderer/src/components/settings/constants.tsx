@@ -2,7 +2,9 @@ import type { ComponentType } from 'react';
 import {
   Code,
   Database,
+  GitBranch,
   Info,
+  ListChecks,
   Plug,
   Server,
   Settings,
@@ -22,6 +24,8 @@ export const categoryIcons: Record<
   general: Settings,
   editor: Code,
   cli: Terminal,
+  git: GitBranch,
+  pipelineTemplates: ListChecks,
   mcp: Server,
   skills: Sparkles,
   connector: Plug,

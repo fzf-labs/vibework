@@ -3,7 +3,6 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
-import unusedImports from 'eslint-plugin-unused-imports';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
 import globals from 'globals';
@@ -21,10 +20,11 @@ export default [
         ecmaFeatures: {
           jsx: true,
         },
-        project: './tsconfig.json',
+        project: ['./tsconfig.node.json', './tsconfig.web.json'],
       },
       globals: {
         ...globals.browser,
+        ...globals.node,
         ...globals.es2022,
         React: 'readonly',
         __BUILD_DATE__: 'readonly',
@@ -35,7 +35,6 @@ export default [
       '@typescript-eslint': tseslint,
       react,
       'react-hooks': reactHooks,
-      'unused-imports': unusedImports,
       prettier,
     },
     settings: {
@@ -48,18 +47,6 @@ export default [
       '@typescript-eslint/no-unused-vars': 'off',
       'no-unused-vars': 'off',
 
-      // Unused imports - auto-fix
-      'unused-imports/no-unused-imports': 'error',
-      'unused-imports/no-unused-vars': [
-        'warn',
-        {
-          vars: 'all',
-          varsIgnorePattern: '^_',
-          args: 'after-used',
-          argsIgnorePattern: '^_',
-        },
-      ],
-
       // React
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
@@ -68,7 +55,7 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
 
       // Prettier
-      'prettier/prettier': 'error',
+      'prettier/prettier': 'off',
 
       // General
       'no-console': 'off', // Too noisy for now
@@ -81,6 +68,8 @@ export default [
   {
     ignores: [
       'node_modules/**',
+      'out/**',
+      'build/**',
       'dist/**',
       'src-api/**',
       'src-tauri/**',

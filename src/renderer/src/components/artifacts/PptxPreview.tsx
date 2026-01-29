@@ -42,7 +42,7 @@ export function PptxPreview({ artifact }: PreviewComponentProps) {
       try {
         // Check file size first
         if (!isRemoteUrl(artifact.path)) {
-        const fileInfo = await fs.stat(artifact.path);
+          const fileInfo = await fs.stat(artifact.path);
           if (fileInfo.size > MAX_PREVIEW_SIZE) {
             console.log('[PPTX Preview] File too large:', fileInfo.size);
             setFileTooLarge(fileInfo.size);
@@ -65,8 +65,8 @@ export function PptxPreview({ artifact }: PreviewComponentProps) {
           }
           arrayBuffer = await response.arrayBuffer();
         } else {
-        const data = await fs.readFile(artifact.path);
-          arrayBuffer = data.buffer;
+          const data = await fs.readFile(artifact.path);
+          arrayBuffer = data.slice().buffer;
         }
 
         console.log('[PPTX Preview] Loaded', arrayBuffer.byteLength, 'bytes');

@@ -141,6 +141,8 @@ export const defaultSettings: Settings = {
     editorType: 'vscode',
     customCommand: '',
   },
+  defaultCliToolId: '',
+  gitWorktreeBranchPrefix: 'vw-',
   claudeCodePath: '',
   codexCliPath: '',
 };
@@ -208,6 +210,10 @@ export async function getSettingsAsync(): Promise<Settings> {
       if (loadedSettings.profile && typeof loadedSettings.profile === 'object') {
         delete (loadedSettings.profile as { avatar?: string }).avatar;
       }
+      if (!loadedSettings.gitWorktreeBranchPrefix?.trim()) {
+        loadedSettings.gitWorktreeBranchPrefix =
+          defaultSettings.gitWorktreeBranchPrefix;
+      }
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
           loadedSettings.providers.push(defaultProvider);
@@ -236,6 +242,10 @@ export function getSettings(): Settings {
       }
       if (loadedSettings.profile && typeof loadedSettings.profile === 'object') {
         delete (loadedSettings.profile as { avatar?: string }).avatar;
+      }
+      if (!loadedSettings.gitWorktreeBranchPrefix?.trim()) {
+        loadedSettings.gitWorktreeBranchPrefix =
+          defaultSettings.gitWorktreeBranchPrefix;
       }
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {

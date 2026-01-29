@@ -53,7 +53,7 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
           const mimeType = getAudioMimeType(ext);
 
           const data = await fs.readFile(artifact.path);
-          const blob = new Blob([data], { type: mimeType });
+          const blob = new Blob([data.slice().buffer], { type: mimeType });
           console.log('[Audio Preview] Loaded', blob.size, 'bytes');
 
           blobUrl = URL.createObjectURL(blob);

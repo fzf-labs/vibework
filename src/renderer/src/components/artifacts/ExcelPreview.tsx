@@ -62,8 +62,8 @@ export function ExcelPreview({ artifact }: PreviewComponentProps) {
         } else {
           // Local file - use Tauri fs plugin
           console.log('[Excel Preview] Reading local Excel file...');
-        const data = await fs.readFile(artifact.path);
-          arrayBuffer = data.buffer;
+          const data = await fs.readFile(artifact.path);
+          arrayBuffer = data.slice().buffer;
         }
 
         console.log('[Excel Preview] Loaded', arrayBuffer.byteLength, 'bytes');

@@ -8,6 +8,8 @@ export type SettingsCategory =
   | 'general'
   | 'editor'
   | 'cli'
+  | 'git'
+  | 'pipelineTemplates'
   | 'mcp'
   | 'skills'
   | 'connector'
@@ -50,7 +52,7 @@ export interface MCPServerUI {
   url?: string;
   headers?: Record<string, string>;
   autoExecute?: boolean;
-  source?: 'VibeWork' | 'claude';
+  source?: string;
 }
 
 // Skill types

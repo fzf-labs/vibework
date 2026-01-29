@@ -73,7 +73,7 @@ export function VideoPreview({ artifact }: PreviewComponentProps) {
           const mimeType = getVideoMimeType(ext);
 
           const data = await fs.readFile(artifact.path);
-          const blob = new Blob([data], { type: mimeType });
+          const blob = new Blob([data.slice().buffer], { type: mimeType });
           console.log('[Video Preview] Loaded', blob.size, 'bytes');
 
           blobUrl = URL.createObjectURL(blob);

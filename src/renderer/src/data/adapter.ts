@@ -3,12 +3,10 @@ import type {
   CreateSessionInput,
   CreateTaskInput,
   CreateMessageInput,
-  CreateFileInput,
   UpdateTaskInput,
   Session,
   Task,
-  Message,
-  LibraryFile
+  Message
 } from './types'
 
 // 导出统一的数据库 API（通过 IPC 调用 Main 进程）
@@ -55,6 +53,41 @@ export const db = {
     return window.api.database.getTasksBySessionId(sessionId) as Promise<Task[]>
   },
 
+  // ============ Pipeline Template 操作 ============
+  getPipelineTemplatesByProject: (projectId: string): Promise<unknown[]> => {
+    return window.api.database.getPipelineTemplatesByProject(projectId) as Promise<unknown[]>
+  },
+
+  getGlobalPipelineTemplates: (): Promise<unknown[]> => {
+    return window.api.database.getGlobalPipelineTemplates() as Promise<unknown[]>
+  },
+
+  getPipelineTemplate: (templateId: string): Promise<unknown> => {
+    return window.api.database.getPipelineTemplate(templateId) as Promise<unknown>
+  },
+
+  createPipelineTemplate: (input: unknown): Promise<unknown> => {
+    return window.api.database.createPipelineTemplate(input) as Promise<unknown>
+  },
+
+  updatePipelineTemplate: (input: unknown): Promise<unknown> => {
+    return window.api.database.updatePipelineTemplate(input) as Promise<unknown>
+  },
+
+  deletePipelineTemplate: (templateId: string, scope: string): Promise<boolean> => {
+    return window.api.database.deletePipelineTemplate(templateId, scope) as Promise<boolean>
+  },
+
+  createProjectTemplateFromGlobal: (
+    globalTemplateId: string,
+    projectId: string
+  ): Promise<unknown> => {
+    return window.api.database.createProjectTemplateFromGlobal(
+      globalTemplateId,
+      projectId
+    ) as Promise<unknown>
+  },
+
   // ============ Message 操作 ============
   createMessage: (input: CreateMessageInput): Promise<Message> => {
     return window.api.database.createMessage(input) as Promise<Message>
@@ -68,27 +101,6 @@ export const db = {
     return window.api.database.deleteMessagesByTaskId(taskId)
   },
 
-  // ============ File 操作 ============
-  createFile: (input: CreateFileInput): Promise<LibraryFile> => {
-    return window.api.database.createFile(input) as Promise<LibraryFile>
-  },
-
-  getFilesByTaskId: (taskId: string): Promise<LibraryFile[]> => {
-    return window.api.database.getFilesByTaskId(taskId) as Promise<LibraryFile[]>
-  },
-
-  getAllFiles: (): Promise<LibraryFile[]> => {
-    return window.api.database.getAllFiles() as Promise<LibraryFile[]>
-  },
-
-  toggleFileFavorite: (fileId: string): Promise<LibraryFile | null> => {
-    return window.api.database.toggleFileFavorite(fileId) as Promise<LibraryFile | null>
-  },
-
-  deleteFile: (fileId: string): Promise<boolean> => {
-    return window.api.database.deleteFile(fileId)
-  },
-
   // ============ 辅助函数 ============
   updateTaskFromMessage: async (
     taskId: string,
@@ -97,9 +109,16 @@ export const db = {
     cost?: number,
     duration?: number
   ): Promise<void> => {
+    const task = await db.getTask(taskId)
+    const isPipelineTask = Boolean(task?.pipeline_template_id)
+
     if (messageType === 'result') {
       if (subtype === 'success') {
-        await db.updateTask(taskId, { status: 'completed', cost, duration })
+        if (isPipelineTask) {
+          await db.updateTask(taskId, { status: 'in_review', cost, duration })
+        } else {
+          await db.updateTask(taskId, { status: 'completed', cost, duration })
+        }
       } else if (subtype === 'error_max_turns') {
         await db.updateTask(taskId, { cost, duration })
       } else {

@@ -60,8 +60,8 @@ export function PdfPreview({ artifact }: PreviewComponentProps) {
         } else {
           // Local file - use Electron fs API
           console.log('[PDF Preview] Reading local PDF file...');
-        const data = await fs.readFile(artifact.path);
-          blob = new Blob([data], { type: 'application/pdf' });
+          const data = await fs.readFile(artifact.path);
+          blob = new Blob([data.slice().buffer], { type: 'application/pdf' });
         }
 
         console.log('[PDF Preview] Loaded', blob.size, 'bytes');

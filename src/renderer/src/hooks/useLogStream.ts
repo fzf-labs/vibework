@@ -1,4 +1,66 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type { NormalizedEntry } from '@/components/cli/NormalizedLogView'
+
+type ContentLike =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ContentLike[]
+  | Record<string, unknown>
+
+function stringifyContentPart(part: ContentLike): string {
+  if (part === null || part === undefined) return ''
+  if (typeof part === 'string') return part
+  if (typeof part === 'number' || typeof part === 'boolean') {
+    return String(part)
+  }
+  if (Array.isArray(part)) {
+    return part.map(stringifyContentPart).join('')
+  }
+  if (typeof part === 'object') {
+    const record = part as Record<string, unknown>
+    if (typeof record.text === 'string') return record.text
+    if (typeof record.content === 'string') return record.content
+    if (typeof record.value === 'string') return record.value
+    if (Array.isArray(record.content)) {
+      return record.content.map((item) => stringifyContentPart(item as ContentLike)).join('')
+    }
+    try {
+      return JSON.stringify(part)
+    } catch {
+      return String(part)
+    }
+  }
+  return String(part)
+}
+
+function normalizeLogEntry(entry: NormalizedEntry): NormalizedEntry {
+  const normalizedContent = stringifyContentPart(entry.content as unknown as ContentLike)
+  const metadata = entry.metadata ? { ...entry.metadata } : undefined
+  if (metadata) {
+    const keys: Array<keyof NonNullable<NormalizedEntry['metadata']>> = [
+      'toolName',
+      'filePath',
+      'command',
+    ]
+    for (const key of keys) {
+      const value = metadata[key]
+      if (value !== undefined && typeof value !== 'string') {
+        metadata[key] = stringifyContentPart(value as ContentLike)
+      }
+    }
+  }
+  if (normalizedContent === entry.content && metadata === entry.metadata) {
+    return entry
+  }
+  return {
+    ...entry,
+    content: normalizedContent,
+    metadata,
+  }
+}
 
 /**
  * 日志消息类型
@@ -9,14 +71,6 @@ export interface LogMsg {
   timestamp: number
   entry?: NormalizedEntry
   exitCode?: number
-}
-
-export interface NormalizedEntry {
-  id: string
-  type: string
-  timestamp: number
-  content: string
-  metadata?: Record<string, unknown>
 }
 
 export interface UseLogStreamResult {
@@ -57,7 +111,7 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
       if (msg.type === 'stdout' || msg.type === 'stderr') {
         raw.push(msg)
       } else if (msg.type === 'normalized' && msg.entry) {
-        normalized.push(msg.entry)
+        normalized.push(normalizeLogEntry(msg.entry))
       }
     }
 
@@ -78,7 +132,7 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
       const history = await window.api.logStream.getHistory(currentSessionId)
       console.log('[useLogStream] History received:', history?.length || 0, 'messages')
       if (Array.isArray(history) && history.length > 0) {
-        processMessages(history)
+        processMessages(history as LogMsg[])
       }
 
       // 订阅实时日志

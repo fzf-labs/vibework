@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { cn } from '@/lib/utils'
 import { VirtualizedLogList, LogEntry } from './VirtualizedLogList'
 
@@ -54,7 +54,8 @@ interface AnsiSegment {
 
 function parseAnsi(text: string): AnsiSegment[] {
   const segments: AnsiSegment[] = []
-  const ansiRegex = /\x1b\[([0-9;]*)m/g
+  // eslint-disable-next-line no-control-regex
+  const ansiRegex = new RegExp('\\x1b\\[([0-9;]*)m', 'g')
   let lastIndex = 0
   let currentClasses: string[] = []
   let match: RegExpExecArray | null

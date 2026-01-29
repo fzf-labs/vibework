@@ -6,6 +6,8 @@ export default {
   general: '通用',
   editor: '编辑器',
   cli: 'Agent CLI',
+  git: 'Git',
+  pipelineTemplates: '流水线模板',
   mcp: 'MCP',
   connector: '连接器',
   about: '关于',
@@ -39,6 +41,9 @@ export default {
 
   // CLI Tools
   cliDescription: '查看本机是否已安装 Agent CLI 工具。',
+  cliDefaultLabel: '默认 CLI',
+  cliDefaultPlaceholder: '请选择默认 CLI',
+  cliDefaultDescription: '创建新任务时默认使用的 CLI 工具。',
   claudeCodePath: 'Claude Code 路径',
   claudeCodePathDesc: 'Claude Code CLI 可执行文件路径。留空则使用系统 PATH。',
   codexCliPath: 'Codex CLI 路径',
@@ -57,6 +62,23 @@ export default {
   browse: '浏览',
   validate: '验证',
   validating: '验证中...',
+
+  // Git
+  gitDescription: '查看 Git 是否可用，并配置 worktree 分支命名前缀。',
+  gitInstallStatus: 'Git 安装状态',
+  gitInstallStatusDesc: '检测本机是否可用 Git。',
+  gitChecking: '检测中...',
+  gitInstalled: '已安装',
+  gitNotInstalled: '未安装',
+  gitWorktreePrefixLabel: 'Worktree 分支前缀',
+  gitWorktreePrefixPlaceholder: '例如: vw-',
+  gitWorktreePrefixDesc: '创建新的 Git worktree 分支时使用的前缀。',
+  gitWorktreePrefixError: '前缀不能为空。',
+
+  // Pipeline Templates
+  globalPipelineTemplatesTitle: '全局流水线模板',
+  globalPipelineTemplatesDescription: '管理可复制到项目中的全局模板。',
+  globalPipelineTemplatesEmpty: '暂无全局模板。',
 
   // Skills
   skills: 'Skills',
@@ -141,6 +163,7 @@ export default {
   mcpStoreDescription: '从商店浏览和安装 MCP 服务器',
   mcpSearch: '搜索 MCP 服务器',
   mcpNoResults: '没有匹配的 MCP 服务器',
+  mcpCliEmpty: '未发现 CLI MCP 服务器',
   mcpGoToConfigure: '去配置',
   mcpInstall: '安装',
   mcpInstalled: '已安装',

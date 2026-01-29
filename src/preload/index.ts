@@ -13,6 +13,7 @@ const api = {
     checkPath: (id: string) => ipcRenderer.invoke('projects:checkPath', id)
   },
   git: {
+    checkInstalled: () => ipcRenderer.invoke('git:checkInstalled'),
     clone: (remoteUrl: string, targetPath: string) =>
       ipcRenderer.invoke('git:clone', remoteUrl, targetPath),
     init: (path: string) => ipcRenderer.invoke('git:init', path),
@@ -21,8 +22,17 @@ const api = {
       repoPath: string,
       worktreePath: string,
       branchName: string,
-      createBranch: boolean
-    ) => ipcRenderer.invoke('git:addWorktree', repoPath, worktreePath, branchName, createBranch),
+      createBranch: boolean,
+      baseBranch?: string
+    ) =>
+      ipcRenderer.invoke(
+        'git:addWorktree',
+        repoPath,
+        worktreePath,
+        branchName,
+        createBranch,
+        baseBranch
+      ),
     removeWorktree: (repoPath: string, worktreePath: string, force: boolean) =>
       ipcRenderer.invoke('git:removeWorktree', repoPath, worktreePath, force),
     pruneWorktrees: (repoPath: string) => ipcRenderer.invoke('git:pruneWorktrees', repoPath),
@@ -198,17 +208,23 @@ const api = {
       ipcRenderer.invoke('db:getTasksBySessionId', sessionId),
     getTasksByProjectId: (projectId: string) =>
       ipcRenderer.invoke('db:getTasksByProjectId', projectId),
+    // Pipeline template operations
+    getPipelineTemplatesByProject: (projectId: string) =>
+      ipcRenderer.invoke('db:getPipelineTemplatesByProject', projectId),
+    getGlobalPipelineTemplates: () => ipcRenderer.invoke('db:getGlobalPipelineTemplates'),
+    getPipelineTemplate: (templateId: string) =>
+      ipcRenderer.invoke('db:getPipelineTemplate', templateId),
+    createPipelineTemplate: (input: unknown) => ipcRenderer.invoke('db:createPipelineTemplate', input),
+    updatePipelineTemplate: (input: unknown) => ipcRenderer.invoke('db:updatePipelineTemplate', input),
+    deletePipelineTemplate: (templateId: string, scope: string) =>
+      ipcRenderer.invoke('db:deletePipelineTemplate', templateId, scope),
+    createProjectTemplateFromGlobal: (globalTemplateId: string, projectId: string) =>
+      ipcRenderer.invoke('db:createProjectTemplateFromGlobal', globalTemplateId, projectId),
     // Message operations
     createMessage: (input: unknown) => ipcRenderer.invoke('db:createMessage', input),
     getMessagesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getMessagesByTaskId', taskId),
     deleteMessagesByTaskId: (taskId: string) =>
-      ipcRenderer.invoke('db:deleteMessagesByTaskId', taskId),
-    // File operations
-    createFile: (input: unknown) => ipcRenderer.invoke('db:createFile', input),
-    getFilesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getFilesByTaskId', taskId),
-    getAllFiles: () => ipcRenderer.invoke('db:getAllFiles'),
-    toggleFileFavorite: (fileId: string) => ipcRenderer.invoke('db:toggleFileFavorite', fileId),
-    deleteFile: (fileId: string) => ipcRenderer.invoke('db:deleteFile', fileId)
+      ipcRenderer.invoke('db:deleteMessagesByTaskId', taskId)
   },
   fs: {
     readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
@@ -252,10 +268,14 @@ const api = {
     create: (options: {
       sessionId: string
       taskIndex: number
+      title: string
       prompt: string
       projectId?: string
       projectPath?: string
       createWorktree?: boolean
+      baseBranch?: string
+      cliToolId?: string
+      pipelineTemplateId?: string
     }) => ipcRenderer.invoke('task:create', options),
     get: (id: string) => ipcRenderer.invoke('task:get', id),
     getAll: () => ipcRenderer.invoke('task:getAll'),

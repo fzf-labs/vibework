@@ -21,6 +21,19 @@ interface AgentMessagesProps {
   isRunning: boolean;
 }
 
+function coerceToString(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 // Detect execution environment from tool name
 function getExecutionEnv(toolName: string): 'sandbox' | 'local' | null {
   if (toolName.includes('sandbox')) {
@@ -182,44 +195,52 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
         >
           {message.type === 'text' &&
             message.content &&
-            // Skip rendering if content is plan JSON (already rendered by PlanApproval)
-            !message.content.trim().startsWith('{"type":"plan"') &&
-            !message.content.trim().startsWith('{"type": "plan"') &&
-            // Check if this is an API error - render as error instead
-            (isApiErrorText(message.content) ? (
-              <ErrorMessage message="__API_KEY_ERROR__" />
-            ) : (
-              <div className="bg-card text-card-foreground prose prose-sm dark:prose-invert max-w-none rounded-lg p-4">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    a: ({ children, href }: any) => (
-                      <a
-                        href={href}
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          if (href) {
-                            try {
-                              const { shell } =
-                                await import('@/lib/electron-api');
-                              await shell.openUrl(href);
-                            } catch {
-                              window.open(href, '_blank');
+            (() => {
+              const content = coerceToString(message.content);
+              // Skip rendering if content is plan JSON (already rendered by PlanApproval)
+              if (
+                content.trim().startsWith('{"type":"plan"') ||
+                content.trim().startsWith('{"type": "plan"')
+              ) {
+                return null;
+              }
+              // Check if this is an API error - render as error instead
+              if (isApiErrorText(content)) {
+                return <ErrorMessage message="__API_KEY_ERROR__" />;
+              }
+              return (
+                <div className="bg-card text-card-foreground prose prose-sm dark:prose-invert max-w-none rounded-lg p-4">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ children, href }: any) => (
+                        <a
+                          href={href}
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            if (href) {
+                              try {
+                                const { shell } =
+                                  await import('@/lib/electron-api');
+                                await shell.openUrl(href);
+                              } catch {
+                                window.open(href, '_blank');
+                              }
                             }
-                          }
-                        }}
-                        className="text-primary cursor-pointer hover:underline"
-                      >
-                        {children}
-                      </a>
-                    ),
-                  }}
-                >
-                  {message.content}
-                </ReactMarkdown>
-              </div>
-            ))}
+                          }}
+                          className="text-primary cursor-pointer hover:underline"
+                        >
+                          {children}
+                        </a>
+                      ),
+                    }}
+                  >
+                    {content}
+                  </ReactMarkdown>
+                </div>
+              );
+            })()}
+          }
 
           {message.type === 'tool_use' &&
             (() => {

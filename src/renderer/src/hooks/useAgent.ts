@@ -3,11 +3,6 @@ import { API_PORT } from '@/config';
 import { db, type Task } from '@/data';
 import { getSettings } from '@/data/settings';
 import {
-  loadAttachments,
-  saveAttachments,
-  type AttachmentReference,
-} from '@/lib/attachments';
-import {
   addBackgroundTask,
   getBackgroundTask,
   removeBackgroundTask,
@@ -27,8 +22,6 @@ import {
   getMcpConfig,
   formatFetchError,
   fetchWithRetry,
-  extractFilesFromText,
-  extractAndSaveFiles,
   buildConversationHistory,
   type PermissionRequest,
   type AgentQuestion,
@@ -39,6 +32,65 @@ import {
   type AgentPhase,
   type SessionInfo,
 } from './agent';
+
+type ContentLike =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ContentLike[]
+  | Record<string, unknown>;
+
+function stringifyContentPart(part: ContentLike): string {
+  if (part === null || part === undefined) return '';
+  if (typeof part === 'string') return part;
+  if (typeof part === 'number' || typeof part === 'boolean') {
+    return String(part);
+  }
+  if (Array.isArray(part)) {
+    return part.map(stringifyContentPart).join('');
+  }
+  if (typeof part === 'object') {
+    const record = part as Record<string, unknown>;
+    if (typeof record.text === 'string') return record.text;
+    if (typeof record.content === 'string') return record.content;
+    if (typeof record.value === 'string') return record.value;
+    if (Array.isArray(record.content)) {
+      return record.content
+        .map((item) => stringifyContentPart(item as ContentLike))
+        .join('');
+    }
+    try {
+      return JSON.stringify(part);
+    } catch {
+      return String(part);
+    }
+  }
+  return String(part);
+}
+
+function normalizeMessageContent(content: unknown): string | undefined {
+  if (content === null || content === undefined) return undefined;
+  if (typeof content === 'string') return content;
+  return stringifyContentPart(content as ContentLike);
+}
+
+function normalizeAgentMessage(message: AgentMessage): AgentMessage {
+  const normalizedContent = normalizeMessageContent(message.content);
+  const normalizedOutput = normalizeMessageContent(message.output);
+  const normalizedErrorMessage = normalizeMessageContent(message.message);
+  const contentUnchanged = normalizedContent === message.content;
+  const outputUnchanged = normalizedOutput === message.output;
+  const messageUnchanged = normalizedErrorMessage === message.message;
+  if (contentUnchanged && outputUnchanged && messageUnchanged) return message;
+  return {
+    ...message,
+    content: normalizedContent,
+    output: normalizedOutput,
+    message: normalizedErrorMessage,
+  };
+}
 
 console.log(
   `[API] Environment: ${import.meta.env.PROD ? 'production' : 'development'}, Port: ${API_PORT}`
@@ -67,7 +119,6 @@ export interface UseAgentReturn {
   taskIndex: number;
   sessionFolder: string | null;
   taskFolder: string | null; // Full path to current task folder (sessionFolder/task-XX)
-  filesVersion: number; // Incremented when files are added (e.g., attachments saved)
   pendingPermission: PermissionRequest | null;
   pendingQuestion: PendingQuestion | null;
   // Two-phase planning
@@ -77,13 +128,15 @@ export interface UseAgentReturn {
     prompt: string,
     existingTaskId?: string,
     sessionInfo?: SessionInfo,
-    attachments?: MessageAttachment[]
+    attachments?: MessageAttachment[],
+    workDirOverride?: string
   ) => Promise<string>;
   approvePlan: () => Promise<void>;
   rejectPlan: () => void;
   continueConversation: (
     reply: string,
-    attachments?: MessageAttachment[]
+    attachments?: MessageAttachment[],
+    workDirOverride?: string
   ) => Promise<void>;
   stopAgent: () => Promise<void>;
   clearMessages: () => void;
@@ -117,8 +170,6 @@ export function useAgent(): UseAgentReturn {
   // Session management
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentTaskIndex, setCurrentTaskIndex] = useState<number>(1);
-  // Track file changes to trigger refresh in UI
-  const [filesVersion, setFilesVersion] = useState<number>(0);
   const [sessionFolder, setSessionFolder] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null); // Backend session ID for API calls
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -316,13 +367,14 @@ export function useAgent(): UseAgentReturn {
               const dbMessages = await db.getMessagesByTaskId(pollingTaskId);
               const agentMessages: AgentMessage[] = dbMessages.map((msg) => ({
                 type: msg.type as AgentMessage['type'],
-                content: msg.content || undefined,
+                content: normalizeMessageContent(msg.content) || undefined,
                 name: msg.tool_name || undefined,
                 input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-                output: msg.tool_output || undefined,
+                output: normalizeMessageContent(msg.tool_output) || undefined,
                 toolUseId: msg.tool_use_id || undefined,
                 subtype: msg.subtype as AgentMessage['subtype'],
-                message: msg.error_message || undefined,
+                message:
+                  normalizeMessageContent(msg.error_message) || undefined,
               }));
               setMessages(agentMessages);
 
@@ -395,68 +447,19 @@ export function useAgent(): UseAgentReturn {
     try {
       const dbMessages = await db.getMessagesByTaskId(id);
 
-      // First pass: identify user messages with attachments that need loading
-      const attachmentLoadTasks: {
-        index: number;
-        refs: AttachmentReference[];
-      }[] = [];
-
-      for (let i = 0; i < dbMessages.length; i++) {
-        const msg = dbMessages[i];
-        if (msg.type === 'user' && msg.attachments) {
-          try {
-            const refs = JSON.parse(msg.attachments) as AttachmentReference[];
-            // Check if it's the new format (has path)
-            if (refs.length > 0 && 'path' in refs[0]) {
-              attachmentLoadTasks.push({ index: i, refs });
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        }
-      }
-
-      // Build agent messages immediately with placeholder attachments
+      // Build agent messages
       const agentMessages: AgentMessage[] = [];
       for (let i = 0; i < dbMessages.length; i++) {
         const msg = dbMessages[i];
         if (msg.type === 'user') {
-          // Check if this message has attachments to load
-          const loadTask = attachmentLoadTasks.find((t) => t.index === i);
-          let attachments: MessageAttachment[] | undefined;
-
-          if (loadTask) {
-            // Create placeholder attachments (loading state)
-            attachments = loadTask.refs.map((ref) => ({
-              id: ref.id,
-              type: ref.type,
-              name: ref.name,
-              data: '', // Empty data, will be loaded later
-              mimeType: ref.mimeType,
-              path: ref.path,
-              isLoading: true,
-            }));
-          } else if (msg.attachments) {
-            // Try old format
-            try {
-              const refs = JSON.parse(msg.attachments) as AttachmentReference[];
-              if (refs.length > 0 && !('path' in refs[0])) {
-                attachments = refs as unknown as MessageAttachment[];
-              }
-            } catch {
-              // Ignore parse errors
-            }
-          }
-
           agentMessages.push({
             type: 'user' as const,
-            content: msg.content || undefined,
-            attachments,
+            content: normalizeMessageContent(msg.content) || undefined,
           });
         } else if (msg.type === 'text') {
           agentMessages.push({
             type: 'text' as const,
-            content: msg.content || undefined,
+            content: normalizeMessageContent(msg.content) || undefined,
           });
         } else if (msg.type === 'tool_use') {
           agentMessages.push({
@@ -468,7 +471,7 @@ export function useAgent(): UseAgentReturn {
           agentMessages.push({
             type: 'tool_result' as const,
             toolUseId: msg.tool_use_id || undefined,
-            output: msg.tool_output || undefined,
+            output: normalizeMessageContent(msg.tool_output) || undefined,
           });
         } else if (msg.type === 'result') {
           agentMessages.push({
@@ -478,14 +481,15 @@ export function useAgent(): UseAgentReturn {
         } else if (msg.type === 'error') {
           agentMessages.push({
             type: 'error' as const,
-            message: msg.error_message || undefined,
+            message: normalizeMessageContent(msg.error_message) || undefined,
           });
         } else if (msg.type === 'plan') {
           // Restore plan message with parsed plan data
           try {
-            const planData = msg.content
-              ? (JSON.parse(msg.content) as TaskPlan)
-              : undefined;
+            const planData =
+              typeof msg.content === 'string'
+                ? (JSON.parse(msg.content) as TaskPlan)
+                : (msg.content as TaskPlan | undefined);
             if (planData) {
               // Only mark steps as completed if task is NOT running
               // For running tasks (restored from background), keep original status
@@ -511,72 +515,9 @@ export function useAgent(): UseAgentReturn {
         }
       }
 
-      // Set messages immediately (with loading placeholders for attachments)
+      // Set messages immediately
       setMessages(agentMessages);
       setTaskId(id);
-
-      // Load attachments asynchronously in background
-      if (attachmentLoadTasks.length > 0) {
-        // Use setTimeout to ensure this runs after the initial render
-        setTimeout(async () => {
-          // Check if we're still on the same task
-          if (activeTaskIdRef.current !== id) return;
-
-          const MESSAGE_CONCURRENCY = 2;
-
-          for (
-            let i = 0;
-            i < attachmentLoadTasks.length;
-            i += MESSAGE_CONCURRENCY
-          ) {
-            // Check again if task changed
-            if (activeTaskIdRef.current !== id) return;
-
-            const batch = attachmentLoadTasks.slice(i, i + MESSAGE_CONCURRENCY);
-            const results = await Promise.all(
-              batch.map(async ({ index, refs }) => {
-                const attachments = await loadAttachments(refs);
-                return { index, attachments };
-              })
-            );
-
-            // Update messages with loaded attachments
-            setMessages((prevMessages) => {
-              // Check if still on same task
-              if (activeTaskIdRef.current !== id) return prevMessages;
-
-              const newMessages = [...prevMessages];
-              for (const { index, attachments } of results) {
-                // Find user message with loading attachments that matches this index
-                const task = attachmentLoadTasks.find((t) => t.index === index);
-                if (!task) continue;
-
-                for (let j = 0; j < newMessages.length; j++) {
-                  const msg = newMessages[j];
-                  if (
-                    msg.type === 'user' &&
-                    msg.attachments?.some((a) => a.isLoading) &&
-                    msg.attachments?.length === task.refs.length &&
-                    // Match by first attachment id
-                    msg.attachments[0]?.id === task.refs[0]?.id
-                  ) {
-                    // Match found, update attachments
-                    newMessages[j] = {
-                      ...msg,
-                      attachments: attachments.map((a) => ({
-                        ...a,
-                        isLoading: false,
-                      })),
-                    };
-                    break;
-                  }
-                }
-              }
-              return newMessages;
-            });
-          }
-        }, 0);
-      }
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
@@ -596,12 +537,6 @@ export function useAgent(): UseAgentReturn {
 
       const decoder = new TextDecoder();
       let buffer = '';
-
-      // Track pending tool_use messages to match with tool_result
-      const pendingToolUses: Map<
-        string,
-        { name: string; input: Record<string, unknown> }
-      > = new Map();
 
       // Track tool execution progress for updating plan steps
       let completedToolCount = 0;
@@ -626,15 +561,16 @@ export function useAgent(): UseAgentReturn {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6)) as AgentMessage;
+              const normalizedData = normalizeAgentMessage(data);
 
               // Check if this is the active task for UI updates
               const isActive = isActiveTask();
 
-              if (data.type === 'session') {
+              if (normalizedData.type === 'session') {
                 if (isActive) {
-                  sessionIdRef.current = data.sessionId || null;
+                  sessionIdRef.current = normalizedData.sessionId || null;
                 }
-              } else if (data.type === 'done') {
+              } else if (normalizedData.type === 'done') {
                 // Update background task status (always, even if not active)
                 updateBackgroundTaskStatus(currentTaskId, false);
 
@@ -653,41 +589,34 @@ export function useAgent(): UseAgentReturn {
                     };
                   });
                 }
-              } else if (data.type === 'permission_request') {
+              } else if (normalizedData.type === 'permission_request') {
                 // Handle permission request - only for active task
-                if (isActive && data.permission) {
-                  setPendingPermission(data.permission);
-                  setMessages((prev) => [...prev, data]);
+                if (isActive && normalizedData.permission) {
+                  setPendingPermission(normalizedData.permission);
+                  setMessages((prev) => [...prev, normalizedData]);
                 }
               } else {
                 // UI update only for active task
                 if (isActive) {
-                  setMessages((prev) => [...prev, data]);
+                  setMessages((prev) => [...prev, normalizedData]);
                 }
 
-                // Extract file paths from text messages
-                if (data.type === 'text' && data.content) {
-                  await extractFilesFromText(currentTaskId, data.content);
-                }
-
-                // Track tool_use messages for file extraction
-                if (data.type === 'tool_use' && data.name) {
+                // Track tool_use messages for plan progress
+                if (normalizedData.type === 'tool_use' && normalizedData.name) {
                   const toolUseId =
-                    (data as { id?: string }).id || `tool_${Date.now()}`;
-                  pendingToolUses.set(toolUseId, {
-                    name: data.name,
-                    input: (data.input as Record<string, unknown>) || {},
-                  });
+                    (normalizedData as { id?: string }).id || `tool_${Date.now()}`;
                   totalToolCount++;
 
                   // Handle AskUserQuestion tool - show question UI and pause execution
                   // Only handle for active task to avoid affecting wrong task's UI
                   if (
                     isActive &&
-                    data.name === 'AskUserQuestion' &&
-                    data.input
+                    normalizedData.name === 'AskUserQuestion' &&
+                    normalizedData.input
                   ) {
-                    const input = data.input as { questions?: AgentQuestion[] };
+                    const input = normalizedData.input as {
+                      questions?: AgentQuestion[];
+                    };
                     if (input.questions && Array.isArray(input.questions)) {
                       setPendingQuestion({
                         id: `question_${Date.now()}`,
@@ -719,33 +648,11 @@ export function useAgent(): UseAgentReturn {
                   }
                 }
 
-                // When we get a tool_result, extract files from the matched tool_use
-                if (data.type === 'tool_result' && data.toolUseId) {
-                  const toolUse = pendingToolUses.get(data.toolUseId);
-                  if (toolUse) {
-                    await extractAndSaveFiles(
-                      currentTaskId,
-                      toolUse.name,
-                      toolUse.input,
-                      data.output
-                    );
-                    pendingToolUses.delete(data.toolUseId);
-
-                    // Trigger working files refresh for file-writing tools
-                    const fileWritingTools = [
-                      'Write',
-                      'Edit',
-                      'Bash',
-                      'NotebookEdit',
-                    ];
-                    if (
-                      fileWritingTools.includes(toolUse.name) ||
-                      toolUse.name.includes('sandbox')
-                    ) {
-                      setFilesVersion((v) => v + 1);
-                    }
-                  }
-
+                // When we get a tool_result, update plan progress
+                if (
+                  normalizedData.type === 'tool_result' &&
+                  normalizedData.toolUseId
+                ) {
                   // Update plan step progress
                   completedToolCount++;
                   setPlan((currentPlan) => {
@@ -782,31 +689,31 @@ export function useAgent(): UseAgentReturn {
                 try {
                   await db.createMessage({
                     task_id: currentTaskId,
-                    type: data.type as
+                    type: normalizedData.type as
                       | 'text'
                       | 'tool_use'
                       | 'tool_result'
                       | 'result'
                       | 'error'
                       | 'user',
-                    content: data.content,
-                    tool_name: data.name,
-                    tool_input: data.input
-                      ? JSON.stringify(data.input)
+                    content: normalizedData.content,
+                    tool_name: normalizedData.name,
+                    tool_input: normalizedData.input
+                      ? JSON.stringify(normalizedData.input)
                       : undefined,
-                    tool_output: data.output,
-                    tool_use_id: data.toolUseId,
-                    subtype: data.subtype,
-                    error_message: data.message,
+                    tool_output: normalizedData.output,
+                    tool_use_id: normalizedData.toolUseId,
+                    subtype: normalizedData.subtype,
+                    error_message: normalizedData.message,
                   });
 
                   // Update task status based on message
                   await db.updateTaskFromMessage(
                     currentTaskId,
-                    data.type,
-                    data.subtype,
-                    data.cost,
-                    data.duration
+                    normalizedData.type,
+                    normalizedData.subtype,
+                    normalizedData.cost,
+                    normalizedData.duration
                   );
                 } catch (dbError) {
                   console.error('Failed to save message:', dbError);
@@ -822,13 +729,37 @@ export function useAgent(): UseAgentReturn {
     []
   );
 
+  const resolveTaskWorkDir = useCallback(
+    async (
+      taskIdValue?: string | null,
+      sessionFolderValue?: string | null,
+      override?: string
+    ): Promise<string> => {
+      if (override) return override;
+      if (taskIdValue) {
+        try {
+          const task = await db.getTask(taskIdValue);
+          if (task?.workspace_path) return task.workspace_path;
+          if (task?.worktree_path) return task.worktree_path;
+        } catch (error) {
+          console.error('[useAgent] Failed to resolve task workDir:', error);
+        }
+      }
+      if (sessionFolderValue) return sessionFolderValue;
+      const settings = getSettings();
+      return settings.workDir || (await getAppDataDir());
+    },
+    []
+  );
+
   // Phase 1: Planning - get a plan from the agent
   const runAgent = useCallback(
     async (
       prompt: string,
       existingTaskId?: string,
       sessionInfo?: SessionInfo,
-      attachments?: MessageAttachment[]
+      attachments?: MessageAttachment[],
+      workDirOverride?: string
     ): Promise<string> => {
       // If there's already a running task, move it to background
       if (isRunning && abortControllerRef.current && taskId) {
@@ -883,11 +814,14 @@ export function useAgent(): UseAgentReturn {
       try {
         const existingTask = await db.getTask(currentTaskId);
         if (!existingTask) {
+          const settings = getSettings();
           await db.createTask({
             id: currentTaskId,
             session_id: sessId,
             task_index: taskIdx,
+            title: prompt,
             prompt,
+            cli_tool_id: settings.defaultCliToolId || null,
           });
           console.log(
             '[useAgent] Created new task:',
@@ -943,39 +877,23 @@ export function useAgent(): UseAgentReturn {
           };
           setMessages([userMessage]);
 
-          // Save user message to database (save attachments to files first)
+          // Save user message to database (attachments are not persisted)
           try {
-            let attachmentRefs: string | undefined;
-            if (
-              attachments &&
-              attachments.length > 0 &&
-              computedSessionFolder
-            ) {
-              // Save attachments to file system and get references
-              const refs = await saveAttachments(
-                computedSessionFolder,
-                attachments
-              );
-              attachmentRefs = JSON.stringify(refs);
-              console.log(
-                '[useAgent] Saved attachments to files:',
-                refs.length
-              );
-              // Trigger working files refresh
-              setFilesVersion((v) => v + 1);
-            }
             await db.createMessage({
               task_id: currentTaskId,
               type: 'user',
               content: prompt,
-              attachments: attachmentRefs,
             });
           } catch (error) {
             console.error('Failed to save user message:', error);
           }
 
           // Use session folder as workDir
-          const workDir = computedSessionFolder || (await getAppDataDir());
+          const taskWorkDir = await resolveTaskWorkDir(
+            currentTaskId,
+            computedSessionFolder,
+            workDirOverride
+          );
           const sandboxConfig = getSandboxConfig();
           const skillsConfig = getSkillsConfig();
 
@@ -989,7 +907,7 @@ export function useAgent(): UseAgentReturn {
             },
             body: JSON.stringify({
               prompt,
-              workDir,
+              workDir: taskWorkDir,
               taskId: currentTaskId,
               modelConfig,
               sandboxConfig,
@@ -1053,15 +971,20 @@ export function useAgent(): UseAgentReturn {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6)) as AgentMessage;
+                const normalizedData = normalizeAgentMessage(data);
+                const normalizedContent = normalizedData.content;
 
                 // Check if this task is still active for UI updates
                 const isActive = isActiveTask();
 
-                if (data.type === 'session') {
+                if (normalizedData.type === 'session') {
                   if (isActive) {
-                    sessionIdRef.current = data.sessionId || null;
+                    sessionIdRef.current = normalizedData.sessionId || null;
                   }
-                } else if (data.type === 'direct_answer' && data.content) {
+                } else if (
+                  normalizedData.type === 'direct_answer' &&
+                  normalizedContent
+                ) {
                   // Simple question - direct answer, no plan needed
                   console.log(
                     '[useAgent] Received direct answer, no plan needed'
@@ -1070,7 +993,7 @@ export function useAgent(): UseAgentReturn {
                   if (isActive) {
                     setMessages((prev) => [
                       ...prev,
-                      { type: 'text', content: data.content },
+                      { type: 'text', content: normalizedContent },
                     ]);
                     setPlan(null); // Clear any plan when we get a direct answer
                     setPhase('idle');
@@ -1081,29 +1004,34 @@ export function useAgent(): UseAgentReturn {
                     await db.createMessage({
                       task_id: currentTaskId,
                       type: 'text',
-                      content: data.content,
+                      content: normalizedContent,
                     });
-                    await db.updateTask(currentTaskId, { status: 'completed' });
+                    const task = await db.getTask(currentTaskId);
+                    if (task?.pipeline_template_id) {
+                      await db.updateTask(currentTaskId, { status: 'in_review' });
+                    } else {
+                      await db.updateTask(currentTaskId, { status: 'completed' });
+                    }
                   } catch (dbError) {
                     console.error('Failed to save direct answer:', dbError);
                   }
-                } else if (data.type === 'plan' && data.plan) {
+                } else if (normalizedData.type === 'plan' && normalizedData.plan) {
                   // Complex task - received the plan, wait for approval
                   // UI updates only for active task
                   if (isActive) {
-                    setPlan(data.plan);
+                    setPlan(normalizedData.plan);
                     setPhase('awaiting_approval');
-                    setMessages((prev) => [...prev, data]);
+                    setMessages((prev) => [...prev, normalizedData]);
                   }
-                } else if (data.type === 'text') {
+                } else if (normalizedData.type === 'text') {
                   if (isActive) {
-                    setMessages((prev) => [...prev, data]);
+                    setMessages((prev) => [...prev, normalizedData]);
                   }
-                } else if (data.type === 'done') {
+                } else if (normalizedData.type === 'done') {
                   // Planning done
-                } else if (data.type === 'error') {
+                } else if (normalizedData.type === 'error') {
                   if (isActive) {
-                    setMessages((prev) => [...prev, data]);
+                    setMessages((prev) => [...prev, normalizedData]);
                     setPhase('idle');
                   }
                 }
@@ -1149,7 +1077,7 @@ export function useAgent(): UseAgentReturn {
 
       return currentTaskId;
     },
-    [isRunning, processStream]
+    [isRunning, processStream, resolveTaskWorkDir]
   );
 
   // Phase 2: Execute the approved plan
@@ -1185,14 +1113,7 @@ export function useAgent(): UseAgentReturn {
     abortControllerRef.current = abortController;
 
     try {
-      // Use session folder directly as workDir (no task subfolder)
-      let workDir: string;
-      if (sessionFolder) {
-        workDir = sessionFolder;
-      } else {
-        const settings = getSettings();
-        workDir = settings.workDir || (await getAppDataDir());
-      }
+      const workDir = await resolveTaskWorkDir(taskId, sessionFolder);
       const modelConfig = getModelConfig();
       const sandboxConfig = getSandboxConfig();
       const skillsConfig = getSkillsConfig();
@@ -1261,44 +1182,46 @@ export function useAgent(): UseAgentReturn {
         try {
           const dbMessages = await db.getMessagesByTaskId(taskId);
           const agentMessages: AgentMessage[] = [];
-          for (const msg of dbMessages) {
-            if (msg.type === 'user') {
-              agentMessages.push({
-                type: 'user' as const,
-                content: msg.content || undefined,
-              });
-            } else if (msg.type === 'text') {
-              agentMessages.push({
-                type: 'text' as const,
-                content: msg.content || undefined,
-              });
-            } else if (msg.type === 'tool_use') {
-              agentMessages.push({
-                type: 'tool_use' as const,
-                name: msg.tool_name || undefined,
-                input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-              });
-            } else if (msg.type === 'tool_result') {
-              agentMessages.push({
-                type: 'tool_result' as const,
-                toolUseId: msg.tool_use_id || undefined,
-                output: msg.tool_output || undefined,
-              });
-            } else if (msg.type === 'result') {
-              agentMessages.push({
-                type: 'result' as const,
-                subtype: msg.subtype || undefined,
-              });
-            } else if (msg.type === 'error') {
-              agentMessages.push({
-                type: 'error' as const,
-                message: msg.error_message || undefined,
-              });
-            } else if (msg.type === 'plan') {
+              for (const msg of dbMessages) {
+                if (msg.type === 'user') {
+                  agentMessages.push({
+                    type: 'user' as const,
+                    content: normalizeMessageContent(msg.content) || undefined,
+                  });
+                } else if (msg.type === 'text') {
+                  agentMessages.push({
+                    type: 'text' as const,
+                    content: normalizeMessageContent(msg.content) || undefined,
+                  });
+                } else if (msg.type === 'tool_use') {
+                  agentMessages.push({
+                    type: 'tool_use' as const,
+                    name: msg.tool_name || undefined,
+                    input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
+                  });
+                } else if (msg.type === 'tool_result') {
+                  agentMessages.push({
+                    type: 'tool_result' as const,
+                    toolUseId: msg.tool_use_id || undefined,
+                    output: normalizeMessageContent(msg.tool_output) || undefined,
+                  });
+                } else if (msg.type === 'result') {
+                  agentMessages.push({
+                    type: 'result' as const,
+                    subtype: msg.subtype || undefined,
+                  });
+                } else if (msg.type === 'error') {
+                  agentMessages.push({
+                    type: 'error' as const,
+                    message:
+                      normalizeMessageContent(msg.error_message) || undefined,
+                  });
+                } else if (msg.type === 'plan') {
               try {
-                const planData = msg.content
-                  ? (JSON.parse(msg.content) as TaskPlan)
-                  : undefined;
+                const planData =
+                  typeof msg.content === 'string'
+                    ? (JSON.parse(msg.content) as TaskPlan)
+                    : (msg.content as TaskPlan | undefined);
                 if (planData) {
                   const completedPlan: TaskPlan = {
                     ...planData,
@@ -1328,7 +1251,15 @@ export function useAgent(): UseAgentReturn {
         }
       }
     }
-  }, [plan, taskId, phase, initialPrompt, processStream, sessionFolder]);
+  }, [
+    plan,
+    taskId,
+    phase,
+    initialPrompt,
+    processStream,
+    sessionFolder,
+    resolveTaskWorkDir,
+  ]);
 
   // Reject the plan
   const rejectPlan = useCallback((): void => {
@@ -1339,7 +1270,11 @@ export function useAgent(): UseAgentReturn {
 
   // Continue conversation with context
   const continueConversation = useCallback(
-    async (reply: string, attachments?: MessageAttachment[]): Promise<void> => {
+    async (
+      reply: string,
+      attachments?: MessageAttachment[],
+      workDirOverride?: string
+    ): Promise<void> => {
       if (isRunning || !taskId) return;
 
       // Add user message to UI immediately (with attachments if any)
@@ -1351,22 +1286,12 @@ export function useAgent(): UseAgentReturn {
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      // Save user message to database (save attachments to files first)
+      // Save user message to database (attachments are not persisted)
       try {
-        let attachmentRefs: string | undefined;
-        if (attachments && attachments.length > 0 && sessionFolder) {
-          // Save attachments to file system and get references
-          const refs = await saveAttachments(sessionFolder, attachments);
-          attachmentRefs = JSON.stringify(refs);
-          console.log('[useAgent] Saved attachments to files:', refs.length);
-          // Trigger working files refresh
-          setFilesVersion((v) => v + 1);
-        }
         await db.createMessage({
           task_id: taskId,
           type: 'user',
           content: reply,
-          attachments: attachmentRefs,
         });
       } catch (error) {
         console.error('Failed to save user message:', error);
@@ -1385,14 +1310,11 @@ export function useAgent(): UseAgentReturn {
           currentMessages
         );
 
-        // Use session folder directly as workDir (no task subfolder)
-        let workDir: string;
-        if (sessionFolder) {
-          workDir = sessionFolder;
-        } else {
-          const settings = getSettings();
-          workDir = settings.workDir || (await getAppDataDir());
-        }
+        const workDir = await resolveTaskWorkDir(
+          taskId,
+          sessionFolder,
+          workDirOverride
+        );
         const modelConfig = getModelConfig();
         const sandboxConfig = getSandboxConfig();
         const skillsConfig = getSkillsConfig();
@@ -1481,7 +1403,15 @@ export function useAgent(): UseAgentReturn {
         }
       }
     },
-    [isRunning, taskId, messages, initialPrompt, processStream, sessionFolder]
+    [
+      isRunning,
+      taskId,
+      messages,
+      initialPrompt,
+      processStream,
+      sessionFolder,
+      resolveTaskWorkDir,
+    ]
   );
 
   const stopAgent = useCallback(async () => {
@@ -1680,7 +1610,6 @@ export function useAgent(): UseAgentReturn {
     taskIndex: currentTaskIndex,
     sessionFolder,
     taskFolder,
-    filesVersion,
     pendingPermission,
     pendingQuestion,
     phase,

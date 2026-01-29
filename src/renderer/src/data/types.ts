@@ -40,6 +40,7 @@ export interface Task {
   id: string;
   session_id: string; // Reference to session
   task_index: number; // Index within session (1, 2, 3...)
+  title: string;
   prompt: string;
   status: TaskStatus;
   cost: number | null;
@@ -48,6 +49,10 @@ export interface Task {
   project_id?: string | null; // Associated project
   worktree_path?: string | null; // Git worktree path for isolated work
   branch_name?: string | null; // Git branch name for this task
+  base_branch?: string | null; // Base branch used to create worktree
+  workspace_path?: string | null; // Actual workspace path for the task
+  cli_tool_id?: string | null; // Selected CLI tool id
+  pipeline_template_id?: string | null; // Selected pipeline template
   created_at: string;
   updated_at: string;
 }
@@ -72,7 +77,6 @@ export interface Message {
   tool_use_id: string | null;
   subtype: string | null;
   error_message: string | null;
-  attachments: string | null; // JSON string of MessageAttachment[]
   created_at: string;
 }
 
@@ -86,7 +90,15 @@ export interface CreateTaskInput {
   id: string;
   session_id: string;
   task_index: number;
+  title: string;
   prompt: string;
+  project_id?: string | null;
+  worktree_path?: string | null;
+  branch_name?: string | null;
+  base_branch?: string | null;
+  workspace_path?: string | null;
+  cli_tool_id?: string | null;
+  pipeline_template_id?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -99,45 +111,19 @@ export interface CreateMessageInput {
   tool_use_id?: string;
   subtype?: string;
   error_message?: string;
-  attachments?: string; // JSON string of MessageAttachment[]
 }
 
 export interface UpdateTaskInput {
+  title?: string;
+  prompt?: string;
   status?: TaskStatus;
   cost?: number;
   duration?: number;
-  prompt?: string;
   favorite?: boolean;
-}
-
-// Library file types
-export type FileType =
-  | 'image'
-  | 'text'
-  | 'code'
-  | 'document'
-  | 'website'
-  | 'presentation'
-  | 'spreadsheet'
-  | 'websearch';
-
-export interface LibraryFile {
-  id: string;
-  task_id: string;
-  name: string;
-  type: FileType;
-  path: string;
-  preview: string | null;
-  thumbnail: string | null;
-  is_favorite: boolean;
-  created_at: string;
-}
-
-export interface CreateFileInput {
-  task_id: string;
-  name: string;
-  type: FileType;
-  path: string;
-  preview?: string;
-  thumbnail?: string;
+  worktree_path?: string | null;
+  branch_name?: string | null;
+  base_branch?: string | null;
+  workspace_path?: string | null;
+  cli_tool_id?: string | null;
+  pipeline_template_id?: string | null;
 }

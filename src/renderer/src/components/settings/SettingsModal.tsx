@@ -17,8 +17,10 @@ import { AccountSettings } from './tabs/AccountSettings';
 import { CLISettings } from './tabs/CLISettings';
 import { DataSettings } from './tabs/DataSettings';
 import { EditorSettings } from './tabs/EditorSettings';
+import { GitSettings } from './tabs/GitSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
+import { PipelineTemplatesSettings } from './tabs/PipelineTemplatesSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import type { SettingsCategory } from './types';
 
@@ -52,6 +54,8 @@ export function SettingsModal({
     'general',
     'editor',
     'cli',
+    'git',
+    'pipelineTemplates',
     'mcp',
     'skills',
     'data',
@@ -157,6 +161,17 @@ export function SettingsModal({
                   settings={settings}
                   onSettingsChange={handleSettingsChange}
                 />
+              )}
+
+              {activeCategory === 'git' && (
+                <GitSettings
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                />
+              )}
+
+              {activeCategory === 'pipelineTemplates' && (
+                <PipelineTemplatesSettings />
               )}
 
               {activeCategory === 'mcp' && (

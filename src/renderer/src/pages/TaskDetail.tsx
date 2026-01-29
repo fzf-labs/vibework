@@ -6,7 +6,7 @@ import {
   useState,
 } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { db, type LibraryFile, type Task } from '@/data';
+import { db, type Task } from '@/data';
 import {
   useAgent,
   type MessageAttachment,
@@ -14,7 +14,7 @@ import {
 import { useVitePreview } from '@/hooks/useVitePreview';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
-import { ArrowDown, ArrowLeft, PanelLeft } from 'lucide-react';
+import { ArrowLeft, PanelLeft } from 'lucide-react';
 
 import {
   ArtifactPreview,
@@ -25,13 +25,8 @@ import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
 import { ClaudeCodeSession } from '@/components/cli';
 import {
-  QuestionInput,
   ToolSelectionContext,
   useToolSelection,
-  MessageList,
-  RunningIndicator,
-  UserMessage,
-  convertFileType,
   getArtifactTypeFromExt,
   RightPanel,
 } from '@/components/task';
@@ -44,6 +39,21 @@ interface LocationState {
   sessionId?: string;
   taskIndex?: number;
   attachments?: MessageAttachment[];
+}
+
+interface PipelineTemplateStage {
+  id: string;
+  name: string;
+  prompt: string;
+  stage_order: number;
+  requires_approval: boolean;
+  continue_on_error: boolean;
+}
+
+interface PipelineTemplate {
+  id: string;
+  name: string;
+  stages: PipelineTemplateStage[];
 }
 
 export function TaskDetailPage() {
@@ -73,20 +83,21 @@ function TaskDetailContent() {
     stopAgent,
     loadTask,
     loadMessages,
-    phase,
     plan: _plan,
-    approvePlan,
-    rejectPlan,
-    pendingQuestion,
-    respondToQuestion,
     sessionFolder,
-    filesVersion,
   } = useAgent();
-  const { toggleLeft, setLeftOpen } = useSidebar();
+  const { toggleLeft } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false);
   const [task, setTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [pipelineTemplate, setPipelineTemplate] =
+    useState<PipelineTemplate | null>(null);
+  const [pipelineStageIndex, setPipelineStageIndex] = useState(0);
+  const [pipelineStatus, setPipelineStatus] = useState<
+    'idle' | 'running' | 'waiting_approval' | 'failed' | 'completed'
+  >('idle');
+  const [pipelineStageMessageStart, setPipelineStageMessageStart] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
@@ -94,8 +105,6 @@ function TaskDetailContent() {
   // Panel visibility state - default to visible for new layout
   const [isPreviewVisible, setIsPreviewVisible] = useState(true);
 
-  // Scroll to bottom button state
-  const [showScrollButton, setShowScrollButton] = useState(false);
   // Track if user has manually scrolled up (to disable auto-scroll)
   const userScrolledUpRef = useRef(false);
   // Track last scroll position to detect scroll direction
@@ -112,7 +121,11 @@ function TaskDetailContent() {
   // Working directory state - prioritize task.worktree_path (project directory)
   // Fallback to sessionFolder for backward compatibility
   const workingDir = useMemo(() => {
-    // Use task's worktree_path if available (actual project directory)
+    // Use task's workspace path if available (actual project directory)
+    if (task?.workspace_path) {
+      return task.workspace_path;
+    }
+
     if (task?.worktree_path) {
       return task.worktree_path;
     }
@@ -163,9 +176,6 @@ function TaskDetailContent() {
     stopPreview();
   }, [stopPreview]);
 
-  // Tool search
-  const [toolSearchQuery] = useState('');
-
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
@@ -173,10 +183,10 @@ function TaskDetailContent() {
 
   // Handle title click to start editing
   const handleTitleClick = useCallback(() => {
-    const currentTitle = task?.prompt || initialPrompt;
+    const currentTitle = task?.title || task?.prompt || initialPrompt;
     setEditedTitle(currentTitle);
     setIsEditingTitle(true);
-  }, [task?.prompt, initialPrompt]);
+  }, [task?.title, task?.prompt, initialPrompt]);
 
   // Handle title save
   const handleTitleSave = useCallback(async () => {
@@ -186,9 +196,9 @@ function TaskDetailContent() {
     }
 
     const trimmedTitle = editedTitle.trim();
-    if (trimmedTitle !== (task?.prompt || initialPrompt)) {
+    if (trimmedTitle !== (task?.title || task?.prompt || initialPrompt)) {
       try {
-        const updatedTask = await db.updateTask(taskId, { prompt: trimmedTitle });
+        const updatedTask = await db.updateTask(taskId, { title: trimmedTitle });
         if (updatedTask) {
           setTask(updatedTask);
         }
@@ -197,7 +207,7 @@ function TaskDetailContent() {
       }
     }
     setIsEditingTitle(false);
-  }, [taskId, editedTitle, task?.prompt, initialPrompt]);
+  }, [taskId, editedTitle, task?.title, task?.prompt, initialPrompt]);
 
   // Handle title input key down
   const handleTitleKeyDown = useCallback(
@@ -231,32 +241,6 @@ function TaskDetailContent() {
     setIsPreviewVisible(false);
     setSelectedArtifact(null);
   }, []);
-
-  // Handle task status change
-  const handleTaskStatusChange = useCallback(
-    async (status: Task['status']) => {
-      if (!taskId) return;
-      try {
-        const updatedTask = await db.updateTask(taskId, { status });
-        if (updatedTask) {
-          setTask(updatedTask);
-        }
-      } catch (error) {
-        console.error('Failed to update task status:', error);
-      }
-    },
-    [taskId]
-  );
-
-  // Handle open worktree folder
-  const handleOpenWorktree = useCallback(async () => {
-    if (!task?.worktree_path) return;
-    try {
-      await window.api?.shell?.openPath?.(task.worktree_path);
-    } catch (error) {
-      console.error('Failed to open worktree folder:', error);
-    }
-  }, [task?.worktree_path]);
 
   // Selected tool operation index for syncing with virtual computer
   const [selectedToolIndex, setSelectedToolIndex] = useState<number | null>(
@@ -399,32 +383,6 @@ function TaskDetailContent() {
         }
       });
 
-      // 2. Load files from database (includes files from Skill tool, etc.)
-      if (taskId) {
-        try {
-          const dbFiles = await db.getFilesByTaskId(taskId);
-          dbFiles.forEach((file: LibraryFile) => {
-            // Skip websearch - we extract these from messages with full output content
-            // Check both type and path pattern (search:// is used for WebSearch results)
-            if (file.type === 'websearch' || file.path?.startsWith('search://'))
-              return;
-            // Skip if we already have this file from Write tool
-            if (file.path && !seenPaths.has(file.path)) {
-              seenPaths.add(file.path);
-              extractedArtifacts.push({
-                id: file.path || `file-${file.id}`,
-                name: file.name,
-                type: convertFileType(file.type),
-                content: file.preview || undefined,
-                path: file.path,
-              });
-            }
-          });
-        } catch (error) {
-          console.error('Failed to load files from database:', error);
-        }
-      }
-
       setArtifacts(extractedArtifacts);
       // Auto-select first artifact if none selected
       if (extractedArtifacts.length > 0 && !selectedArtifact) {
@@ -473,8 +431,6 @@ function TaskDetailContent() {
 
     lastScrollTopRef.current = scrollTop;
 
-    // Show button if more than 200px from bottom
-    setShowScrollButton(distanceFromBottom > 200);
   }, [isRunning]);
 
   // Add scroll listener to messages container
@@ -500,12 +456,6 @@ function TaskDetailContent() {
       });
     }
   }, [isLoading, messages.length, checkScrollPosition]);
-
-  // Scroll to bottom handler - also re-enables auto-scroll
-  const scrollToBottom = useCallback(() => {
-    userScrolledUpRef.current = false;
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
 
   // Reset UI state when taskId changes (but don't touch agent/task state - let loadTask handle that)
   useEffect(() => {
@@ -560,7 +510,13 @@ function TaskDetailContent() {
         const sessionInfo = initialSessionId
           ? { sessionId: initialSessionId, taskIndex: initialTaskIndex }
           : undefined;
-        await runAgent(initialPrompt, taskId, sessionInfo, initialAttachments);
+        await runAgent(
+          initialPrompt,
+          taskId,
+          sessionInfo,
+          initialAttachments,
+          workingDir || undefined
+        );
         const newTask = await loadTask(taskId);
         setTask(newTask);
       } else {
@@ -573,6 +529,173 @@ function TaskDetailContent() {
     initialize();
   }, [taskId]);
 
+  useEffect(() => {
+    if (!task?.pipeline_template_id) {
+      setPipelineTemplate(null);
+      setPipelineStatus('idle');
+      return;
+    }
+
+    let active = true;
+    const loadTemplate = async () => {
+      try {
+        const template = (await db.getPipelineTemplate(
+          task.pipeline_template_id
+        )) as PipelineTemplate | null;
+        if (active) {
+          setPipelineTemplate(template);
+          setPipelineStageIndex(0);
+          setPipelineStatus('idle');
+        }
+      } catch (error) {
+        console.error('Failed to load pipeline template:', error);
+      }
+    };
+
+    loadTemplate();
+    return () => {
+      active = false;
+    };
+  }, [task?.pipeline_template_id]);
+
+  const appendPipelineNotice = useCallback(
+    async (content: string) => {
+      if (!taskId) return;
+      setMessages((prev) => [...prev, { type: 'text', content }]);
+      try {
+        await db.createMessage({
+          task_id: taskId,
+          type: 'text',
+          content,
+        });
+      } catch (error) {
+        console.error('Failed to save pipeline notice:', error);
+      }
+    },
+    [taskId]
+  );
+
+  const startPipelineStage = useCallback(
+    async (index: number, approvalNote?: string) => {
+      if (!pipelineTemplate || !taskId) return;
+      const stage = pipelineTemplate.stages[index];
+      if (!stage) {
+        setPipelineStatus('completed');
+        try {
+          await db.updateTask(taskId, { status: 'completed' });
+        } catch (error) {
+          console.error('Failed to update task status:', error);
+        }
+        await appendPipelineNotice(t.task.pipelineCompleted);
+        return;
+      }
+
+      const prompt = approvalNote
+        ? `${stage.prompt}\n\n${t.task.pipelineApprovalNotePrefix}: ${approvalNote}`
+        : stage.prompt;
+
+      setPipelineStageIndex(index);
+      setPipelineStatus('running');
+      setPipelineStageMessageStart(messages.length);
+      try {
+        await db.updateTask(taskId, { status: 'running' });
+      } catch (error) {
+        console.error('Failed to update task status:', error);
+      }
+
+      const sessionInfo =
+        task?.session_id && task?.task_index
+          ? { sessionId: task.session_id, taskIndex: task.task_index }
+          : undefined;
+
+      if (messages.length === 0) {
+        await runAgent(
+          prompt,
+          taskId,
+          sessionInfo,
+          undefined,
+          workingDir || undefined
+        );
+      } else {
+        await continueConversation(prompt, undefined, workingDir || undefined);
+      }
+    },
+    [
+      appendPipelineNotice,
+      continueConversation,
+      messages.length,
+      pipelineTemplate,
+      runAgent,
+      task?.session_id,
+      task?.task_index,
+      taskId,
+      t.task.pipelineApprovalNotePrefix,
+      t.task.pipelineCompleted,
+      workingDir,
+    ]
+  );
+
+  const startNextPipelineStage = useCallback(
+    async (approvalNote?: string) => {
+      await startPipelineStage(pipelineStageIndex + 1, approvalNote);
+    },
+    [pipelineStageIndex, startPipelineStage]
+  );
+
+  useEffect(() => {
+    if (!pipelineTemplate || pipelineStatus !== 'idle' || isRunning) return;
+    if (!taskId || messages.length > 0) return;
+    startPipelineStage(0).catch((error) => {
+      console.error('Failed to start pipeline stage:', error);
+    });
+  }, [pipelineTemplate, pipelineStatus, isRunning, taskId, messages.length, startPipelineStage]);
+
+  useEffect(() => {
+    if (!pipelineTemplate || pipelineStatus !== 'running' || isRunning) return;
+    const stageMessages = messages.slice(pipelineStageMessageStart);
+    let outcome: typeof stageMessages[number] | undefined;
+    for (let i = stageMessages.length - 1; i >= 0; i -= 1) {
+      if (stageMessages[i].type === 'result' || stageMessages[i].type === 'error') {
+        outcome = stageMessages[i];
+        break;
+      }
+    }
+    if (!outcome || !taskId) return;
+
+    const stage = pipelineTemplate.stages[pipelineStageIndex];
+    const stageName = stage?.name || `${t.task.stageLabel} ${pipelineStageIndex + 1}`;
+
+    if (outcome.type === 'result' && outcome.subtype === 'success') {
+      setPipelineStatus('waiting_approval');
+      db.updateTask(taskId, { status: 'in_review' }).catch((error) => {
+        console.error('Failed to update task status:', error);
+      });
+      appendPipelineNotice(
+        `${t.task.pipelineStageCompleted.replace('{name}', stageName)}`
+      );
+    } else {
+      setPipelineStatus('failed');
+      db.updateTask(taskId, { status: 'error' }).catch((error) => {
+        console.error('Failed to update task status:', error);
+      });
+      appendPipelineNotice(
+        `${t.task.pipelineStageFailed.replace('{name}', stageName)}`
+      );
+    }
+  }, [
+    appendPipelineNotice,
+    isRunning,
+    messages,
+    pipelineStageIndex,
+    pipelineStageMessageStart,
+    pipelineStatus,
+    pipelineTemplate,
+    taskId,
+    t.task.pipelineStageCompleted,
+    t.task.pipelineStageFailed,
+    t.task.stageLabel,
+  ]);
+
   // Handle reply submission from ChatInput
   const handleReply = useCallback(
     async (text: string, messageAttachments?: MessageAttachment[]) => {
@@ -582,48 +705,72 @@ function TaskDetailContent() {
         !isRunning &&
         taskId
       ) {
-        await continueConversation(text.trim(), messageAttachments);
+        if (
+          pipelineTemplate &&
+          (pipelineStatus === 'waiting_approval' || pipelineStatus === 'failed')
+        ) {
+          const approvalNote = text.trim();
+          if (approvalNote) {
+            setMessages((prev) => [
+              ...prev,
+              { type: 'user', content: approvalNote },
+            ]);
+            try {
+              await db.createMessage({
+                task_id: taskId,
+                type: 'user',
+                content: approvalNote,
+              });
+            } catch (error) {
+              console.error('Failed to save approval note:', error);
+            }
+          }
+          await startNextPipelineStage(approvalNote);
+          return;
+        }
+        await continueConversation(
+          text.trim(),
+          messageAttachments,
+          workingDir || undefined
+        );
       }
     },
-    [isRunning, taskId, continueConversation]
+    [
+      isRunning,
+      taskId,
+      continueConversation,
+      pipelineTemplate,
+      pipelineStatus,
+      startNextPipelineStage,
+      workingDir,
+    ]
   );
 
   const displayPrompt = task?.prompt || initialPrompt;
-
-  // Get attachments for the initial user message:
-  // 1. From navigation state (first navigation from home page)
-  // 2. Or from the first user message in messages (when reloading/re-entering)
-  const displayAttachments = useMemo(() => {
-    console.log('[TaskDetail] Computing displayAttachments:');
-    console.log('  - initialAttachments:', initialAttachments?.length || 0);
-    if (initialAttachments && initialAttachments.length > 0) {
-      initialAttachments.forEach((a, i) => {
-        console.log(
-          `  - initialAttachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
-        );
-      });
-      return initialAttachments;
+  const displayTitle = task?.title || task?.prompt || initialPrompt;
+  const pipelineBanner = useMemo(() => {
+    if (!pipelineTemplate) return null;
+    const stage = pipelineTemplate.stages[pipelineStageIndex];
+    const stageName = stage?.name || `${t.task.stageLabel} ${pipelineStageIndex + 1}`;
+    if (pipelineStatus === 'waiting_approval') {
+      return t.task.pipelineStageCompleted.replace('{name}', stageName);
     }
-    // Find the first user message in messages array
-    const firstUserMessage = messages.find((m) => m.type === 'user');
-    console.log('  - firstUserMessage found:', !!firstUserMessage);
-    if (firstUserMessage?.attachments) {
-      console.log(
-        '  - firstUserMessage.attachments:',
-        firstUserMessage.attachments.length
-      );
+    if (pipelineStatus === 'failed') {
+      return t.task.pipelineStageFailed.replace('{name}', stageName);
     }
-    return firstUserMessage?.attachments;
-  }, [initialAttachments, messages]);
-
-  // Check if we should skip showing the first user message separately
-  // (to avoid duplication when messages array already includes it)
-  const firstMessageIsUserWithSameContent = useMemo(() => {
-    const firstMessage = messages[0];
-    return (
-      firstMessage?.type === 'user' && firstMessage?.content === displayPrompt
-    );
-  }, [messages, displayPrompt]);
+    if (pipelineStatus === 'completed') {
+      return t.task.pipelineCompleted;
+    }
+    return null;
+  }, [
+    pipelineTemplate,
+    pipelineStageIndex,
+    pipelineStatus,
+    t.task.pipelineCompleted,
+    t.task.pipelineStageCompleted,
+    t.task.pipelineStageFailed,
+    t.task.stageLabel,
+  ]);
 
   return (
     <ToolSelectionContext.Provider value={toolSelectionValue}>
@@ -690,8 +837,8 @@ function TaskDetailContent() {
                     className="text-foreground hover:bg-accent/50 inline-block max-w-full cursor-pointer truncate rounded-md px-2 py-1 text-sm font-normal transition-colors"
                     title="Click to edit title"
                   >
-                    {displayPrompt.slice(0, 40) || `Task ${taskId}`}
-                    {displayPrompt.length > 40 && '...'}
+                    {displayTitle.slice(0, 40) || `Task ${taskId}`}
+                    {displayTitle.length > 40 && '...'}
                   </h1>
                 )}
               </div>
@@ -726,6 +873,12 @@ function TaskDetailContent() {
               )}
             </div>
 
+            {pipelineBanner && (
+              <div className="border-t bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                {pipelineBanner}
+              </div>
+            )}
+
             {/* Chat Input */}
             <div className="border-t bg-background shrink-0 py-2">
               <ChatInput
@@ -747,7 +900,6 @@ function TaskDetailContent() {
             <div className="bg-muted/10 flex min-w-0 flex-1 flex-col overflow-hidden">
               <RightPanel
                 workingDir={workingDir}
-                artifacts={artifacts}
                 selectedArtifact={selectedArtifact}
                 onSelectArtifact={handleSelectArtifact}
                 livePreviewUrl={livePreviewUrl}

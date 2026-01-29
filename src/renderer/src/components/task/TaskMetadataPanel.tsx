@@ -23,6 +23,26 @@ const statusConfig: Record<
   TaskStatus,
   { icon: typeof Clock; label: string; color: string }
 > = {
+  todo: {
+    icon: Clock,
+    label: 'Todo',
+    color: 'text-slate-500 bg-slate-500/10',
+  },
+  in_progress: {
+    icon: Play,
+    label: 'In Progress',
+    color: 'text-blue-500 bg-blue-500/10',
+  },
+  in_review: {
+    icon: Clock,
+    label: 'In Review',
+    color: 'text-amber-500 bg-amber-500/10',
+  },
+  done: {
+    icon: CheckCircle,
+    label: 'Done',
+    color: 'text-green-500 bg-green-500/10',
+  },
   running: {
     icon: Play,
     label: 'Running',
@@ -55,6 +75,7 @@ export function TaskMetadataPanel({
 
   const config = statusConfig[task.status];
   const StatusIcon = config?.icon || Clock;
+  const isExecutionStatus = ['running', 'completed', 'error', 'stopped'].includes(task.status);
 
   return (
     <div className={cn('space-y-3 p-3', className)}>
@@ -117,8 +138,35 @@ export function TaskMetadataPanel({
         </div>
       )}
 
+      {/* Workspace Path */}
+      {task.workspace_path && !task.worktree_path && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground text-xs font-medium">
+              Workspace
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs">
+            <FolderGit2 className="text-muted-foreground size-3 shrink-0" />
+            <code className="bg-muted truncate rounded px-1.5 py-0.5">
+              {task.workspace_path}
+            </code>
+          </div>
+        </div>
+      )}
+
+      {/* CLI Tool */}
+      {task.cli_tool_id && (
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground text-xs font-medium">
+            CLI
+          </span>
+          <div className="text-xs font-mono">{task.cli_tool_id}</div>
+        </div>
+      )}
+
       {/* Status Actions */}
-      {onStatusChange && task.status !== 'completed' && (
+      {onStatusChange && isExecutionStatus && task.status !== 'completed' && (
         <div className="border-border/50 flex gap-2 border-t pt-3">
           {task.status === 'running' && (
             <Button

@@ -180,6 +180,15 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for Git operations
+  ipcMain.handle('git:checkInstalled', async () => {
+    try {
+      const installed = await gitService.isInstalled()
+      return { success: true, data: installed }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
   ipcMain.handle('git:clone', async (_, remoteUrl: string, targetPath: string) => {
     try {
       await gitService.clone(remoteUrl, targetPath)
@@ -214,10 +223,17 @@ app.whenReady().then(() => {
       repoPath: string,
       worktreePath: string,
       branchName: string,
-      createBranch: boolean
+      createBranch: boolean,
+      baseBranch?: string
     ) => {
       try {
-        await gitService.addWorktree(repoPath, worktreePath, branchName, createBranch)
+        await gitService.addWorktree(
+          repoPath,
+          worktreePath,
+          branchName,
+          createBranch,
+          baseBranch
+        )
         return { success: true }
       } catch (error) {
         return { success: false, error: String(error) }
@@ -916,6 +932,73 @@ app.whenReady().then(() => {
     }
   })
 
+  // Pipeline template operations
+  ipcMain.handle('db:getPipelineTemplatesByProject', (_, projectId: string) => {
+    try {
+      return databaseService.getPipelineTemplatesByProject(projectId)
+    } catch (error) {
+      console.error('Failed to get pipeline templates by project:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getGlobalPipelineTemplates', () => {
+    try {
+      return databaseService.getGlobalPipelineTemplates()
+    } catch (error) {
+      console.error('Failed to get global pipeline templates:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:getPipelineTemplate', (_, templateId: string) => {
+    try {
+      return databaseService.getPipelineTemplate(templateId)
+    } catch (error) {
+      console.error('Failed to get pipeline template:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:createPipelineTemplate', (_, input) => {
+    try {
+      return databaseService.createPipelineTemplate(input)
+    } catch (error) {
+      console.error('Failed to create pipeline template:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:updatePipelineTemplate', (_, input) => {
+    try {
+      return databaseService.updatePipelineTemplate(input)
+    } catch (error) {
+      console.error('Failed to update pipeline template:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:deletePipelineTemplate', (_, templateId: string, scope: string) => {
+    try {
+      return databaseService.deletePipelineTemplate(
+        templateId,
+        scope === 'global' ? 'global' : 'project'
+      )
+    } catch (error) {
+      console.error('Failed to delete pipeline template:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('db:createProjectTemplateFromGlobal', (_, globalTemplateId: string, projectId: string) => {
+    try {
+      return databaseService.createProjectTemplateFromGlobal(globalTemplateId, projectId)
+    } catch (error) {
+      console.error('Failed to create project template from global:', error)
+      throw error
+    }
+  })
+
   // Message operations
   ipcMain.handle('db:createMessage', (_, input) => {
     try {
@@ -940,52 +1023,6 @@ app.whenReady().then(() => {
       return databaseService.deleteMessagesByTaskId(taskId)
     } catch (error) {
       console.error('Failed to delete messages:', error)
-      throw error
-    }
-  })
-
-  // File operations
-  ipcMain.handle('db:createFile', (_, input) => {
-    try {
-      return databaseService.createFile(input)
-    } catch (error) {
-      console.error('Failed to create file:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:getFilesByTaskId', (_, taskId: string) => {
-    try {
-      return databaseService.getFilesByTaskId(taskId)
-    } catch (error) {
-      console.error('Failed to get files:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:getAllFiles', () => {
-    try {
-      return databaseService.getAllFiles()
-    } catch (error) {
-      console.error('Failed to get all files:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:toggleFileFavorite', (_, fileId: string) => {
-    try {
-      return databaseService.toggleFileFavorite(fileId)
-    } catch (error) {
-      console.error('Failed to toggle file favorite:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:deleteFile', (_, fileId: string) => {
-    try {
-      return databaseService.deleteFile(fileId)
-    } catch (error) {
-      console.error('Failed to delete file:', error)
       throw error
     }
   })

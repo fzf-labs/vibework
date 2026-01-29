@@ -35,13 +35,16 @@ function MCPCard({
   server,
   onConfigure,
   onDelete,
+  readOnly = false,
 }: {
   server: MCPServerUI;
-  onConfigure: () => void;
-  onDelete: () => void;
+  onConfigure?: () => void;
+  onDelete?: () => void;
+  readOnly?: boolean;
 }) {
   const { t } = useLanguage();
   const [showMenu, setShowMenu] = useState(false);
+  const showActions = !readOnly && onConfigure && onDelete;
 
   return (
     <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
@@ -59,56 +62,66 @@ function MCPCard({
             : t.settings.mcpTypeHttp}
       </p>
 
-      <div className="border-border flex items-center justify-end border-t pt-3">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onConfigure}
-            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
-            title={t.settings.mcpGoToConfigure}
-          >
-            <Settings2 className="size-4" />
-          </button>
-          <div className="relative">
+      {showActions && (
+        <div className="border-border flex items-center justify-end border-t pt-3">
+          <div className="flex items-center gap-1">
             <button
-              onClick={() => setShowMenu(!showMenu)}
+              onClick={onConfigure}
               className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+              title={t.settings.mcpGoToConfigure}
             >
-              <MoreHorizontal className="size-4" />
+              <Settings2 className="size-4" />
             </button>
-            {showMenu && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowMenu(false)}
-                />
-                <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
-                  <button
-                    onClick={() => {
-                      onDelete();
-                      setShowMenu(false);
-                    }}
-                    className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
-                  >
-                    <Trash2 className="size-3.5 shrink-0" />
-                    {t.settings.mcpDeleteServer}
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="text-muted-foreground hover:bg-accent hover:text-foreground rounded p-1.5 transition-colors"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+              {showMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="border-border bg-popover absolute right-0 bottom-full z-20 mb-1 min-w-max rounded-lg border py-1 shadow-lg">
+                    <button
+                      onClick={() => {
+                        onDelete?.();
+                        setShowMenu(false);
+                      }}
+                      className="hover:bg-destructive/10 text-destructive flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm whitespace-nowrap transition-colors"
+                    >
+                      <Trash2 className="size-3.5 shrink-0" />
+                      {t.settings.mcpDeleteServer}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-type MainTab = 'installed' | 'settings';
+type MainTab = 'installed' | 'cli';
 
 interface KeyValuePair {
   id: string;
   key: string;
   value: string;
 }
+
+type CliMcpGroup = {
+  id: string;
+  label: string;
+  path: string;
+  exists: boolean;
+  servers: MCPServerUI[];
+};
 
 interface ConfigDialogState {
   open: boolean;
@@ -136,15 +149,13 @@ const initialConfigDialog: ConfigDialogState = {
 };
 
 export function MCPSettings({ settings }: SettingsTabProps) {
-  const [servers, setServers] = useState<MCPServerUI[]>([]);
+  const [appServers, setAppServers] = useState<MCPServerUI[]>([]);
+  const [cliGroups, setCliGroups] = useState<CliMcpGroup[]>([]);
   const [mainTab, setMainTab] = useState<MainTab>('installed');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [appError, setAppError] = useState<string | null>(null);
+  const [cliError, setCliError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [mcpDirs, setMcpDirs] = useState<{ user: string; app: string }>({
-    user: '',
-    app: '',
-  });
 
   // Import by JSON dialog
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -204,7 +215,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       string,
       MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
     >,
-    sourceName: 'VibeWork' | 'claude'
+    sourceName: string
   ): MCPServerUI[] => {
     const serverList: MCPServerUI[] = [];
     for (const [id, serverConfig] of Object.entries(servers)) {
@@ -236,8 +247,17 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     return serverList;
   };
 
+  const isAppConfigName = (name: string) => name.toLowerCase() === 'vibework';
+
+  const formatCliLabel = (id: string) =>
+    id
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part[0].toUpperCase() + part.slice(1))
+      .join(' ');
+
   // Filter and sort servers
-  const filteredServers = servers
+  const filteredServers = appServers
     .filter((server) => {
       if (
         searchQuery &&
@@ -255,101 +275,152 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       return 0;
     });
 
-  // Load MCP config from all sources
-  useEffect(() => {
-    async function loadMCPConfig() {
-      setLoading(true);
-      setError(null);
+  const readAppServersFromFile = async (): Promise<MCPServerUI[] | null> => {
+    if (!window.api?.fs?.readTextFile || !window.api?.fs?.exists) return null;
+    const localPath = await resolvePath(await getSaveConfigPath());
+    if (!localPath) return null;
+    const exists = await window.api.fs.exists(localPath);
+    if (!exists) return null;
 
-      try {
-        if (window.api?.fs?.readTextFile && window.api?.fs?.exists) {
-          const localPath = await resolvePath(await getSaveConfigPath());
-          if (localPath) {
-            const exists = await window.api.fs.exists(localPath);
-            if (exists) {
-              const content = await window.api.fs.readTextFile(localPath);
-              const parsed = JSON.parse(content) as MCPConfig | Record<string, unknown>;
-              const mcpServers = (parsed as MCPConfig).mcpServers || parsed;
-              if (mcpServers && typeof mcpServers === 'object') {
-                const serverList = buildServersFromConfig(
-                  mcpServers as Record<
-                    string,
-                    MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-                  >,
-                  'VibeWork'
-                );
-                setMcpDirs({ user: '', app: localPath });
-                setServers(serverList);
-                setError(null);
-                setLoading(false);
-                return;
-              }
-            }
-          }
-        }
+    const content = await window.api.fs.readTextFile(localPath);
+    const parsed = JSON.parse(content) as MCPConfig | Record<string, unknown>;
+    const mcpServers = (parsed as MCPConfig).mcpServers || parsed;
+    if (!mcpServers || typeof mcpServers !== 'object') return [];
 
-        const response = await fetch(`${API_BASE_URL}/mcp/all-configs`);
-        const result = await response.json();
+    return buildServersFromConfig(
+      mcpServers as Record<
+        string,
+        MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+      >,
+      'VibeWork'
+    );
+  };
 
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to load config');
-        }
+  const fetchAllConfigs = async (): Promise<{
+    name: string;
+    path: string;
+    exists: boolean;
+    servers: Record<
+      string,
+      MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+    >;
+  }[]> => {
+    const response = await fetch(`${API_BASE_URL}/mcp/all-configs`);
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to load config');
+    }
+    return result.configs as {
+      name: string;
+      path: string;
+      exists: boolean;
+      servers: Record<
+        string,
+        MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+      >;
+    }[];
+  };
 
-        const serverList: MCPServerUI[] = [];
-        const dirs: { user: string; app: string } = { user: '', app: '' };
-
-        for (const configInfo of result.configs as {
-          name: string;
-          path: string;
-          exists: boolean;
-          servers: Record<
-            string,
-            MCPServerStdio | { url: string; headers?: Record<string, string> }
-          >;
-        }[]) {
-          if (configInfo.name === 'claude') {
-            dirs.user = configInfo.path;
-          } else if (configInfo.name === 'VibeWork') {
-            dirs.app = configInfo.path;
-          }
-
-          if (!configInfo.exists) continue;
-
-          serverList.push(
-            ...buildServersFromConfig(
-              configInfo.servers as Record<
-                string,
-                MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-              >,
-              configInfo.name as 'VibeWork' | 'claude'
-            )
-          );
-        }
-
-        if (!dirs.app) {
-          dirs.app = await getMcpConfigPath();
-        }
-
-        setMcpDirs(dirs);
-        setServers(serverList);
-        setError(null);
-      } catch (err) {
-        console.error('[MCP] Failed to load MCP config:', err);
-        setError(t.settings.mcpLoadError);
-        setServers([]);
-      } finally {
-        setLoading(false);
-      }
+  const buildCliGroups = async (
+    configs: {
+      name: string;
+      path: string;
+      exists: boolean;
+      servers: Record<
+        string,
+        MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+      >;
+    }[]
+  ): Promise<CliMcpGroup[]> => {
+    const tools =
+      (await window.api?.cliTools?.getAll?.())?.filter(Boolean) ?? [];
+    const toolNameMap = new Map<string, string>();
+    for (const tool of tools as { id: string; displayName?: string }[]) {
+      toolNameMap.set(tool.id, tool.displayName || formatCliLabel(tool.id));
     }
 
-    loadMCPConfig();
-  }, []);
+    return configs
+      .filter((config) => config.exists && !isAppConfigName(config.name))
+      .map((config) => ({
+        id: config.name,
+        label: toolNameMap.get(config.name) || formatCliLabel(config.name),
+        path: config.path,
+        exists: config.exists,
+        servers: buildServersFromConfig(config.servers, config.name),
+      }));
+  };
+
+  // Load MCP config from all sources
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMcpData() {
+      setLoading(true);
+      setAppError(null);
+      setCliError(null);
+
+      let appServersResult: MCPServerUI[] | null = null;
+      try {
+        appServersResult = await readAppServersFromFile();
+      } catch (err) {
+        console.error('[MCP] Failed to read app MCP config:', err);
+      }
+
+      let configs: {
+        name: string;
+        path: string;
+        exists: boolean;
+        servers: Record<
+          string,
+          MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+        >;
+      }[] | null = null;
+
+      try {
+        configs = await fetchAllConfigs();
+      } catch (err) {
+        console.error('[MCP] Failed to load MCP config:', err);
+        setCliError(t.settings.mcpLoadError);
+        if (appServersResult === null) {
+          setAppError(t.settings.mcpLoadError);
+        }
+      }
+
+      let appServersList = appServersResult ?? [];
+      if (configs && appServersResult === null) {
+        const appConfig = configs.find((config) => isAppConfigName(config.name));
+        if (appConfig?.exists) {
+          appServersList = buildServersFromConfig(appConfig.servers, 'VibeWork');
+        }
+      }
+
+      let cliGroupsList: CliMcpGroup[] = [];
+      if (configs) {
+        try {
+          cliGroupsList = await buildCliGroups(configs);
+        } catch (err) {
+          console.error('[MCP] Failed to build CLI MCP groups:', err);
+          setCliError(t.settings.mcpLoadError);
+        }
+      }
+
+      if (cancelled) return;
+      setAppServers(appServersList);
+      setCliGroups(cliGroupsList);
+      setLoading(false);
+    }
+
+    loadMcpData();
+    return () => {
+      cancelled = true;
+    };
+  }, [settings?.mcpConfigPath]);
 
   // Save MCP config via API
   const saveMCPConfig = async (serverList: MCPServerUI[]) => {
     const mcpServers: Record<string, unknown> = {};
     for (const server of serverList) {
-      if (server.source === 'claude') continue;
+      if (server.source && server.source !== 'VibeWork') continue;
       if (server.type === 'http' || server.type === 'sse') {
         const serverConfig: Record<string, unknown> = {
           url: server.url || '',
@@ -464,7 +535,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         return;
       }
 
-      const newServers: MCPServerUI[] = [...servers];
+      const newServers: MCPServerUI[] = [...appServers];
 
       for (const [name, config] of Object.entries(mcpServers)) {
         const cfg = config as Record<string, unknown>;
@@ -499,8 +570,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         }
       }
 
-      setServers(newServers);
-      setError(null);
+      setAppServers(newServers);
+      setAppError(null);
       saveMCPConfig(newServers);
       setShowImportDialog(false);
       setImportJson('');
@@ -554,7 +625,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
   const handleSaveConfigDialog = () => {
     if (!configDialog.serverName) return;
 
-    const newServers = [...servers];
+    const newServers = [...appServers];
     const headersObj = keyValuePairsToObject(configDialog.headers);
     const hasHeaders = Object.keys(headersObj).length > 0;
     const envObj = keyValuePairsToObject(configDialog.env);
@@ -618,19 +689,19 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       });
     }
 
-    setServers(newServers);
-    setError(null);
+    setAppServers(newServers);
+    setAppError(null);
     saveMCPConfig(newServers);
     setConfigDialog(initialConfigDialog);
   };
 
   // Handle delete server
   const handleDeleteServer = (serverId: string) => {
-    const server = servers.find((s) => s.id === serverId);
-    if (!server || server.source === 'claude') return;
+    const server = appServers.find((s) => s.id === serverId);
+    if (!server || server.source !== 'VibeWork') return;
 
-    const newServers = servers.filter((s) => s.id !== serverId);
-    setServers(newServers);
+    const newServers = appServers.filter((s) => s.id !== serverId);
+    setAppServers(newServers);
     saveMCPConfig(newServers);
   };
 
@@ -722,126 +793,41 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         {/* Tab Bar */}
         <div className="border-border shrink-0 border-b px-6">
           <div className="flex items-center gap-6">
-            <button
-              onClick={() => setMainTab('installed')}
-              className={cn(
-                'relative py-4 text-sm font-medium transition-colors',
-                mainTab === 'installed'
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {t.settings.skillsInstalled}
-              {mainTab === 'installed' && (
-                <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
-              )}
-            </button>
-            <button
-              onClick={() => setMainTab('settings')}
-              className={cn(
-                'relative py-4 text-sm font-medium transition-colors',
-                mainTab === 'settings'
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {t.settings.title}
-              {mainTab === 'settings' && (
-                <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
-              )}
-            </button>
-          </div>
+          <button
+            onClick={() => setMainTab('installed')}
+            className={cn(
+              'relative py-4 text-sm font-medium transition-colors',
+              mainTab === 'installed'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {t.settings.mcpInstalled}
+            {mainTab === 'installed' && (
+              <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setMainTab('cli')}
+            className={cn(
+              'relative py-4 text-sm font-medium transition-colors',
+              mainTab === 'cli'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {t.settings.cli}
+            {mainTab === 'cli' && (
+              <span className="bg-foreground absolute bottom-0 left-0 h-0.5 w-full" />
+            )}
+          </button>
         </div>
+      </div>
 
         {/* Content Area */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           {mainTab === 'installed' ? (
-            <div className="flex h-full flex-col">
-              {/* Filter Bar */}
-              <div className="bg-background sticky top-0 z-10 flex shrink-0 items-center justify-between gap-4 px-6 pt-6 pb-4">
-                <div className="flex items-center gap-3">
-                  {/* Search Input */}
-                  <div className="relative">
-                    <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={t.settings.mcpSearch}
-                      className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-64 rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Add Button with Dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
-                    >
-                      <Plus className="size-4" />
-                      {t.settings.add}
-                      <ChevronDown className="size-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[180px] rounded-xl p-1">
-                    <DropdownMenuItem
-                      onSelect={() => setShowImportDialog(true)}
-                      className="gap-3 px-3 py-2"
-                    >
-                      <FileJson className="text-muted-foreground size-4 shrink-0" />
-                      <span className="text-foreground text-sm">
-                        {t.settings.mcpImportByJson}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        setConfigDialog({
-                          ...initialConfigDialog,
-                          open: true,
-                        })
-                      }
-                      className="gap-3 px-3 py-2"
-                    >
-                      <Settings2 className="text-muted-foreground size-4 shrink-0" />
-                      <span className="text-foreground text-sm">
-                        {t.settings.mcpDirectConfig}
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              {/* MCP Grid */}
-              <div className="min-h-0 flex-1 overflow-y-auto p-6">
-                {error && filteredServers.length === 0 ? (
-                  <div className="flex h-32 items-center justify-center text-sm text-red-500">
-                    {error}
-                  </div>
-                ) : filteredServers.length === 0 ? (
-                  <div className="text-muted-foreground flex h-32 items-center justify-center text-sm">
-                    {searchQuery
-                      ? t.settings.mcpNoResults
-                      : t.settings.mcpNoServers}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {filteredServers.map((server) => (
-                      <MCPCard
-                        key={server.id}
-                        server={server}
-                        onConfigure={() => handleConfigureServer(server)}
-                        onDelete={() => handleDeleteServer(server.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Settings Tab Content */
-            <div className="space-y-4 p-6">
+            <div className="space-y-6 p-6">
               {/* MCP Config File */}
               <div className="border-border bg-background rounded-xl border p-4">
                 <div className="flex items-start justify-between">
@@ -865,6 +851,159 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                   </div>
                 </div>
               </div>
+
+              <div className="flex flex-col gap-4">
+                {/* Filter Bar */}
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={t.settings.mcpSearch}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-9 w-64 rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Add Button with Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                      >
+                        <Plus className="size-4" />
+                        {t.common.add}
+                        <ChevronDown className="size-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[180px] rounded-xl p-1">
+                      <DropdownMenuItem
+                        onSelect={() => setShowImportDialog(true)}
+                        className="gap-3 px-3 py-2"
+                      >
+                        <FileJson className="text-muted-foreground size-4 shrink-0" />
+                        <span className="text-foreground text-sm">
+                          {t.settings.mcpImportByJson}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          setConfigDialog({
+                            ...initialConfigDialog,
+                            open: true,
+                          })
+                        }
+                        className="gap-3 px-3 py-2"
+                      >
+                        <Settings2 className="text-muted-foreground size-4 shrink-0" />
+                        <span className="text-foreground text-sm">
+                          {t.settings.mcpDirectConfig}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* MCP Grid */}
+                <div>
+                  {appError && filteredServers.length === 0 ? (
+                    <div className="flex h-32 items-center justify-center text-sm text-red-500">
+                      {appError}
+                    </div>
+                  ) : filteredServers.length === 0 ? (
+                    <div className="text-muted-foreground flex h-32 items-center justify-center text-sm">
+                      {searchQuery
+                        ? t.settings.mcpNoResults
+                        : t.settings.mcpNoServers}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {filteredServers.map((server) => (
+                        <MCPCard
+                          key={server.id}
+                          server={server}
+                          onConfigure={() => handleConfigureServer(server)}
+                          onDelete={() => handleDeleteServer(server.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* CLI Tab Content */
+            <div className="space-y-4 p-6">
+              {cliError && cliGroups.length === 0 ? (
+                <div className="flex h-32 items-center justify-center text-sm text-red-500">
+                  {cliError}
+                </div>
+              ) : cliGroups.length === 0 ? (
+                <div className="text-muted-foreground flex h-28 items-center justify-center rounded-xl border border-dashed border-border text-sm">
+                  {t.settings.mcpCliEmpty}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cliGroups.map((group) => (
+                    <div
+                      key={group.id}
+                      className="border-border bg-background rounded-xl border p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <h4 className="text-foreground text-sm font-medium">
+                              {group.label}
+                            </h4>
+                            <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-xs font-medium">
+                              {group.servers.length} {t.settings.mcpServers}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
+                              {group.path}
+                            </code>
+                            <button
+                              onClick={() => {
+                                const folderPath =
+                                  getDirectoryPath(group.path) || group.path;
+                                void openFolderInSystem(folderPath);
+                              }}
+                              className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-8 w-8 items-center justify-center rounded transition-colors"
+                              title={t.settings.skillsOpenFolder}
+                            >
+                              <FolderOpen className="size-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        {group.servers.length === 0 ? (
+                          <div className="text-muted-foreground flex h-24 items-center justify-center rounded-lg border border-dashed border-border text-sm">
+                            {t.settings.mcpNoServers}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-4">
+                            {group.servers.map((server) => (
+                              <MCPCard
+                                key={server.id}
+                                server={server}
+                                readOnly
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

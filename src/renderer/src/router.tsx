@@ -1,7 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import {
   HomePage,
-  LibraryPage,
   SetupPage,
   TaskDetailPage,
   DashboardPage,
@@ -9,6 +8,7 @@ import {
   SkillsPage,
   McpPage,
   ProjectsPage,
+  PipelineTemplatesPage,
 } from '@/pages';
 
 import { SetupGuard } from '@/components/shared/SetupGuard';
@@ -36,6 +36,10 @@ export const router = createBrowserRouter([
         element: <BoardPage />,
       },
       {
+        path: 'pipeline-templates',
+        element: <PipelineTemplatesPage />,
+      },
+      {
         path: 'skills',
         element: <SkillsPage />,
       },
@@ -58,14 +62,6 @@ export const router = createBrowserRouter([
     element: (
       <SetupGuard>
         <TaskDetailPage />
-      </SetupGuard>
-    ),
-  },
-  {
-    path: '/library',
-    element: (
-      <SetupGuard>
-        <LibraryPage />
       </SetupGuard>
     ),
   },

@@ -18,13 +18,16 @@ interface CLIToolInfo {
 }
 
 export function CLISettings({
-  settings: _settings,
-  onSettingsChange: _onSettingsChange,
+  settings,
+  onSettingsChange,
 }: SettingsTabProps) {
   const { t } = useLanguage();
   const [tools, setTools] = useState<CLIToolInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [defaultCliToolId, setDefaultCliToolId] = useState(
+    settings.defaultCliToolId || ''
+  );
 
   const loadTools = useCallback(async (force = false) => {
     setLoading(true);
@@ -57,6 +60,15 @@ export function CLISettings({
     void loadTools();
   }, [loadTools]);
 
+  useEffect(() => {
+    setDefaultCliToolId(settings.defaultCliToolId || '');
+  }, [settings.defaultCliToolId]);
+
+  const handleDefaultChange = (value: string) => {
+    setDefaultCliToolId(value);
+    onSettingsChange({ ...settings, defaultCliToolId: value });
+  };
+
   const statusLabel = (installed: boolean) =>
     installed
       ? t.settings?.cliInstalled || 'Installed'
@@ -71,6 +83,34 @@ export function CLISettings({
 
   return (
     <div className="space-y-6">
+      <div className="border-border rounded-lg border p-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            {t.settings?.cliDefaultLabel || 'Default CLI'}
+          </label>
+          <select
+            value={defaultCliToolId}
+            onChange={(e) => handleDefaultChange(e.target.value)}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+          >
+            <option value="">
+              {t.settings?.cliDefaultPlaceholder || 'Select default CLI'}
+            </option>
+            {tools
+              .filter((tool) => tool.installed)
+              .map((tool) => (
+                <option key={tool.id} value={tool.id}>
+                  {tool.displayName}
+                </option>
+              ))}
+          </select>
+          <p className="text-muted-foreground text-xs">
+            {t.settings?.cliDefaultDescription ||
+              'Used as the default CLI when creating new tasks.'}
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-muted-foreground text-sm">
           {t.settings?.cliDescription ||
