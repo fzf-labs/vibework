@@ -8,6 +8,7 @@ export { TaskMetadataPanel } from './TaskMetadataPanel';
 export { RightPanel } from './RightPanel';
 export { WorkNodeReviewPanel } from './WorkNodeReviewPanel';
 export { WorkflowProgressBar } from './WorkflowProgressBar';
+export { FileListPanel } from './FileListPanel';
 
 // Components moved from pages/task-detail
 export { ToolSelectionContext, useToolSelection } from './context';

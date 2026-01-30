@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL } from '@/config';
 import { getSettings } from '@/data/settings';
 import { cn } from '@/lib/utils';
+import { fs } from '@/lib/electron-api';
 import { useLanguage } from '@/providers/language-provider';
 import {
   Check,
@@ -11,6 +12,7 @@ import {
   Eye,
   FileCode2,
   FileText,
+  Loader2,
   Maximize2,
   Radio,
   X,
@@ -45,6 +47,8 @@ import {
   getFileExtension,
   getOpenWithApp,
   inlineAssets,
+  isRemoteUrl,
+  MAX_PREVIEW_SIZE,
   parseCSV,
   parseFrontmatter,
 } from './utils';
@@ -92,9 +96,15 @@ export function ArtifactPreview({
   const [viewMode, setViewMode] = useState<ViewMode>('preview');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('static');
   const [copied, setCopied] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isNodeAvailable, setIsNodeAvailable] = useState<boolean | null>(null);
+  const [textContent, setTextContent] = useState<string | null>(null);
+  const [textLoading, setTextLoading] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
+  const [textFileTooLarge, setTextFileTooLarge] = useState<number | null>(null);
+  const [textReloadToken, setTextReloadToken] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { t, tt } = useLanguage();
 
@@ -116,6 +126,111 @@ export function ArtifactPreview({
     }
     checkNodeAvailable();
   }, []);
+
+  const isTextBasedType = useMemo(() => {
+    if (!artifact) return false;
+    return [
+      'code',
+      'text',
+      'markdown',
+      'csv',
+      'json',
+      'html',
+      'jsx',
+      'css',
+    ].includes(artifact.type);
+  }, [artifact]);
+
+  const shouldLoadTextContent = useMemo(() => {
+    if (!artifact) return false;
+    if (!isTextBasedType) return false;
+    if (artifact.content) return false;
+    return Boolean(artifact.path);
+  }, [artifact, isTextBasedType]);
+
+  useEffect(() => {
+    if (!artifact) {
+      setTextContent(null);
+      setTextError(null);
+      setTextFileTooLarge(null);
+      setTextLoading(false);
+      return;
+    }
+
+    setTextContent(null);
+    setTextError(null);
+    setTextFileTooLarge(null);
+    setTextLoading(false);
+
+    if (!shouldLoadTextContent || !artifact.path) {
+      return;
+    }
+
+    let active = true;
+    const loadTextContent = async () => {
+      setTextLoading(true);
+      setTextError(null);
+      setTextFileTooLarge(null);
+      try {
+        if (!isRemoteUrl(artifact.path)) {
+          const fileInfo = await fs.stat(artifact.path);
+          if (fileInfo.size > MAX_PREVIEW_SIZE) {
+            if (active) {
+              setTextFileTooLarge(fileInfo.size);
+            }
+            return;
+          }
+          const content = await fs.readTextFile(artifact.path);
+          if (active) {
+            setTextContent(content);
+          }
+          return;
+        }
+
+        const url = artifact.path.startsWith('//')
+          ? `https:${artifact.path}`
+          : artifact.path;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch file: ${response.status} ${response.statusText}`
+          );
+        }
+        const content = await response.text();
+        if (active) {
+          setTextContent(content);
+        }
+      } catch (error) {
+        if (active) {
+          setTextError(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        if (active) {
+          setTextLoading(false);
+        }
+      }
+    };
+
+    void loadTextContent();
+
+    return () => {
+      active = false;
+    };
+  }, [artifact, shouldLoadTextContent, textReloadToken]);
+
+  const resolvedContent = artifact?.content ?? textContent;
+
+  const previewArtifact = useMemo(() => {
+    if (!artifact) return null;
+    const mergedFileTooLarge = Boolean(artifact.fileTooLarge || textFileTooLarge);
+    const mergedFileSize = artifact.fileSize ?? textFileTooLarge ?? undefined;
+    return {
+      ...artifact,
+      content: resolvedContent ?? undefined,
+      fileTooLarge: mergedFileTooLarge,
+      fileSize: mergedFileSize,
+    };
+  }, [artifact, resolvedContent, textFileTooLarge]);
 
   // Check if live preview is available for this artifact
   // Requires: HTML artifact + onStartLivePreview handler + Node.js installed
@@ -152,13 +267,24 @@ export function ArtifactPreview({
 
   // Handle copy to clipboard
   const handleCopy = async () => {
-    if (!artifact?.content) return;
+    if (!resolvedContent) return;
     try {
-      await navigator.clipboard.writeText(artifact.content);
+      await navigator.clipboard.writeText(resolvedContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleCopyPath = async () => {
+    if (!artifact?.path) return;
+    try {
+      await navigator.clipboard.writeText(artifact.path);
+      setCopiedPath(true);
+      setTimeout(() => setCopiedPath(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy path:', err);
     }
   };
 
@@ -296,17 +422,17 @@ export function ArtifactPreview({
   const iframeSrc = useMemo(() => {
     // Only create blob URL when we need to show static preview
     if (!shouldShowStaticPreview) return null;
-    if (!artifact?.content || artifact.type !== 'html') return null;
+    if (!resolvedContent || artifact?.type !== 'html') return null;
 
     const enhancedHtml =
       allArtifacts.length > 0
-        ? inlineAssets(artifact.content, allArtifacts)
-        : artifact.content;
+        ? inlineAssets(resolvedContent, allArtifacts)
+        : resolvedContent;
 
     const blob = new Blob([enhancedHtml], { type: 'text/html' });
     return URL.createObjectURL(blob);
   }, [
-    artifact?.content,
+    resolvedContent,
     artifact?.type,
     allArtifacts,
     shouldShowStaticPreview,
@@ -323,14 +449,14 @@ export function ArtifactPreview({
 
   // Parse CSV data
   const csvData = useMemo(() => {
-    if (artifact?.type === 'csv' && artifact.content) {
-      return parseCSV(artifact.content);
+    if (artifact?.type === 'csv' && resolvedContent) {
+      return parseCSV(resolvedContent);
     }
     if (artifact?.data) {
       return artifact.data;
     }
     return null;
-  }, [artifact?.type, artifact?.content, artifact?.data]);
+  }, [artifact?.type, resolvedContent, artifact?.data]);
 
   // Get slides for presentation
   const slides = useMemo(() => {
@@ -348,13 +474,13 @@ export function ArtifactPreview({
     if (!artifact) return false;
     switch (artifact.type) {
       case 'html':
-        return true;
+        return Boolean(resolvedContent || shouldLoadTextContent);
       case 'image':
         return !!artifact.content || !!artifact.path;
       case 'markdown':
-        return !!artifact.content;
+        return Boolean(resolvedContent || shouldLoadTextContent);
       case 'csv':
-        return !!csvData;
+        return Boolean(csvData || shouldLoadTextContent);
       case 'spreadsheet':
         return !!artifact.path;
       case 'presentation':
@@ -374,7 +500,7 @@ export function ArtifactPreview({
       default:
         return false;
     }
-  }, [artifact, csvData, slides]);
+  }, [artifact, csvData, slides, resolvedContent, shouldLoadTextContent]);
 
   // Check if code view is available
   const hasCodeView = useMemo(() => {
@@ -386,8 +512,10 @@ export function ArtifactPreview({
     ) {
       return false;
     }
-    return !!artifact.content;
-  }, [artifact]);
+    if (resolvedContent) return true;
+    if (shouldLoadTextContent) return true;
+    return false;
+  }, [artifact, resolvedContent, shouldLoadTextContent]);
 
   // Empty state
   if (!artifact) {
@@ -407,16 +535,53 @@ export function ArtifactPreview({
               <FileText className="text-muted-foreground/50 size-8" />
             </div>
             <h3 className="text-muted-foreground text-sm font-medium">
-              {t.task.noArtifacts}
+              {t.preview.noArtifactSelected}
             </h3>
             <p className="text-muted-foreground/70 mt-1 text-xs">
-              Select an artifact from the right panel to preview
+              {t.preview.selectArtifactHint}
             </p>
           </div>
         </div>
       </div>
     );
   }
+
+  const showTextLoading = shouldLoadTextContent && textLoading && !resolvedContent;
+  const showTextTooLarge = shouldLoadTextContent && textFileTooLarge !== null;
+  const showTextError = shouldLoadTextContent && Boolean(textError) && !resolvedContent;
+
+  const renderTextLoading = () => (
+    <div className="bg-muted/20 flex h-full flex-col items-center justify-center p-8">
+      <Loader2 className="text-muted-foreground size-8 animate-spin" />
+      <p className="text-muted-foreground mt-4 text-sm">
+        {t.preview.loadingFile}
+      </p>
+    </div>
+  );
+
+  const renderTextError = () => (
+    <div className="bg-muted/20 flex h-full flex-col items-center justify-center p-8">
+      <div className="flex max-w-md flex-col items-center text-center">
+        <div className="border-border bg-background mb-4 flex size-20 items-center justify-center rounded-xl border">
+          <FileText className="size-10 text-red-500" />
+        </div>
+        <h3 className="text-foreground mb-2 text-lg font-medium">
+          {t.preview.fileLoadError}
+        </h3>
+        {textError && (
+          <p className="text-muted-foreground mb-6 text-sm break-all whitespace-pre-wrap">
+            {textError}
+          </p>
+        )}
+        <button
+          onClick={() => setTextReloadToken((prev) => prev + 1)}
+          className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+        >
+          {t.preview.retry}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -438,6 +603,26 @@ export function ArtifactPreview({
 
         <TooltipProvider delayDuration={300}>
           <div className="flex shrink-0 items-center gap-1">
+            {artifact.path && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleCopyPath}
+                    className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-colors"
+                  >
+                    {copiedPath ? (
+                      <Check className="size-4 text-emerald-500" />
+                    ) : (
+                      <Copy className="size-4" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>{copiedPath ? t.preview.copied : t.preview.copyPath}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {openWithApp && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -621,9 +806,20 @@ export function ArtifactPreview({
               onStart={onStartLivePreview}
               onStop={onStopLivePreview}
             />
+          ) : showTextLoading ? (
+            renderTextLoading()
+          ) : showTextTooLarge && textFileTooLarge ? (
+            <FileTooLarge
+              artifact={previewArtifact || artifact}
+              fileSize={textFileTooLarge}
+              icon={FileText}
+              onOpenExternal={handleOpenExternal}
+            />
+          ) : showTextError ? (
+            renderTextError()
           ) : (
             <PreviewContent
-              artifact={artifact}
+              artifact={previewArtifact || artifact}
               iframeSrc={iframeSrc}
               iframeRef={iframeRef}
               csvData={csvData}
@@ -632,8 +828,19 @@ export function ArtifactPreview({
               onSlideChange={setCurrentSlide}
             />
           )
+        ) : showTextLoading ? (
+          renderTextLoading()
+        ) : showTextTooLarge && textFileTooLarge ? (
+          <FileTooLarge
+            artifact={previewArtifact || artifact}
+            fileSize={textFileTooLarge}
+            icon={FileText}
+            onOpenExternal={handleOpenExternal}
+          />
+        ) : showTextError ? (
+          renderTextError()
         ) : (
-          <CodePreview artifact={artifact} />
+          <CodePreview artifact={previewArtifact || artifact} />
         )}
       </div>
     </div>
@@ -658,6 +865,8 @@ function PreviewContent({
   currentSlide: number;
   onSlideChange: (slide: number) => void;
 }) {
+  const { t } = useLanguage();
+
   // Open file in system application
   const handleOpenExternal = async () => {
     if (!artifact.path) return;
@@ -912,8 +1121,7 @@ function PreviewContent({
             {artifact.name}
           </h3>
           <p className="text-muted-foreground text-sm">
-            Use the external link button above to open with Microsoft Word or
-            other compatible applications.
+            {t.preview.documentHint}
           </p>
         </div>
       </div>
@@ -928,10 +1136,10 @@ function PreviewContent({
           <Code className="text-muted-foreground/50 size-8" />
         </div>
         <h3 className="text-muted-foreground text-sm font-medium">
-          Preview not available
+          {t.preview.previewNotAvailable}
         </h3>
         <p className="text-muted-foreground/70 mt-1 text-xs">
-          Switch to Code view to see the content
+          {t.preview.switchToCodeHint}
         </p>
       </div>
     </div>

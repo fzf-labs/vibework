@@ -880,6 +880,25 @@ function TaskDetailContent() {
         console.error('Failed to update task status:', error);
       }
 
+      // 如果使用 Claude Code CLI，使用 claudeCode API
+      if (useClaudeCli) {
+        try {
+          if (messages.length === 0) {
+            await window.api?.claudeCode?.startSession?.(
+              taskId,
+              workingDir || '',
+              { prompt }
+            );
+          } else {
+            await window.api?.claudeCode?.sendInput?.(taskId, prompt);
+          }
+        } catch (error) {
+          console.error('Failed to execute Claude Code:', error);
+          setPipelineStatus('failed');
+        }
+        return;
+      }
+
       const sessionInfo =
         task?.session_id && task?.task_index
           ? { sessionId: task.session_id, taskIndex: task.task_index }
@@ -909,6 +928,7 @@ function TaskDetailContent() {
       t.task.pipelineApprovalNotePrefix,
       t.task.pipelineCompleted,
       workingDir,
+      useClaudeCli,
     ]
   );
 
@@ -1533,6 +1553,7 @@ function TaskDetailContent() {
             <div className="bg-muted/10 flex min-w-0 flex-1 flex-col overflow-hidden">
               <RightPanel
                 workingDir={workingDir}
+                artifacts={artifacts}
                 selectedArtifact={selectedArtifact}
                 onSelectArtifact={handleSelectArtifact}
                 livePreviewUrl={livePreviewUrl}

@@ -1,4 +1,5 @@
 import { ExternalLink } from 'lucide-react';
+import { useLanguage } from '@/providers/language-provider';
 
 import type { Artifact } from './types';
 import { formatFileSize } from './utils';
@@ -16,6 +17,8 @@ export function FileTooLarge({
   icon: Icon,
   onOpenExternal,
 }: FileTooLargeProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="bg-muted/20 flex h-full flex-col items-center justify-center p-8">
       <div className="flex max-w-md flex-col items-center text-center">
@@ -26,17 +29,17 @@ export function FileTooLarge({
           {artifact.name}
         </h3>
         <p className="text-muted-foreground mb-1 text-sm">
-          File size: {formatFileSize(fileSize)}
+          {t.preview.fileSize}: {formatFileSize(fileSize)}
         </p>
         <p className="text-muted-foreground mb-6 text-sm">
-          This file is too large to preview in the app.
+          {t.preview.fileTooLarge}
         </p>
         <button
           onClick={onOpenExternal}
           className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
         >
           <ExternalLink className="size-4" />
-          Open in System App
+          {t.preview.openInSystemApp}
         </button>
       </div>
     </div>
