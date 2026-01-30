@@ -236,6 +236,8 @@ const api = {
       ipcRenderer.invoke('db:getWorkNodesByWorkflowId', workflowId),
     updateWorkNodeStatus: (id: string, status: string) =>
       ipcRenderer.invoke('db:updateWorkNodeStatus', id, status),
+    approveWorkNode: (id: string) => ipcRenderer.invoke('db:approveWorkNode', id),
+    rejectWorkNode: (id: string) => ipcRenderer.invoke('db:rejectWorkNode', id),
     // AgentExecution operations
     createAgentExecution: (workNodeId: string) =>
       ipcRenderer.invoke('db:createAgentExecution', workNodeId),

@@ -6,6 +6,8 @@ export { TaskList } from './TaskList';
 export { CreateTaskDialog } from './CreateTaskDialog';
 export { TaskMetadataPanel } from './TaskMetadataPanel';
 export { RightPanel } from './RightPanel';
+export { WorkNodeReviewPanel } from './WorkNodeReviewPanel';
+export { WorkflowProgressBar } from './WorkflowProgressBar';
 
 // Components moved from pages/task-detail
 export { ToolSelectionContext, useToolSelection } from './context';

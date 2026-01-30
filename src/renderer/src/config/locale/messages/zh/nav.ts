@@ -1,7 +1,7 @@
 export default {
   dashboard: '仪表盘',
   board: '看板',
-  pipelineTemplates: '流水线模板',
+  pipelineTemplates: '工作流',
   skills: 'Skill',
   mcp: 'MCP',
   newTask: '新建任务',

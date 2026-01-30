@@ -47,7 +47,7 @@ export class PipelineService extends EventEmitter {
   }
 
   /**
-   * 执行流水线
+   * 执行工作流
    */
   async executePipeline(
     pipelineId: string,

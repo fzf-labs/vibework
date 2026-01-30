@@ -41,6 +41,7 @@ import {
   RightPanel,
   MessageList,
   RunningIndicator,
+  WorkNodeReviewPanel,
 } from '@/components/task';
 import {
   DropdownMenu,
@@ -67,19 +68,27 @@ interface LocationState {
   attachments?: MessageAttachment[];
 }
 
-interface PipelineTemplateStage {
+interface WorkNodeTemplate {
   id: string;
+  workflow_template_id: string;
+  node_order: number;
   name: string;
   prompt: string;
-  stage_order: number;
   requires_approval: boolean;
   continue_on_error: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface PipelineTemplate {
   id: string;
   name: string;
-  stages: PipelineTemplateStage[];
+  description: string | null;
+  scope: 'global' | 'project';
+  project_id: string | null;
+  created_at: string;
+  updated_at: string;
+  nodes: WorkNodeTemplate[];
 }
 
 interface CLIToolInfo {
@@ -173,6 +182,23 @@ function TaskDetailContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
+
+  // Workflow state for review panel
+  const [currentWorkNode, setCurrentWorkNode] = useState<{
+    id: string;
+    name: string;
+    prompt: string;
+    status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error';
+  } | null>(null);
+  const [workNodeExecutions, setWorkNodeExecutions] = useState<Array<{
+    id: string;
+    execution_index: number;
+    status: 'idle' | 'running' | 'completed';
+    started_at: string | null;
+    completed_at: string | null;
+    cost: number | null;
+    duration: number | null;
+  }>>([]);
 
   // Panel visibility state - default to visible for new layout
   const [isPreviewVisible, setIsPreviewVisible] = useState(true);
@@ -662,7 +688,7 @@ function TaskDetailContent() {
     let active = true;
     const loadTemplate = async () => {
       try {
-        const template = (await db.getPipelineTemplate(
+        const template = (await db.getWorkflowTemplate(
           task.pipeline_template_id!
         )) as PipelineTemplate | null;
         if (active) {
@@ -681,6 +707,79 @@ function TaskDetailContent() {
     };
   }, [task?.pipeline_template_id]);
 
+  // Load workflow instance and current work node status
+  useEffect(() => {
+    if (!taskId) return;
+
+    let active = true;
+    const loadWorkflowStatus = async () => {
+      try {
+        const workflow = await db.getWorkflowByTaskId(taskId) as {
+          id: string;
+          current_node_index: number;
+          status: string;
+        } | null;
+
+        if (!active || !workflow) {
+          setCurrentWorkNode(null);
+          return;
+        }
+
+        const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
+          id: string;
+          work_node_template_id: string;
+          status: string;
+        }>;
+
+        const currentNode = nodes[workflow.current_node_index];
+        if (!currentNode) {
+          setCurrentWorkNode(null);
+          return;
+        }
+
+        // Get node template for name and prompt
+        const nodeTemplate = pipelineTemplate?.nodes.find(
+          n => n.id === currentNode.work_node_template_id
+        );
+
+        if (nodeTemplate && currentNode.status === 'in_review') {
+          setCurrentWorkNode({
+            id: currentNode.id,
+            name: nodeTemplate.name,
+            prompt: nodeTemplate.prompt,
+            status: currentNode.status as 'in_review',
+          });
+
+          // Load executions for this node
+          const executions = await db.getAgentExecutionsByWorkNodeId(currentNode.id) as Array<{
+            id: string;
+            execution_index: number;
+            status: 'idle' | 'running' | 'completed';
+            started_at: string | null;
+            completed_at: string | null;
+            cost: number | null;
+            duration: number | null;
+          }>;
+          setWorkNodeExecutions(executions);
+        } else {
+          setCurrentWorkNode(null);
+          setWorkNodeExecutions([]);
+        }
+      } catch (error) {
+        console.error('Failed to load workflow status:', error);
+      }
+    };
+
+    loadWorkflowStatus();
+    // Poll for updates every 2 seconds when task is running
+    const interval = isRunning ? setInterval(loadWorkflowStatus, 2000) : null;
+
+    return () => {
+      active = false;
+      if (interval) clearInterval(interval);
+    };
+  }, [taskId, pipelineTemplate, isRunning]);
+
   useEffect(() => {
     if (!isEditOpen) return;
     let active = true;
@@ -691,7 +790,7 @@ function TaskDetailContent() {
         return;
       }
       try {
-        const templates = await db.getPipelineTemplatesByProject(task.project_id);
+        const templates = await db.getWorkflowTemplatesByProject(task.project_id);
         if (active) {
           setPipelineTemplates(templates as PipelineTemplate[]);
         }
@@ -756,7 +855,7 @@ function TaskDetailContent() {
   const startPipelineStage = useCallback(
     async (index: number, approvalNote?: string) => {
       if (!pipelineTemplate || !taskId) return;
-      const stage = pipelineTemplate.stages[index];
+      const stage = pipelineTemplate.nodes?.[index];
       if (!stage) {
         setPipelineStatus('completed');
         try {
@@ -840,7 +939,7 @@ function TaskDetailContent() {
     }
     if (!outcome || !taskId) return;
 
-    const stage = pipelineTemplate.stages[pipelineStageIndex];
+    const stage = pipelineTemplate.nodes?.[pipelineStageIndex];
     const stageName = stage?.name || `${t.task.stageLabel} ${pipelineStageIndex + 1}`;
 
     if (outcome.type === 'result' && outcome.subtype === 'success') {
@@ -962,6 +1061,19 @@ function TaskDetailContent() {
 
   const handleStartTask = useCallback(async () => {
     if (!taskId) return;
+
+    // 验证任务必须设置工作流模板
+    if (!task?.pipeline_template_id) {
+      setLocalMessages((prev) => [
+        ...prev,
+        {
+          type: 'error',
+          message: '任务必须设置工作流模板才能执行',
+        },
+      ]);
+      return;
+    }
+
     setHasStartedOnce(true);
     if (task?.pipeline_template_id) {
       if (!pipelineTemplate) return;
@@ -1021,10 +1133,21 @@ function TaskDetailContent() {
     workingDir,
   ]);
 
+  const handleApproveWorkNode = useCallback(async () => {
+    if (!currentWorkNode) return;
+    await db.approveWorkNode(currentWorkNode.id);
+    setCurrentWorkNode(null);
+  }, [currentWorkNode]);
+
+  const handleRejectWorkNode = useCallback(async () => {
+    if (!currentWorkNode) return;
+    await db.rejectWorkNode(currentWorkNode.id);
+  }, [currentWorkNode]);
+
   const displayTitle = task?.title || task?.prompt || initialPrompt;
   const pipelineBanner = useMemo(() => {
     if (!pipelineTemplate) return null;
-    const stage = pipelineTemplate.stages[pipelineStageIndex];
+    const stage = pipelineTemplate.nodes?.[pipelineStageIndex];
     const stageName = stage?.name || `${t.task.stageLabel} ${pipelineStageIndex + 1}`;
     if (pipelineStatus === 'waiting_approval') {
       return t.task.pipelineStageCompleted.replace('{name}', stageName);
@@ -1265,6 +1388,62 @@ function TaskDetailContent() {
                   })}
                 </div>
               )}
+
+              {/* Workflow Nodes Progress */}
+              {pipelineTemplate && pipelineTemplate.nodes && pipelineTemplate.nodes.length > 0 && (
+                <div className="bg-muted/40 mt-2 rounded-lg px-2.5 py-2">
+                  <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <ListChecks className="size-3.5" />
+                    <span>{t.task.workflowNodes || 'Workflow Nodes'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {pipelineTemplate.nodes.map((node, index) => {
+                      const isCompleted = index < pipelineStageIndex;
+                      const isCurrent = index === pipelineStageIndex;
+                      const isFailed = isCurrent && pipelineStatus === 'failed';
+                      const isWaiting = isCurrent && pipelineStatus === 'waiting_approval';
+                      const isRunningNode = isCurrent && pipelineStatus === 'running';
+
+                      return (
+                        <div key={node.id} className="flex items-center">
+                          <div
+                            className={cn(
+                              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                              isCompleted && 'bg-green-500/10 text-green-600',
+                              isFailed && 'bg-red-500/10 text-red-600',
+                              isWaiting && 'bg-amber-500/10 text-amber-600',
+                              isRunningNode && 'bg-blue-500/10 text-blue-600',
+                              !isCompleted && !isCurrent && 'bg-background/60 text-muted-foreground'
+                            )}
+                            title={node.prompt}
+                          >
+                            {isCompleted && <CheckCircle className="size-3" />}
+                            {isRunningNode && (
+                              <span className="size-2 animate-pulse rounded-full bg-blue-500" />
+                            )}
+                            {isWaiting && <Clock className="size-3" />}
+                            {isFailed && <span className="size-2 rounded-full bg-red-500" />}
+                            {!isCompleted && !isCurrent && (
+                              <span className="size-2 rounded-full bg-muted-foreground/30" />
+                            )}
+                            <span className="max-w-[80px] truncate">
+                              {node.name || `${t.task.stageLabel} ${index + 1}`}
+                            </span>
+                          </div>
+                          {index < pipelineTemplate.nodes.length - 1 && (
+                            <div
+                              className={cn(
+                                'mx-0.5 h-px w-3',
+                                isCompleted ? 'bg-green-500/50' : 'bg-muted-foreground/20'
+                              )}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Output / Conversation Area */}
@@ -1317,6 +1496,16 @@ function TaskDetailContent() {
                         onRejectPlan={rejectPlan}
                       />
                       {isRunning && <RunningIndicator messages={messages} />}
+                      {currentWorkNode?.status === 'in_review' && (
+                        <div className="mt-3">
+                          <WorkNodeReviewPanel
+                            node={currentWorkNode}
+                            executions={workNodeExecutions}
+                            onApprove={handleApproveWorkNode}
+                            onReject={handleRejectWorkNode}
+                          />
+                        </div>
+                      )}
                     </>
                   )}
                   <div ref={messagesEndRef} />

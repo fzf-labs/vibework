@@ -18,10 +18,10 @@ import {
 // Legacy type alias for backward compatibility
 type PipelineTemplateFormValues = WorkflowTemplateFormValues;
 
-interface PipelineTemplateStage {
+interface WorkNodeTemplate {
   id: string;
-  template_id: string;
-  stage_order: number;
+  workflow_template_id: string;
+  node_order: number;
   name: string;
   prompt: string;
   requires_approval: boolean;
@@ -36,16 +36,16 @@ interface PipelineTemplate {
   description?: string | null;
   scope: 'global' | 'project';
   project_id?: string | null;
-  stages: PipelineTemplateStage[];
+  nodes: WorkNodeTemplate[];
   created_at: string;
   updated_at: string;
 }
 
-const toStageInputs = (values: PipelineTemplateFormValues) =>
+const toNodeInputs = (values: PipelineTemplateFormValues) =>
   values.nodes.map((node, index) => ({
     name: node.name,
     prompt: node.prompt,
-    stage_order: index + 1,
+    node_order: index + 1,
     requires_approval: node.requiresApproval,
     continue_on_error: node.continueOnError,
   }));
@@ -103,21 +103,21 @@ export function PipelineTemplatesPage() {
   const handleSubmit = async (values: PipelineTemplateFormValues) => {
     if (!projectId) return;
     if (editingTemplate) {
-      await db.updatePipelineTemplate({
+      await db.updateWorkflowTemplate({
         id: editingTemplate.id,
         scope: 'project',
         project_id: projectId,
         name: values.name,
         description: values.description,
-        stages: toStageInputs(values),
+        nodes: toNodeInputs(values),
       });
     } else {
-      await db.createPipelineTemplate({
+      await db.createWorkflowTemplate({
         scope: 'project',
         project_id: projectId,
         name: values.name,
         description: values.description,
-        stages: toStageInputs(values),
+        nodes: toNodeInputs(values),
       });
     }
     await loadTemplates();
@@ -131,13 +131,13 @@ export function PipelineTemplatesPage() {
     ) {
       return;
     }
-    await db.deletePipelineTemplate(template.id, 'project');
+    await db.deleteWorkflowTemplate(template.id, 'project');
     await loadTemplates();
   };
 
   const handleCopyFromGlobal = async () => {
     if (!projectId || !copyTemplateId) return;
-    await db.createProjectTemplateFromGlobal(copyTemplateId, projectId);
+    await db.copyGlobalWorkflowToProject(copyTemplateId, projectId);
     setCopyTemplateId('');
     await loadTemplates();
   };
@@ -145,7 +145,7 @@ export function PipelineTemplatesPage() {
   const stageCount = (template: PipelineTemplate) =>
     t.task.pipelineTemplateStageCount.replace(
       '{count}',
-      `${template.stages?.length || 0}`
+      `${template.nodes?.length || 0}`
     );
 
   const dialogTitle = editingTemplate
@@ -290,11 +290,11 @@ export function PipelineTemplatesPage() {
             ? {
                 name: editingTemplate.name,
                 description: editingTemplate.description || undefined,
-                nodes: editingTemplate.stages.map((stage) => ({
-                  name: stage.name,
-                  prompt: stage.prompt,
-                  requiresApproval: stage.requires_approval,
-                  continueOnError: stage.continue_on_error,
+                nodes: (editingTemplate.nodes || []).map((node) => ({
+                  name: node.name,
+                  prompt: node.prompt,
+                  requiresApproval: node.requires_approval,
+                  continueOnError: node.continue_on_error,
                 })),
               }
             : null

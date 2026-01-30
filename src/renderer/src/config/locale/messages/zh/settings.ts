@@ -7,7 +7,7 @@ export default {
   editor: '编辑器',
   cli: 'Agent CLI',
   git: 'Git',
-  pipelineTemplates: '流水线模板',
+  pipelineTemplates: '工作流',
   mcp: 'MCP',
   connector: '连接器',
   about: '关于',
@@ -76,9 +76,9 @@ export default {
   gitWorktreePrefixError: '前缀不能为空。',
 
   // Pipeline Templates
-  globalPipelineTemplatesTitle: '全局流水线模板',
-  globalPipelineTemplatesDescription: '管理可复制到项目中的全局模板。',
-  globalPipelineTemplatesEmpty: '暂无全局模板。',
+  globalPipelineTemplatesTitle: '全局工作流',
+  globalPipelineTemplatesDescription: '管理可复制到项目中的全局工作流。',
+  globalPipelineTemplatesEmpty: '暂无全局工作流。',
 
   // Skills
   skills: 'Skills',

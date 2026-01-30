@@ -1,6 +1,6 @@
 ## Why
 
-当前系统中"任务"、"流水线模板"、"流水线阶段"、"Agent CLI 执行"等概念混乱，状态定义不清晰。Task 的状态混合了执行状态和流程状态，缺少 Workflow（工作流）和 WorkNode（工作节点）的中间抽象层，导致代码难以维护和扩展。需要按照新的层级设计（Project → Task → Workflow → WorkNode → Agent CLI）重构整个任务系统。
+当前系统中"任务"、"工作流"、"工作流阶段"、"Agent CLI 执行"等概念混乱，状态定义不清晰。Task 的状态混合了执行状态和流程状态，缺少 Workflow（工作流）和 WorkNode（工作节点）的中间抽象层，导致代码难以维护和扩展。需要按照新的层级设计（Project → Task → Workflow → WorkNode → Agent CLI）重构整个任务系统。
 
 ## What Changes
 

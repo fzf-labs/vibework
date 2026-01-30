@@ -112,6 +112,14 @@ export const db = {
     return window.api.database.updateWorkNodeStatus(id, status) as Promise<unknown>
   },
 
+  approveWorkNode: (id: string): Promise<void> => {
+    return window.api.database.approveWorkNode(id) as Promise<void>
+  },
+
+  rejectWorkNode: (id: string): Promise<void> => {
+    return window.api.database.rejectWorkNode(id) as Promise<void>
+  },
+
   // ============ AgentExecution 操作 ============
   createAgentExecution: (workNodeId: string): Promise<unknown> => {
     return window.api.database.createAgentExecution(workNodeId) as Promise<unknown>

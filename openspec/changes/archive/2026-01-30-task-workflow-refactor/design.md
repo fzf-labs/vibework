@@ -12,8 +12,8 @@
 - `sessions` - 会话
 - `tasks` - 任务（直接引用 `pipeline_template_id`）
 - `messages` - 消息
-- `global_task_pipeline_templates` / `projects_task_pipeline_templates` - 流水线模板
-- `global_task_pipeline_template_stages` / `projects_task_pipeline_template_stages` - 流水线阶段模板
+- `global_task_pipeline_templates` / `projects_task_pipeline_templates` - 工作流
+- `global_task_pipeline_template_stages` / `projects_task_pipeline_template_stages` - 工作流阶段模板
 
 ## Goals / Non-Goals
 

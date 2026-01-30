@@ -991,6 +991,14 @@ app.whenReady().then(() => {
     return databaseService.updateWorkNodeStatus(id, status)
   })
 
+  ipcMain.handle('db:approveWorkNode', (_, id: string) => {
+    return databaseService.approveWorkNode(id)
+  })
+
+  ipcMain.handle('db:rejectWorkNode', (_, id: string) => {
+    return databaseService.rejectWorkNode(id)
+  })
+
   // AgentExecution operations
   ipcMain.handle('db:createAgentExecution', (_, workNodeId: string) => {
     return databaseService.createAgentExecution(workNodeId)

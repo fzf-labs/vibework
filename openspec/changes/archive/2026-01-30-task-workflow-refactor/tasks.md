@@ -25,7 +25,7 @@
 - [x] 3.1 实现 WorkflowTemplate CRUD 方法（全局）
 - [x] 3.2 实现 WorkflowTemplate CRUD 方法（项目级）
 - [x] 3.3 实现 WorkNodeTemplate CRUD 方法
-- [x] 3.4 实现从全局模板复制到项目的方法
+- [x] 3.4 实现从全局工作流复制到项目的方法
 - [x] 3.5 实现 Workflow 实例创建和查询方法
 - [x] 3.6 实现 WorkNode 实例创建和状态更新方法
 - [x] 3.7 实现 AgentExecution 记录创建和更新方法
@@ -60,7 +60,7 @@
 
 - [x] 7.1 更新 src/renderer/src/config/locale/messages/zh/task.ts 翻译（已有完整翻译，保持向后兼容）
 - [x] 7.2 更新 src/renderer/src/config/locale/messages/en/task.ts 翻译（已有完整翻译，保持向后兼容）
-- [x] 7.3 更新 settings.ts 中的流水线相关翻译 key（已有完整翻译，保持向后兼容）
+- [x] 7.3 更新 settings.ts 中的工作流相关翻译 key（已有完整翻译，保持向后兼容）
 
 ## 8. 清理和验证
 
@@ -68,5 +68,5 @@
 - [x] 8.2 运行类型检查确保无编译错误
 - [ ] 8.3 测试全局工作流模板 CRUD 功能
 - [ ] 8.4 测试项目工作流模板 CRUD 功能
-- [ ] 8.5 测试从全局模板复制到项目功能
+- [ ] 8.5 测试从全局工作流复制到项目功能
 - [ ] 8.6 测试任务执行时工作流实例化功能

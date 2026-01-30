@@ -298,9 +298,6 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
       CREATE INDEX IF NOT EXISTS idx_messages_task_id ON messages(task_id);
-      CREATE INDEX IF NOT EXISTS idx_projects_task_pipeline_templates_project_id ON projects_task_pipeline_templates(project_id);
-      CREATE INDEX IF NOT EXISTS idx_global_task_pipeline_template_stages_template_id ON global_task_pipeline_template_stages(template_id);
-      CREATE INDEX IF NOT EXISTS idx_projects_task_pipeline_template_stages_template_id ON projects_task_pipeline_template_stages(template_id);
     `)
   }
 
@@ -865,6 +862,13 @@ export class DatabaseService {
     const fields: string[] = []
     const values: any[] = []
 
+    // 获取当前任务状态用于检测状态变更
+    const currentTask = this.getTask(id)
+    if (!currentTask) return null
+
+    const oldStatus = currentTask.status
+    const newStatus = updates.status
+
     if (updates.status !== undefined) {
       fields.push('status = ?')
       values.push(updates.status)
@@ -921,6 +925,12 @@ export class DatabaseService {
 
     const stmt = this.db.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`)
     stmt.run(...values)
+
+    // 状态变更触发：todo → in_progress 时自动实例化工作流
+    if (oldStatus === 'todo' && newStatus === 'in_progress') {
+      this.onTaskStarted(id, currentTask)
+    }
+
     return this.getTask(id)
   }
 
@@ -928,6 +938,117 @@ export class DatabaseService {
     const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?')
     const result = stmt.run(id)
     return result.changes > 0
+  }
+
+  // ============ 任务状态变更触发 ============
+  private onTaskStarted(taskId: string, task: Task): void {
+    const templateId = task.pipeline_template_id
+    if (!templateId) return
+
+    // 获取工作流模板
+    const template = this.getWorkflowTemplate(templateId)
+    if (!template) return
+
+    // 实例化工作流
+    this.instantiateWorkflow(taskId, template)
+  }
+
+  private instantiateWorkflow(taskId: string, template: WorkflowTemplate): Workflow {
+    // 创建 Workflow 实例
+    const workflow = this.createWorkflow(taskId, template.id, template.scope)
+
+    // 创建所有 WorkNode 实例
+    for (const nodeTemplate of template.nodes) {
+      this.createWorkNode(workflow.id, nodeTemplate.id, nodeTemplate.node_order)
+    }
+
+    // 更新工作流状态为 in_progress
+    this.updateWorkflowStatus(workflow.id, 'in_progress')
+
+    // 启动第一个节点
+    const nodes = this.getWorkNodesByWorkflowId(workflow.id)
+    if (nodes.length > 0) {
+      this.startWorkNode(nodes[0].id)
+    }
+
+    return this.getWorkflow(workflow.id)!
+  }
+
+  private startWorkNode(workNodeId: string): void {
+    this.updateWorkNodeStatus(workNodeId, 'in_progress')
+    this.createAgentExecution(workNodeId)
+  }
+
+  syncTaskStatusFromWorkflow(workflowId: string): void {
+    const workflow = this.getWorkflow(workflowId)
+    if (!workflow) return
+
+    const taskStatus = this.deriveTaskStatusFromWorkflow(workflow)
+    if (taskStatus) {
+      const now = new Date().toISOString()
+      this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
+        .run(taskStatus, now, workflow.task_id)
+    }
+  }
+
+  private deriveTaskStatusFromWorkflow(workflow: Workflow): string | null {
+    const nodes = this.getWorkNodesByWorkflowId(workflow.id)
+
+    // 检查是否有节点在审核中
+    const hasReviewNode = nodes.some(n => n.status === 'in_review')
+    if (hasReviewNode) return 'in_review'
+
+    // 检查工作流状态
+    if (workflow.status === 'done') return 'done'
+    if (workflow.status === 'error') return 'error'
+    if (workflow.status === 'in_progress') return 'in_progress'
+
+    return null
+  }
+
+  completeWorkNode(workNodeId: string, requiresApproval: boolean): void {
+    if (requiresApproval) {
+      this.updateWorkNodeStatus(workNodeId, 'in_review')
+    } else {
+      this.finalizeWorkNode(workNodeId)
+    }
+  }
+
+  private finalizeWorkNode(workNodeId: string): void {
+    this.updateWorkNodeStatus(workNodeId, 'done')
+
+    const node = this.getWorkNode(workNodeId)
+    if (!node) return
+
+    const workflow = this.getWorkflow(node.workflow_id)
+    if (!workflow) return
+
+    this.advanceToNextNode(workflow)
+  }
+
+  private advanceToNextNode(workflow: Workflow): void {
+    const nodes = this.getWorkNodesByWorkflowId(workflow.id)
+    const nextIndex = workflow.current_node_index + 1
+
+    if (nextIndex >= nodes.length) {
+      // 所有节点完成
+      this.updateWorkflowStatus(workflow.id, 'done')
+      this.syncTaskStatusFromWorkflow(workflow.id)
+      return
+    }
+
+    // 推进到下一个节点
+    this.updateWorkflowStatus(workflow.id, 'in_progress', nextIndex)
+    this.startWorkNode(nodes[nextIndex].id)
+    this.syncTaskStatusFromWorkflow(workflow.id)
+  }
+
+  approveWorkNode(workNodeId: string): void {
+    this.finalizeWorkNode(workNodeId)
+  }
+
+  rejectWorkNode(workNodeId: string): void {
+    this.startWorkNode(workNodeId)
   }
 
   // ============ Message 操作 ============
