@@ -93,7 +93,8 @@ interface UpdateTaskInput {
   favorite?: boolean
 }
 
-interface PipelineTemplate {
+// Workflow 相关类型
+interface WorkflowTemplate {
   id: string
   name: string
   description: string | null
@@ -101,13 +102,13 @@ interface PipelineTemplate {
   project_id: string | null
   created_at: string
   updated_at: string
-  stages: PipelineTemplateStage[]
+  nodes: WorkNodeTemplate[]
 }
 
-interface PipelineTemplateStage {
+interface WorkNodeTemplate {
   id: string
-  template_id: string
-  stage_order: number
+  workflow_template_id: string
+  node_order: number
   name: string
   prompt: string
   requires_approval: boolean
@@ -116,29 +117,63 @@ interface PipelineTemplateStage {
   updated_at: string
 }
 
-interface CreatePipelineTemplateStageInput {
+interface Workflow {
+  id: string
+  task_id: string
+  workflow_template_id: string
+  workflow_template_scope: 'global' | 'project'
+  current_node_index: number
+  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error'
+  created_at: string
+  updated_at: string
+}
+
+interface WorkNode {
+  id: string
+  workflow_id: string
+  work_node_template_id: string
+  node_order: number
+  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error'
+  created_at: string
+  updated_at: string
+}
+
+interface AgentExecution {
+  id: string
+  work_node_id: string
+  execution_index: number
+  status: 'idle' | 'running' | 'completed'
+  started_at: string | null
+  completed_at: string | null
+  cost: number | null
+  duration: number | null
+  created_at: string
+}
+
+// Workflow 输入类型
+interface CreateWorkNodeTemplateInput {
   name: string
   prompt: string
-  stage_order: number
+  node_order: number
   requires_approval?: boolean
   continue_on_error?: boolean
 }
 
-interface CreatePipelineTemplateInput {
+interface CreateWorkflowTemplateInput {
   name: string
   description?: string
   scope: 'global' | 'project'
   project_id?: string
-  stages: CreatePipelineTemplateStageInput[]
+  nodes: CreateWorkNodeTemplateInput[]
 }
 
-interface UpdatePipelineTemplateInput {
+interface UpdateWorkflowTemplateInput {
   id: string
   name: string
   description?: string
   scope: 'global' | 'project'
   project_id?: string
-  stages: CreatePipelineTemplateStageInput[]
+  nodes: CreateWorkNodeTemplateInput[]
 }
 
 interface CreateMessageInput {
@@ -233,9 +268,6 @@ export class DatabaseService {
       )
     `)
 
-    // 创建流水线模板表（全局/项目分离）
-    this.ensureTaskPipelineTables()
-
     // 创建 messages 表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -285,17 +317,18 @@ export class DatabaseService {
     this.ensureColumn('tasks', 'cost', 'REAL')
     this.ensureColumn('tasks', 'duration', 'REAL')
     this.ensureColumn('tasks', 'favorite', 'INTEGER DEFAULT 0')
-    this.ensureTaskPipelineTables()
-    this.migrateLegacyPipelineTemplates()
+    this.ensureColumn('tasks', 'workflow_id', 'TEXT')
+    this.ensureWorkflowTables()
     this.backfillTaskTitles()
     this.backfillWorkspacePaths()
     this.migrateToUlidIdentifiers()
     this.migrateRemoveFileLibrary()
   }
 
-  private ensureTaskPipelineTables(): void {
+  private ensureWorkflowTables(): void {
+    // 全局工作流模板表
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS global_task_pipeline_templates (
+      CREATE TABLE IF NOT EXISTS global_workflow_templates (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
@@ -303,22 +336,24 @@ export class DatabaseService {
         updated_at TEXT NOT NULL
       )
     `)
+    // 全局工作节点模板表
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS global_task_pipeline_template_stages (
+      CREATE TABLE IF NOT EXISTS global_work_node_templates (
         id TEXT PRIMARY KEY,
-        template_id TEXT NOT NULL,
-        stage_order INTEGER NOT NULL,
+        workflow_template_id TEXT NOT NULL,
+        node_order INTEGER NOT NULL,
         name TEXT NOT NULL,
         prompt TEXT NOT NULL,
         requires_approval INTEGER DEFAULT 1,
         continue_on_error INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        FOREIGN KEY (template_id) REFERENCES global_task_pipeline_templates(id) ON DELETE CASCADE
+        FOREIGN KEY (workflow_template_id) REFERENCES global_workflow_templates(id) ON DELETE CASCADE
       )
     `)
+    // 项目工作流模板表
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS projects_task_pipeline_templates (
+      CREATE TABLE IF NOT EXISTS project_workflow_templates (
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -328,109 +363,63 @@ export class DatabaseService {
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )
     `)
+    // 项目工作节点模板表
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS projects_task_pipeline_template_stages (
+      CREATE TABLE IF NOT EXISTS project_work_node_templates (
         id TEXT PRIMARY KEY,
-        template_id TEXT NOT NULL,
-        stage_order INTEGER NOT NULL,
+        workflow_template_id TEXT NOT NULL,
+        node_order INTEGER NOT NULL,
         name TEXT NOT NULL,
         prompt TEXT NOT NULL,
         requires_approval INTEGER DEFAULT 1,
         continue_on_error INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        FOREIGN KEY (template_id) REFERENCES projects_task_pipeline_templates(id) ON DELETE CASCADE
+        FOREIGN KEY (workflow_template_id) REFERENCES project_workflow_templates(id) ON DELETE CASCADE
       )
     `)
-  }
-
-  private migrateLegacyPipelineTemplates(): void {
-    if (!this.tableExists('pipeline_templates')) return
-    if (!this.tableExists('pipeline_template_stages')) return
-
-    const globalCount = this.db
-      .prepare('SELECT COUNT(*) as count FROM global_task_pipeline_templates')
-      .get() as { count: number }
-    const projectCount = this.db
-      .prepare('SELECT COUNT(*) as count FROM projects_task_pipeline_templates')
-      .get() as { count: number }
-
-    if (globalCount.count > 0 || projectCount.count > 0) return
-
-    const templates = this.db.prepare('SELECT * FROM pipeline_templates').all() as any[]
-    if (templates.length === 0) return
-
-    const stages = this.db.prepare('SELECT * FROM pipeline_template_stages').all() as any[]
-
-    const migrate = this.db.transaction(() => {
-      const insertGlobal = this.db.prepare(`
-        INSERT INTO global_task_pipeline_templates (id, name, description, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-      `)
-      const insertProject = this.db.prepare(`
-        INSERT INTO projects_task_pipeline_templates (id, project_id, name, description, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `)
-      const insertGlobalStage = this.db.prepare(`
-        INSERT INTO global_task_pipeline_template_stages (
-          id, template_id, stage_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      const insertProjectStage = this.db.prepare(`
-        INSERT INTO projects_task_pipeline_template_stages (
-          id, template_id, stage_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-
-      for (const template of templates) {
-        const scope = template.scope === 'project' ? 'project' : 'global'
-        if (scope === 'project' && !template.project_id) {
-          console.warn(
-            '[DatabaseService] Project pipeline template missing project_id, treating as global:',
-            template.id
-          )
-        }
-        if (scope === 'project' && template.project_id) {
-          insertProject.run(
-            template.id,
-            template.project_id,
-            template.name,
-            template.description ?? null,
-            template.created_at,
-            template.updated_at
-          )
-        } else {
-          insertGlobal.run(
-            template.id,
-            template.name,
-            template.description ?? null,
-            template.created_at,
-            template.updated_at
-          )
-        }
-
-        const relatedStages = stages.filter((stage) => stage.template_id === template.id)
-        relatedStages.forEach((stage) => {
-          const insert =
-            scope === 'project' && template.project_id
-              ? insertProjectStage
-              : insertGlobalStage
-          insert.run(
-            stage.id,
-            stage.template_id,
-            stage.stage_order,
-            stage.name,
-            stage.prompt,
-            stage.requires_approval ?? 1,
-            stage.continue_on_error ?? 0,
-            stage.created_at,
-            stage.updated_at
-          )
-        })
-      }
-    })
-
-    migrate()
+    // 工作流实例表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS workflows (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        workflow_template_id TEXT NOT NULL,
+        workflow_template_scope TEXT NOT NULL,
+        current_node_index INTEGER DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'todo',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      )
+    `)
+    // 工作节点实例表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS work_nodes (
+        id TEXT PRIMARY KEY,
+        workflow_id TEXT NOT NULL,
+        work_node_template_id TEXT NOT NULL,
+        node_order INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'todo',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+      )
+    `)
+    // Agent 执行记录表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_executions (
+        id TEXT PRIMARY KEY,
+        work_node_id TEXT NOT NULL,
+        execution_index INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL DEFAULT 'idle',
+        started_at TEXT,
+        completed_at TEXT,
+        cost REAL,
+        duration REAL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (work_node_id) REFERENCES work_nodes(id) ON DELETE CASCADE
+      )
+    `)
   }
 
   private backfillTaskTitles(): void {
@@ -1057,277 +1046,263 @@ export class DatabaseService {
     return result.changes > 0
   }
 
-  // ============ Pipeline Template 操作 ============
-  createPipelineTemplate(input: CreatePipelineTemplateInput): PipelineTemplate {
+  // ============ Workflow Template 操作 ============
+  createWorkflowTemplate(input: CreateWorkflowTemplateInput): WorkflowTemplate {
     const now = new Date().toISOString()
     const templateId = newUlid()
-    const stages = input.stages ?? []
+    const nodes = input.nodes ?? []
 
     if (input.scope === 'project' && !input.project_id) {
-      throw new Error('Project pipeline template requires project_id')
+      throw new Error('Project workflow template requires project_id')
     }
 
     const create = this.db.transaction(() => {
       if (input.scope === 'global') {
-        const stmt = this.db.prepare(`
-          INSERT INTO global_task_pipeline_templates (id, name, description, created_at, updated_at)
+        this.db.prepare(`
+          INSERT INTO global_workflow_templates (id, name, description, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?)
-        `)
-        stmt.run(templateId, input.name, input.description || null, now, now)
+        `).run(templateId, input.name, input.description || null, now, now)
       } else {
-        const stmt = this.db.prepare(`
-          INSERT INTO projects_task_pipeline_templates (id, project_id, name, description, created_at, updated_at)
+        this.db.prepare(`
+          INSERT INTO project_workflow_templates (id, project_id, name, description, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `)
-        stmt.run(
-          templateId,
-          input.project_id!,
-          input.name,
-          input.description || null,
-          now,
-          now
-        )
+        `).run(templateId, input.project_id!, input.name, input.description || null, now, now)
       }
 
-      const insertStage = this.db.prepare(
+      const insertNode = this.db.prepare(
         input.scope === 'global'
-          ? `
-        INSERT INTO global_task_pipeline_template_stages (
-          id, template_id, stage_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-          : `
-        INSERT INTO projects_task_pipeline_template_stages (
-          id, template_id, stage_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
+          ? `INSERT INTO global_work_node_templates
+             (id, workflow_template_id, node_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          : `INSERT INTO project_work_node_templates
+             (id, workflow_template_id, node_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
 
-      stages.forEach((stage) => {
-        insertStage.run(
-          newUlid(),
-          templateId,
-          stage.stage_order,
-          stage.name,
-          stage.prompt,
-          stage.requires_approval ? 1 : 0,
-          stage.continue_on_error ? 1 : 0,
-          now,
-          now
+      nodes.forEach((node) => {
+        insertNode.run(
+          newUlid(), templateId, node.node_order, node.name, node.prompt,
+          node.requires_approval ? 1 : 0, node.continue_on_error ? 1 : 0, now, now
         )
       })
     })
 
     create()
-    return this.getPipelineTemplateByScope(templateId, input.scope)!
+    return this.getWorkflowTemplateByScope(templateId, input.scope)!
   }
 
-  getPipelineTemplate(id: string): PipelineTemplate | null {
-    const projectTemplate = this.getPipelineTemplateByScope(id, 'project')
-    if (projectTemplate) return projectTemplate
-    return this.getPipelineTemplateByScope(id, 'global')
-  }
-
-  getPipelineTemplatesByProject(projectId: string): PipelineTemplate[] {
+  getGlobalWorkflowTemplates(): WorkflowTemplate[] {
     const rows = this.db
-      .prepare(
-        'SELECT * FROM projects_task_pipeline_templates WHERE project_id = ? ORDER BY updated_at DESC'
-      )
-      .all(projectId) as PipelineTemplate[]
-    return rows.map((row) => ({
-      ...row,
-      scope: 'project' as const,
-      stages: this.getPipelineTemplateStages(row.id, 'project')
-    }))
-  }
-
-  getGlobalPipelineTemplates(): PipelineTemplate[] {
-    const rows = this.db
-      .prepare('SELECT * FROM global_task_pipeline_templates ORDER BY updated_at DESC')
-      .all() as PipelineTemplate[]
+      .prepare('SELECT * FROM global_workflow_templates ORDER BY updated_at DESC')
+      .all() as WorkflowTemplate[]
     return rows.map((row) => ({
       ...row,
       scope: 'global' as const,
       project_id: null,
-      stages: this.getPipelineTemplateStages(row.id, 'global')
+      nodes: this.getWorkNodeTemplates(row.id, 'global')
     }))
   }
 
-  createProjectTemplateFromGlobal(
-    globalTemplateId: string,
-    projectId: string
-  ): PipelineTemplate {
-    const template = this.getPipelineTemplateByScope(globalTemplateId, 'global')
-    if (!template) {
-      throw new Error('Global template not found')
-    }
+  getWorkflowTemplatesByProject(projectId: string): WorkflowTemplate[] {
+    const rows = this.db
+      .prepare('SELECT * FROM project_workflow_templates WHERE project_id = ? ORDER BY updated_at DESC')
+      .all(projectId) as WorkflowTemplate[]
+    return rows.map((row) => ({
+      ...row,
+      scope: 'project' as const,
+      nodes: this.getWorkNodeTemplates(row.id, 'project')
+    }))
+  }
 
-    return this.createPipelineTemplate({
+  getWorkflowTemplate(id: string): WorkflowTemplate | null {
+    const projectTemplate = this.getWorkflowTemplateByScope(id, 'project')
+    if (projectTemplate) return projectTemplate
+    return this.getWorkflowTemplateByScope(id, 'global')
+  }
+
+  updateWorkflowTemplate(input: UpdateWorkflowTemplateInput): WorkflowTemplate {
+    const now = new Date().toISOString()
+    const existing = this.getWorkflowTemplateByScope(input.id, input.scope)
+    if (!existing) throw new Error('Workflow template not found')
+
+    const update = this.db.transaction(() => {
+      if (input.scope === 'global') {
+        this.db.prepare(
+          'UPDATE global_workflow_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
+        ).run(input.name, input.description || null, now, input.id)
+        this.db.prepare('DELETE FROM global_work_node_templates WHERE workflow_template_id = ?').run(input.id)
+      } else {
+        this.db.prepare(
+          'UPDATE project_workflow_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
+        ).run(input.name, input.description || null, now, input.id)
+        this.db.prepare('DELETE FROM project_work_node_templates WHERE workflow_template_id = ?').run(input.id)
+      }
+
+      const insertNode = this.db.prepare(
+        input.scope === 'global'
+          ? `INSERT INTO global_work_node_templates (id, workflow_template_id, node_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          : `INSERT INTO project_work_node_templates (id, workflow_template_id, node_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      input.nodes.forEach((node) => {
+        insertNode.run(newUlid(), input.id, node.node_order, node.name, node.prompt, node.requires_approval ? 1 : 0, node.continue_on_error ? 1 : 0, now, now)
+      })
+    })
+    update()
+    return this.getWorkflowTemplateByScope(input.id, input.scope)!
+  }
+
+  deleteWorkflowTemplate(id: string, scope: 'global' | 'project'): boolean {
+    const del = this.db.transaction(() => {
+      if (scope === 'global') {
+        this.db.prepare('DELETE FROM global_work_node_templates WHERE workflow_template_id = ?').run(id)
+        return this.db.prepare('DELETE FROM global_workflow_templates WHERE id = ?').run(id).changes > 0
+      }
+      this.db.prepare('DELETE FROM project_work_node_templates WHERE workflow_template_id = ?').run(id)
+      return this.db.prepare('DELETE FROM project_workflow_templates WHERE id = ?').run(id).changes > 0
+    })
+    return del()
+  }
+
+  copyGlobalWorkflowToProject(globalTemplateId: string, projectId: string): WorkflowTemplate {
+    const template = this.getWorkflowTemplateByScope(globalTemplateId, 'global')
+    if (!template) throw new Error('Global template not found')
+    return this.createWorkflowTemplate({
       name: template.name,
       description: template.description ?? undefined,
       scope: 'project',
       project_id: projectId,
-      stages: template.stages.map((stage) => ({
-        name: stage.name,
-        prompt: stage.prompt,
-        stage_order: stage.stage_order,
-        requires_approval: Boolean(stage.requires_approval),
-        continue_on_error: Boolean(stage.continue_on_error)
+      nodes: template.nodes.map((node) => ({
+        name: node.name,
+        prompt: node.prompt,
+        node_order: node.node_order,
+        requires_approval: node.requires_approval,
+        continue_on_error: node.continue_on_error
       }))
     })
   }
 
-  updatePipelineTemplate(input: UpdatePipelineTemplateInput): PipelineTemplate {
-    const now = new Date().toISOString()
-
-    const existing = this.getPipelineTemplateByScope(input.id, input.scope)
-    if (!existing) {
-      throw new Error('Pipeline template not found')
-    }
-
-    const projectId =
-      input.scope === 'project'
-        ? input.project_id || existing.project_id
-        : null
-
-    if (input.scope === 'project' && !projectId) {
-      throw new Error('Project pipeline template requires project_id')
-    }
-
-    const update = this.db.transaction(() => {
-      if (input.scope === 'global') {
-        this.db
-          .prepare(
-            'UPDATE global_task_pipeline_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
-          )
-          .run(input.name, input.description || null, now, input.id)
-        this.db
-          .prepare(
-            'DELETE FROM global_task_pipeline_template_stages WHERE template_id = ?'
-          )
-          .run(input.id)
-      } else {
-        this.db
-          .prepare(
-            'UPDATE projects_task_pipeline_templates SET name = ?, description = ?, updated_at = ?, project_id = ? WHERE id = ?'
-          )
-          .run(
-            input.name,
-            input.description || null,
-            now,
-            projectId,
-            input.id
-          )
-        this.db
-          .prepare(
-            'DELETE FROM projects_task_pipeline_template_stages WHERE template_id = ?'
-          )
-          .run(input.id)
-      }
-
-      const insertStage = this.db.prepare(
-        input.scope === 'global'
-          ? `
-        INSERT INTO global_task_pipeline_template_stages (
-          id, template_id, stage_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-          : `
-        INSERT INTO projects_task_pipeline_template_stages (
-          id, template_id, stage_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-      )
-
-      input.stages.forEach((stage) => {
-        insertStage.run(
-          newUlid(),
-          input.id,
-          stage.stage_order,
-          stage.name,
-          stage.prompt,
-          stage.requires_approval ? 1 : 0,
-          stage.continue_on_error ? 1 : 0,
-          now,
-          now
-        )
-      })
-    })
-
-    update()
-    return this.getPipelineTemplateByScope(input.id, input.scope)!
-  }
-
-  deletePipelineTemplate(id: string, scope: 'global' | 'project'): boolean {
-    const del = this.db.transaction(() => {
-      if (scope === 'global') {
-        this.db
-          .prepare(
-            'DELETE FROM global_task_pipeline_template_stages WHERE template_id = ?'
-          )
-          .run(id)
-        const result = this.db
-          .prepare('DELETE FROM global_task_pipeline_templates WHERE id = ?')
-          .run(id)
-        return result.changes > 0
-      }
-      this.db
-        .prepare(
-          'DELETE FROM projects_task_pipeline_template_stages WHERE template_id = ?'
-        )
-        .run(id)
-      const result = this.db
-        .prepare('DELETE FROM projects_task_pipeline_templates WHERE id = ?')
-        .run(id)
-      return result.changes > 0
-    })
-
-    return del()
-  }
-
-  private getPipelineTemplateByScope(
-    id: string,
-    scope: 'global' | 'project'
-  ): PipelineTemplate | null {
+  private getWorkflowTemplateByScope(id: string, scope: 'global' | 'project'): WorkflowTemplate | null {
     if (scope === 'global') {
-      const template = this.db
-        .prepare('SELECT * FROM global_task_pipeline_templates WHERE id = ?')
-        .get(id) as PipelineTemplate | undefined
+      const template = this.db.prepare('SELECT * FROM global_workflow_templates WHERE id = ?').get(id) as WorkflowTemplate | undefined
       if (!template) return null
-      return {
-        ...template,
-        scope: 'global',
-        project_id: null,
-        stages: this.getPipelineTemplateStages(id, 'global')
-      }
+      return { ...template, scope: 'global', project_id: null, nodes: this.getWorkNodeTemplates(id, 'global') }
     }
-    const template = this.db
-      .prepare('SELECT * FROM projects_task_pipeline_templates WHERE id = ?')
-      .get(id) as PipelineTemplate | undefined
+    const template = this.db.prepare('SELECT * FROM project_workflow_templates WHERE id = ?').get(id) as WorkflowTemplate | undefined
     if (!template) return null
-    return {
-      ...template,
-      scope: 'project',
-      stages: this.getPipelineTemplateStages(id, 'project')
-    }
+    return { ...template, scope: 'project', nodes: this.getWorkNodeTemplates(id, 'project') }
   }
 
-  private getPipelineTemplateStages(
-    templateId: string,
-    scope: 'global' | 'project'
-  ): PipelineTemplateStage[] {
-    const rows = this.db
-      .prepare(
-        scope === 'global'
-          ? 'SELECT * FROM global_task_pipeline_template_stages WHERE template_id = ? ORDER BY stage_order ASC'
-          : 'SELECT * FROM projects_task_pipeline_template_stages WHERE template_id = ? ORDER BY stage_order ASC'
-      )
-      .all(templateId) as PipelineTemplateStage[]
-    return rows.map((stage) => ({
-      ...stage,
-      requires_approval: Boolean(stage.requires_approval),
-      continue_on_error: Boolean(stage.continue_on_error)
+  private getWorkNodeTemplates(templateId: string, scope: 'global' | 'project'): WorkNodeTemplate[] {
+    const rows = this.db.prepare(
+      scope === 'global'
+        ? 'SELECT * FROM global_work_node_templates WHERE workflow_template_id = ? ORDER BY node_order ASC'
+        : 'SELECT * FROM project_work_node_templates WHERE workflow_template_id = ? ORDER BY node_order ASC'
+    ).all(templateId) as WorkNodeTemplate[]
+    return rows.map((node) => ({
+      ...node,
+      requires_approval: Boolean(node.requires_approval),
+      continue_on_error: Boolean(node.continue_on_error)
     }))
+  }
+
+  // ============ Workflow 实例操作 ============
+  createWorkflow(taskId: string, templateId: string, scope: 'global' | 'project'): Workflow {
+    const now = new Date().toISOString()
+    const id = newUlid()
+    this.db.prepare(`
+      INSERT INTO workflows (id, task_id, workflow_template_id, workflow_template_scope, current_node_index, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 0, 'todo', ?, ?)
+    `).run(id, taskId, templateId, scope, now, now)
+    return this.getWorkflow(id)!
+  }
+
+  getWorkflow(id: string): Workflow | null {
+    return this.db.prepare('SELECT * FROM workflows WHERE id = ?').get(id) as Workflow | null
+  }
+
+  getWorkflowByTaskId(taskId: string): Workflow | null {
+    return this.db.prepare('SELECT * FROM workflows WHERE task_id = ?').get(taskId) as Workflow | null
+  }
+
+  updateWorkflowStatus(id: string, status: string, nodeIndex?: number): Workflow | null {
+    const now = new Date().toISOString()
+    if (nodeIndex !== undefined) {
+      this.db.prepare('UPDATE workflows SET status = ?, current_node_index = ?, updated_at = ? WHERE id = ?').run(status, nodeIndex, now, id)
+    } else {
+      this.db.prepare('UPDATE workflows SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
+    }
+    return this.getWorkflow(id)
+  }
+
+  // ============ WorkNode 实例操作 ============
+  createWorkNode(workflowId: string, templateId: string, nodeOrder: number): WorkNode {
+    const now = new Date().toISOString()
+    const id = newUlid()
+    this.db.prepare(`
+      INSERT INTO work_nodes (id, workflow_id, work_node_template_id, node_order, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'todo', ?, ?)
+    `).run(id, workflowId, templateId, nodeOrder, now, now)
+    return this.getWorkNode(id)!
+  }
+
+  getWorkNode(id: string): WorkNode | null {
+    return this.db.prepare('SELECT * FROM work_nodes WHERE id = ?').get(id) as WorkNode | null
+  }
+
+  getWorkNodesByWorkflowId(workflowId: string): WorkNode[] {
+    return this.db.prepare('SELECT * FROM work_nodes WHERE workflow_id = ? ORDER BY node_order ASC').all(workflowId) as WorkNode[]
+  }
+
+  updateWorkNodeStatus(id: string, status: string): WorkNode | null {
+    const now = new Date().toISOString()
+    this.db.prepare('UPDATE work_nodes SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
+    return this.getWorkNode(id)
+  }
+
+  // ============ AgentExecution 操作 ============
+  createAgentExecution(workNodeId: string): AgentExecution {
+    const now = new Date().toISOString()
+    const id = newUlid()
+    // 获取当前最大 execution_index
+    const maxIndex = this.db.prepare(
+      'SELECT MAX(execution_index) as max FROM agent_executions WHERE work_node_id = ?'
+    ).get(workNodeId) as { max: number | null }
+    const nextIndex = (maxIndex.max ?? 0) + 1
+
+    this.db.prepare(`
+      INSERT INTO agent_executions (id, work_node_id, execution_index, status, created_at)
+      VALUES (?, ?, ?, 'idle', ?)
+    `).run(id, workNodeId, nextIndex, now)
+    return this.getAgentExecution(id)!
+  }
+
+  getAgentExecution(id: string): AgentExecution | null {
+    return this.db.prepare('SELECT * FROM agent_executions WHERE id = ?').get(id) as AgentExecution | null
+  }
+
+  getAgentExecutionsByWorkNodeId(workNodeId: string): AgentExecution[] {
+    return this.db.prepare(
+      'SELECT * FROM agent_executions WHERE work_node_id = ? ORDER BY execution_index ASC'
+    ).all(workNodeId) as AgentExecution[]
+  }
+
+  getLatestAgentExecution(workNodeId: string): AgentExecution | null {
+    return this.db.prepare(
+      'SELECT * FROM agent_executions WHERE work_node_id = ? ORDER BY execution_index DESC LIMIT 1'
+    ).get(workNodeId) as AgentExecution | null
+  }
+
+  updateAgentExecutionStatus(id: string, status: 'idle' | 'running' | 'completed', cost?: number, duration?: number): AgentExecution | null {
+    const now = new Date().toISOString()
+    if (status === 'running') {
+      this.db.prepare('UPDATE agent_executions SET status = ?, started_at = ? WHERE id = ?').run(status, now, id)
+    } else if (status === 'completed') {
+      this.db.prepare('UPDATE agent_executions SET status = ?, completed_at = ?, cost = ?, duration = ? WHERE id = ?')
+        .run(status, now, cost ?? null, duration ?? null, id)
+    } else {
+      this.db.prepare('UPDATE agent_executions SET status = ? WHERE id = ?').run(status, id)
+    }
+    return this.getAgentExecution(id)
   }
 
   // ============ 清理和关闭 ============

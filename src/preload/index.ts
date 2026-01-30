@@ -208,18 +208,43 @@ const api = {
       ipcRenderer.invoke('db:getTasksBySessionId', sessionId),
     getTasksByProjectId: (projectId: string) =>
       ipcRenderer.invoke('db:getTasksByProjectId', projectId),
-    // Pipeline template operations
-    getPipelineTemplatesByProject: (projectId: string) =>
-      ipcRenderer.invoke('db:getPipelineTemplatesByProject', projectId),
-    getGlobalPipelineTemplates: () => ipcRenderer.invoke('db:getGlobalPipelineTemplates'),
-    getPipelineTemplate: (templateId: string) =>
-      ipcRenderer.invoke('db:getPipelineTemplate', templateId),
-    createPipelineTemplate: (input: unknown) => ipcRenderer.invoke('db:createPipelineTemplate', input),
-    updatePipelineTemplate: (input: unknown) => ipcRenderer.invoke('db:updatePipelineTemplate', input),
-    deletePipelineTemplate: (templateId: string, scope: string) =>
-      ipcRenderer.invoke('db:deletePipelineTemplate', templateId, scope),
-    createProjectTemplateFromGlobal: (globalTemplateId: string, projectId: string) =>
-      ipcRenderer.invoke('db:createProjectTemplateFromGlobal', globalTemplateId, projectId),
+    // Workflow template operations
+    getGlobalWorkflowTemplates: () => ipcRenderer.invoke('db:getGlobalWorkflowTemplates'),
+    getWorkflowTemplatesByProject: (projectId: string) =>
+      ipcRenderer.invoke('db:getWorkflowTemplatesByProject', projectId),
+    getWorkflowTemplate: (templateId: string) =>
+      ipcRenderer.invoke('db:getWorkflowTemplate', templateId),
+    createWorkflowTemplate: (input: unknown) =>
+      ipcRenderer.invoke('db:createWorkflowTemplate', input),
+    updateWorkflowTemplate: (input: unknown) =>
+      ipcRenderer.invoke('db:updateWorkflowTemplate', input),
+    deleteWorkflowTemplate: (templateId: string, scope: string) =>
+      ipcRenderer.invoke('db:deleteWorkflowTemplate', templateId, scope),
+    copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) =>
+      ipcRenderer.invoke('db:copyGlobalWorkflowToProject', globalTemplateId, projectId),
+    // Workflow instance operations
+    createWorkflow: (taskId: string, templateId: string, scope: string) =>
+      ipcRenderer.invoke('db:createWorkflow', taskId, templateId, scope),
+    getWorkflow: (id: string) => ipcRenderer.invoke('db:getWorkflow', id),
+    getWorkflowByTaskId: (taskId: string) => ipcRenderer.invoke('db:getWorkflowByTaskId', taskId),
+    updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) =>
+      ipcRenderer.invoke('db:updateWorkflowStatus', id, status, nodeIndex),
+    // WorkNode instance operations
+    createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) =>
+      ipcRenderer.invoke('db:createWorkNode', workflowId, templateId, nodeOrder),
+    getWorkNodesByWorkflowId: (workflowId: string) =>
+      ipcRenderer.invoke('db:getWorkNodesByWorkflowId', workflowId),
+    updateWorkNodeStatus: (id: string, status: string) =>
+      ipcRenderer.invoke('db:updateWorkNodeStatus', id, status),
+    // AgentExecution operations
+    createAgentExecution: (workNodeId: string) =>
+      ipcRenderer.invoke('db:createAgentExecution', workNodeId),
+    getAgentExecutionsByWorkNodeId: (workNodeId: string) =>
+      ipcRenderer.invoke('db:getAgentExecutionsByWorkNodeId', workNodeId),
+    getLatestAgentExecution: (workNodeId: string) =>
+      ipcRenderer.invoke('db:getLatestAgentExecution', workNodeId),
+    updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) =>
+      ipcRenderer.invoke('db:updateAgentExecutionStatus', id, status, cost, duration),
     // Message operations
     createMessage: (input: unknown) => ipcRenderer.invoke('db:createMessage', input),
     getMessagesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getMessagesByTaskId', taskId),

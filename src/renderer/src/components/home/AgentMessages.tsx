@@ -240,7 +240,6 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
                 </div>
               );
             })()}
-          }
 
           {message.type === 'tool_use' &&
             (() => {

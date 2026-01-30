@@ -1,5 +1,5 @@
-export { PipelineTemplateDialog } from './PipelineTemplateDialog';
+export { WorkflowTemplateDialog } from './WorkflowTemplateDialog';
 export type {
-  PipelineTemplateFormValues,
-  PipelineTemplateStageDraft,
-} from './PipelineTemplateDialog';
+  WorkflowTemplateFormValues,
+  WorkNodeTemplateDraft,
+} from './WorkflowTemplateDialog';

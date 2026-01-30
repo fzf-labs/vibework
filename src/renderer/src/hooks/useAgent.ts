@@ -113,6 +113,7 @@ export type {
 
 export interface UseAgentReturn {
   messages: AgentMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<AgentMessage[]>>;
   isRunning: boolean;
   taskId: string | null;
   sessionId: string | null;
@@ -489,7 +490,7 @@ export function useAgent(): UseAgentReturn {
             const planData =
               typeof msg.content === 'string'
                 ? (JSON.parse(msg.content) as TaskPlan)
-                : (msg.content as TaskPlan | undefined);
+                : (msg.content as TaskPlan | null | undefined) ?? undefined;
             if (planData) {
               // Only mark steps as completed if task is NOT running
               // For running tasks (restored from background), keep original status
@@ -1221,7 +1222,7 @@ export function useAgent(): UseAgentReturn {
                 const planData =
                   typeof msg.content === 'string'
                     ? (JSON.parse(msg.content) as TaskPlan)
-                    : (msg.content as TaskPlan | undefined);
+                    : (msg.content as TaskPlan | null | undefined) ?? undefined;
                 if (planData) {
                   const completedPlan: TaskPlan = {
                     ...planData,
@@ -1604,6 +1605,7 @@ export function useAgent(): UseAgentReturn {
 
   return {
     messages,
+    setMessages,
     isRunning,
     taskId,
     sessionId: currentSessionId,

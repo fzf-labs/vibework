@@ -194,17 +194,28 @@ interface DatabaseAPI {
   deleteTask: (id: string) => Promise<boolean>
   getTasksBySessionId: (sessionId: string) => Promise<unknown[]>
   getTasksByProjectId: (projectId: string) => Promise<unknown[]>
-  // Pipeline template
-  getPipelineTemplatesByProject: (projectId: string) => Promise<unknown[]>
-  getGlobalPipelineTemplates: () => Promise<unknown[]>
-  getPipelineTemplate: (templateId: string) => Promise<unknown>
-  createPipelineTemplate: (input: unknown) => Promise<unknown>
-  updatePipelineTemplate: (input: unknown) => Promise<unknown>
-  deletePipelineTemplate: (templateId: string, scope: string) => Promise<boolean>
-  createProjectTemplateFromGlobal: (
-    globalTemplateId: string,
-    projectId: string
-  ) => Promise<unknown>
+  // Workflow template
+  getGlobalWorkflowTemplates: () => Promise<unknown[]>
+  getWorkflowTemplatesByProject: (projectId: string) => Promise<unknown[]>
+  getWorkflowTemplate: (templateId: string) => Promise<unknown>
+  createWorkflowTemplate: (input: unknown) => Promise<unknown>
+  updateWorkflowTemplate: (input: unknown) => Promise<unknown>
+  deleteWorkflowTemplate: (templateId: string, scope: string) => Promise<boolean>
+  copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) => Promise<unknown>
+  // Workflow instance
+  createWorkflow: (taskId: string, templateId: string, scope: string) => Promise<unknown>
+  getWorkflow: (id: string) => Promise<unknown>
+  getWorkflowByTaskId: (taskId: string) => Promise<unknown>
+  updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) => Promise<unknown>
+  // WorkNode instance
+  createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) => Promise<unknown>
+  getWorkNodesByWorkflowId: (workflowId: string) => Promise<unknown[]>
+  updateWorkNodeStatus: (id: string, status: string) => Promise<unknown>
+  // AgentExecution
+  createAgentExecution: (workNodeId: string) => Promise<unknown>
+  getAgentExecutionsByWorkNodeId: (workNodeId: string) => Promise<unknown[]>
+  getLatestAgentExecution: (workNodeId: string) => Promise<unknown>
+  updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) => Promise<unknown>
   // Message
   createMessage: (input: unknown) => Promise<unknown>
   getMessagesByTaskId: (taskId: string) => Promise<unknown[]>

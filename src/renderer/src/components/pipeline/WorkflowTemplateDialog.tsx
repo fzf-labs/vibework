@@ -10,46 +10,46 @@ import {
 } from '@/components/ui/dialog';
 import { useLanguage } from '@/providers/language-provider';
 
-export interface PipelineTemplateStageDraft {
+export interface WorkNodeTemplateDraft {
   name: string;
   prompt: string;
   requiresApproval: boolean;
   continueOnError: boolean;
 }
 
-export interface PipelineTemplateFormValues {
+export interface WorkflowTemplateFormValues {
   name: string;
   description?: string;
-  stages: PipelineTemplateStageDraft[];
+  nodes: WorkNodeTemplateDraft[];
 }
 
-interface PipelineTemplateDialogProps {
+interface WorkflowTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  initialValues?: PipelineTemplateFormValues | null;
-  onSubmit: (values: PipelineTemplateFormValues) => Promise<void>;
+  initialValues?: WorkflowTemplateFormValues | null;
+  onSubmit: (values: WorkflowTemplateFormValues) => Promise<void>;
 }
 
-const DEFAULT_STAGE: PipelineTemplateStageDraft = {
+const DEFAULT_NODE: WorkNodeTemplateDraft = {
   name: '',
   prompt: '',
   requiresApproval: true,
   continueOnError: false,
 };
 
-export function PipelineTemplateDialog({
+export function WorkflowTemplateDialog({
   open,
   onOpenChange,
   title,
   initialValues,
   onSubmit,
-}: PipelineTemplateDialogProps) {
+}: WorkflowTemplateDialogProps) {
   const { t } = useLanguage();
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
-  const [templateStages, setTemplateStages] = useState<PipelineTemplateStageDraft[]>([
-    { ...DEFAULT_STAGE },
+  const [templateNodes, setTemplateNodes] = useState<WorkNodeTemplateDraft[]>([
+    { ...DEFAULT_NODE },
   ]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,15 +60,15 @@ export function PipelineTemplateDialog({
     if (initialValues) {
       setTemplateName(initialValues.name);
       setTemplateDescription(initialValues.description || '');
-      setTemplateStages(
-        initialValues.stages.length > 0
-          ? initialValues.stages.map((stage) => ({ ...stage }))
-          : [{ ...DEFAULT_STAGE }]
+      setTemplateNodes(
+        initialValues.nodes.length > 0
+          ? initialValues.nodes.map((node) => ({ ...node }))
+          : [{ ...DEFAULT_NODE }]
       );
     } else {
       setTemplateName('');
       setTemplateDescription('');
-      setTemplateStages([{ ...DEFAULT_STAGE }]);
+      setTemplateNodes([{ ...DEFAULT_NODE }]);
     }
   }, [open, initialValues]);
 
@@ -79,16 +79,16 @@ export function PipelineTemplateDialog({
       return;
     }
 
-    const stages = templateStages
-      .map((stage, index) => ({
-        name: stage.name.trim() || `${t.task.stageLabel} ${index + 1}`,
-        prompt: stage.prompt.trim(),
-        requiresApproval: stage.requiresApproval,
-        continueOnError: stage.continueOnError,
+    const nodes = templateNodes
+      .map((node, index) => ({
+        name: node.name.trim() || `${t.task.stageLabel} ${index + 1}`,
+        prompt: node.prompt.trim(),
+        requiresApproval: node.requiresApproval,
+        continueOnError: node.continueOnError,
       }))
-      .filter((stage) => stage.prompt.length > 0);
+      .filter((node) => node.prompt.length > 0);
 
-    if (stages.length === 0) {
+    if (nodes.length === 0) {
       setError(t.task.createTemplateStageRequired);
       return;
     }
@@ -99,7 +99,7 @@ export function PipelineTemplateDialog({
       await onSubmit({
         name: templateName.trim(),
         description: templateDescription.trim() || undefined,
-        stages,
+        nodes,
       });
       onOpenChange(false);
     } catch (err) {
@@ -150,19 +150,19 @@ export function PipelineTemplateDialog({
           </div>
 
           <div className="space-y-3">
-            {templateStages.map((stage, index) => (
-              <div key={`stage-${index}`} className="rounded-md border p-3">
+            {templateNodes.map((node, index) => (
+              <div key={`node-${index}`} className="rounded-md border p-3">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-medium">
                     {t.task.stageLabel} {index + 1}
                   </div>
-                  {templateStages.length > 1 && (
+                  {templateNodes.length > 1 && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        setTemplateStages((prev) =>
+                        setTemplateNodes((prev) =>
                           prev.filter((_, idx) => idx !== index)
                         );
                       }}
@@ -172,10 +172,10 @@ export function PipelineTemplateDialog({
                   )}
                 </div>
                 <input
-                  value={stage.name}
+                  value={node.name}
                   onChange={(e) => {
                     const value = e.target.value;
-                    setTemplateStages((prev) =>
+                    setTemplateNodes((prev) =>
                       prev.map((item, idx) =>
                         idx === index ? { ...item, name: value } : item
                       )
@@ -185,10 +185,10 @@ export function PipelineTemplateDialog({
                   className="mt-2 w-full rounded-md border bg-background px-2 py-1 text-sm"
                 />
                 <textarea
-                  value={stage.prompt}
+                  value={node.prompt}
                   onChange={(e) => {
                     const value = e.target.value;
-                    setTemplateStages((prev) =>
+                    setTemplateNodes((prev) =>
                       prev.map((item, idx) =>
                         idx === index ? { ...item, prompt: value } : item
                       )
@@ -201,10 +201,10 @@ export function PipelineTemplateDialog({
                   <label className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
-                      checked={stage.requiresApproval}
+                      checked={node.requiresApproval}
                       onChange={(e) => {
                         const checked = e.target.checked;
-                        setTemplateStages((prev) =>
+                        setTemplateNodes((prev) =>
                           prev.map((item, idx) =>
                             idx === index
                               ? { ...item, requiresApproval: checked }
@@ -218,10 +218,10 @@ export function PipelineTemplateDialog({
                   <label className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
-                      checked={stage.continueOnError}
+                      checked={node.continueOnError}
                       onChange={(e) => {
                         const checked = e.target.checked;
-                        setTemplateStages((prev) =>
+                        setTemplateNodes((prev) =>
                           prev.map((item, idx) =>
                             idx === index
                               ? { ...item, continueOnError: checked }
@@ -241,7 +241,7 @@ export function PipelineTemplateDialog({
               variant="ghost"
               size="sm"
               onClick={() =>
-                setTemplateStages((prev) => [...prev, { ...DEFAULT_STAGE }])
+                setTemplateNodes((prev) => [...prev, { ...DEFAULT_NODE }])
               }
             >
               {t.task.addStage}

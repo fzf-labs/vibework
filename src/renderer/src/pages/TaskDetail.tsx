@@ -137,6 +137,7 @@ function TaskDetailContent() {
   const {
     taskId: activeTaskId,
     messages,
+    setMessages,
     isRunning,
     runAgent,
     continueConversation,
@@ -662,7 +663,7 @@ function TaskDetailContent() {
     const loadTemplate = async () => {
       try {
         const template = (await db.getPipelineTemplate(
-          task.pipeline_template_id
+          task.pipeline_template_id!
         )) as PipelineTemplate | null;
         if (active) {
           setPipelineTemplate(template);
@@ -1217,7 +1218,7 @@ function TaskDetailContent() {
                     onClick={handleStartTask}
                     disabled={startDisabled}
                   >
-                    {t.task.startExecution || t.common.start || 'Start'}
+                    {t.task.startExecution || 'Start'}
                   </Button>
                 )}
 

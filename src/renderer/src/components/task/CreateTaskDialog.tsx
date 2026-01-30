@@ -92,7 +92,7 @@ export function CreateTaskDialog({
         return
       }
       try {
-        const projectTemplates = await db.getPipelineTemplatesByProject(projectId)
+        const projectTemplates = await db.getWorkflowTemplatesByProject(projectId)
         setPipelineTemplates(projectTemplates as PipelineTemplate[])
       } catch (err) {
         console.error('Failed to load pipeline templates:', err)

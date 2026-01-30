@@ -1,13 +1,16 @@
 // Database types for sessions, tasks and messages
 
-// Execution status (CLI process state)
-export type TaskExecutionStatus = 'running' | 'completed' | 'error' | 'stopped';
+// Task status (workflow state) - includes legacy values for backward compatibility
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'running' | 'completed' | 'stopped' | 'error';
 
-// Pipeline status (workflow state) - matches design.md
-export type TaskPipelineStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
+// Legacy alias for backward compatibility
+export type TaskPipelineStatus = TaskStatus;
 
-// Combined task status
-export type TaskStatus = TaskExecutionStatus | TaskPipelineStatus;
+// WorkNode status
+export type WorkNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'error';
+
+// Agent execution status (CLI process state)
+export type AgentExecutionStatus = 'idle' | 'running' | 'completed';
 
 // Project represents a workspace/repository
 export interface Project {
@@ -53,6 +56,7 @@ export interface Task {
   workspace_path?: string | null; // Actual workspace path for the task
   cli_tool_id?: string | null; // Selected CLI tool id
   pipeline_template_id?: string | null; // Selected pipeline template
+  workflow_id?: string | null; // Associated workflow instance
   created_at: string;
   updated_at: string;
 }

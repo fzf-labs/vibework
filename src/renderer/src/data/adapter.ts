@@ -53,39 +53,80 @@ export const db = {
     return window.api.database.getTasksBySessionId(sessionId) as Promise<Task[]>
   },
 
-  // ============ Pipeline Template 操作 ============
-  getPipelineTemplatesByProject: (projectId: string): Promise<unknown[]> => {
-    return window.api.database.getPipelineTemplatesByProject(projectId) as Promise<unknown[]>
+  // ============ Workflow Template 操作 ============
+  getGlobalWorkflowTemplates: (): Promise<unknown[]> => {
+    return window.api.database.getGlobalWorkflowTemplates() as Promise<unknown[]>
   },
 
-  getGlobalPipelineTemplates: (): Promise<unknown[]> => {
-    return window.api.database.getGlobalPipelineTemplates() as Promise<unknown[]>
+  getWorkflowTemplatesByProject: (projectId: string): Promise<unknown[]> => {
+    return window.api.database.getWorkflowTemplatesByProject(projectId) as Promise<unknown[]>
   },
 
-  getPipelineTemplate: (templateId: string): Promise<unknown> => {
-    return window.api.database.getPipelineTemplate(templateId) as Promise<unknown>
+  getWorkflowTemplate: (templateId: string): Promise<unknown> => {
+    return window.api.database.getWorkflowTemplate(templateId) as Promise<unknown>
   },
 
-  createPipelineTemplate: (input: unknown): Promise<unknown> => {
-    return window.api.database.createPipelineTemplate(input) as Promise<unknown>
+  createWorkflowTemplate: (input: unknown): Promise<unknown> => {
+    return window.api.database.createWorkflowTemplate(input) as Promise<unknown>
   },
 
-  updatePipelineTemplate: (input: unknown): Promise<unknown> => {
-    return window.api.database.updatePipelineTemplate(input) as Promise<unknown>
+  updateWorkflowTemplate: (input: unknown): Promise<unknown> => {
+    return window.api.database.updateWorkflowTemplate(input) as Promise<unknown>
   },
 
-  deletePipelineTemplate: (templateId: string, scope: string): Promise<boolean> => {
-    return window.api.database.deletePipelineTemplate(templateId, scope) as Promise<boolean>
+  deleteWorkflowTemplate: (templateId: string, scope: string): Promise<boolean> => {
+    return window.api.database.deleteWorkflowTemplate(templateId, scope) as Promise<boolean>
   },
 
-  createProjectTemplateFromGlobal: (
-    globalTemplateId: string,
-    projectId: string
-  ): Promise<unknown> => {
-    return window.api.database.createProjectTemplateFromGlobal(
-      globalTemplateId,
-      projectId
-    ) as Promise<unknown>
+  copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string): Promise<unknown> => {
+    return window.api.database.copyGlobalWorkflowToProject(globalTemplateId, projectId) as Promise<unknown>
+  },
+
+  // ============ Workflow 实例操作 ============
+  createWorkflow: (taskId: string, templateId: string, scope: string): Promise<unknown> => {
+    return window.api.database.createWorkflow(taskId, templateId, scope) as Promise<unknown>
+  },
+
+  getWorkflow: (id: string): Promise<unknown> => {
+    return window.api.database.getWorkflow(id) as Promise<unknown>
+  },
+
+  getWorkflowByTaskId: (taskId: string): Promise<unknown> => {
+    return window.api.database.getWorkflowByTaskId(taskId) as Promise<unknown>
+  },
+
+  updateWorkflowStatus: (id: string, status: string, nodeIndex?: number): Promise<unknown> => {
+    return window.api.database.updateWorkflowStatus(id, status, nodeIndex) as Promise<unknown>
+  },
+
+  // ============ WorkNode 实例操作 ============
+  createWorkNode: (workflowId: string, templateId: string, nodeOrder: number): Promise<unknown> => {
+    return window.api.database.createWorkNode(workflowId, templateId, nodeOrder) as Promise<unknown>
+  },
+
+  getWorkNodesByWorkflowId: (workflowId: string): Promise<unknown[]> => {
+    return window.api.database.getWorkNodesByWorkflowId(workflowId) as Promise<unknown[]>
+  },
+
+  updateWorkNodeStatus: (id: string, status: string): Promise<unknown> => {
+    return window.api.database.updateWorkNodeStatus(id, status) as Promise<unknown>
+  },
+
+  // ============ AgentExecution 操作 ============
+  createAgentExecution: (workNodeId: string): Promise<unknown> => {
+    return window.api.database.createAgentExecution(workNodeId) as Promise<unknown>
+  },
+
+  getAgentExecutionsByWorkNodeId: (workNodeId: string): Promise<unknown[]> => {
+    return window.api.database.getAgentExecutionsByWorkNodeId(workNodeId) as Promise<unknown[]>
+  },
+
+  getLatestAgentExecution: (workNodeId: string): Promise<unknown> => {
+    return window.api.database.getLatestAgentExecution(workNodeId) as Promise<unknown>
+  },
+
+  updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number): Promise<unknown> => {
+    return window.api.database.updateAgentExecutionStatus(id, status, cost, duration) as Promise<unknown>
   },
 
   // ============ Message 操作 ============
@@ -110,22 +151,22 @@ export const db = {
     duration?: number
   ): Promise<void> => {
     const task = await db.getTask(taskId)
-    const isPipelineTask = Boolean(task?.pipeline_template_id)
+    const isWorkflowTask = Boolean(task?.workflow_id)
 
     if (messageType === 'result') {
       if (subtype === 'success') {
-        if (isPipelineTask) {
+        if (isWorkflowTask) {
           await db.updateTask(taskId, { status: 'in_review', cost, duration })
         } else {
-          await db.updateTask(taskId, { status: 'completed', cost, duration })
+          await db.updateTask(taskId, { status: 'done', cost, duration })
         }
       } else if (subtype === 'error_max_turns') {
         await db.updateTask(taskId, { cost, duration })
       } else {
-        await db.updateTask(taskId, { status: 'error', cost, duration })
+        await db.updateTask(taskId, { status: 'todo', cost, duration })
       }
     } else if (messageType === 'error') {
-      await db.updateTask(taskId, { status: 'error' })
+      await db.updateTask(taskId, { status: 'todo' })
     }
   }
 }

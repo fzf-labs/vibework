@@ -932,71 +932,80 @@ app.whenReady().then(() => {
     }
   })
 
-  // Pipeline template operations
-  ipcMain.handle('db:getPipelineTemplatesByProject', (_, projectId: string) => {
-    try {
-      return databaseService.getPipelineTemplatesByProject(projectId)
-    } catch (error) {
-      console.error('Failed to get pipeline templates by project:', error)
-      throw error
-    }
+  // Workflow template operations
+  ipcMain.handle('db:getGlobalWorkflowTemplates', () => {
+    return databaseService.getGlobalWorkflowTemplates()
   })
 
-  ipcMain.handle('db:getGlobalPipelineTemplates', () => {
-    try {
-      return databaseService.getGlobalPipelineTemplates()
-    } catch (error) {
-      console.error('Failed to get global pipeline templates:', error)
-      throw error
-    }
+  ipcMain.handle('db:getWorkflowTemplatesByProject', (_, projectId: string) => {
+    return databaseService.getWorkflowTemplatesByProject(projectId)
   })
 
-  ipcMain.handle('db:getPipelineTemplate', (_, templateId: string) => {
-    try {
-      return databaseService.getPipelineTemplate(templateId)
-    } catch (error) {
-      console.error('Failed to get pipeline template:', error)
-      throw error
-    }
+  ipcMain.handle('db:getWorkflowTemplate', (_, templateId: string) => {
+    return databaseService.getWorkflowTemplate(templateId)
   })
 
-  ipcMain.handle('db:createPipelineTemplate', (_, input) => {
-    try {
-      return databaseService.createPipelineTemplate(input)
-    } catch (error) {
-      console.error('Failed to create pipeline template:', error)
-      throw error
-    }
+  ipcMain.handle('db:createWorkflowTemplate', (_, input) => {
+    return databaseService.createWorkflowTemplate(input)
   })
 
-  ipcMain.handle('db:updatePipelineTemplate', (_, input) => {
-    try {
-      return databaseService.updatePipelineTemplate(input)
-    } catch (error) {
-      console.error('Failed to update pipeline template:', error)
-      throw error
-    }
+  ipcMain.handle('db:updateWorkflowTemplate', (_, input) => {
+    return databaseService.updateWorkflowTemplate(input)
   })
 
-  ipcMain.handle('db:deletePipelineTemplate', (_, templateId: string, scope: string) => {
-    try {
-      return databaseService.deletePipelineTemplate(
-        templateId,
-        scope === 'global' ? 'global' : 'project'
-      )
-    } catch (error) {
-      console.error('Failed to delete pipeline template:', error)
-      throw error
-    }
+  ipcMain.handle('db:deleteWorkflowTemplate', (_, templateId: string, scope: string) => {
+    return databaseService.deleteWorkflowTemplate(templateId, scope === 'global' ? 'global' : 'project')
   })
 
-  ipcMain.handle('db:createProjectTemplateFromGlobal', (_, globalTemplateId: string, projectId: string) => {
-    try {
-      return databaseService.createProjectTemplateFromGlobal(globalTemplateId, projectId)
-    } catch (error) {
-      console.error('Failed to create project template from global:', error)
-      throw error
-    }
+  ipcMain.handle('db:copyGlobalWorkflowToProject', (_, globalTemplateId: string, projectId: string) => {
+    return databaseService.copyGlobalWorkflowToProject(globalTemplateId, projectId)
+  })
+
+  // Workflow instance operations
+  ipcMain.handle('db:createWorkflow', (_, taskId: string, templateId: string, scope: string) => {
+    return databaseService.createWorkflow(taskId, templateId, scope === 'global' ? 'global' : 'project')
+  })
+
+  ipcMain.handle('db:getWorkflow', (_, id: string) => {
+    return databaseService.getWorkflow(id)
+  })
+
+  ipcMain.handle('db:getWorkflowByTaskId', (_, taskId: string) => {
+    return databaseService.getWorkflowByTaskId(taskId)
+  })
+
+  ipcMain.handle('db:updateWorkflowStatus', (_, id: string, status: string, nodeIndex?: number) => {
+    return databaseService.updateWorkflowStatus(id, status, nodeIndex)
+  })
+
+  // WorkNode instance operations
+  ipcMain.handle('db:createWorkNode', (_, workflowId: string, templateId: string, nodeOrder: number) => {
+    return databaseService.createWorkNode(workflowId, templateId, nodeOrder)
+  })
+
+  ipcMain.handle('db:getWorkNodesByWorkflowId', (_, workflowId: string) => {
+    return databaseService.getWorkNodesByWorkflowId(workflowId)
+  })
+
+  ipcMain.handle('db:updateWorkNodeStatus', (_, id: string, status: string) => {
+    return databaseService.updateWorkNodeStatus(id, status)
+  })
+
+  // AgentExecution operations
+  ipcMain.handle('db:createAgentExecution', (_, workNodeId: string) => {
+    return databaseService.createAgentExecution(workNodeId)
+  })
+
+  ipcMain.handle('db:getAgentExecutionsByWorkNodeId', (_, workNodeId: string) => {
+    return databaseService.getAgentExecutionsByWorkNodeId(workNodeId)
+  })
+
+  ipcMain.handle('db:getLatestAgentExecution', (_, workNodeId: string) => {
+    return databaseService.getLatestAgentExecution(workNodeId)
+  })
+
+  ipcMain.handle('db:updateAgentExecutionStatus', (_, id: string, status: string, cost?: number, duration?: number) => {
+    return databaseService.updateAgentExecutionStatus(id, status as 'idle' | 'running' | 'completed', cost, duration)
   })
 
   // Message operations

@@ -20,7 +20,7 @@ import { EditorSettings } from './tabs/EditorSettings';
 import { GitSettings } from './tabs/GitSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
-import { PipelineTemplatesSettings } from './tabs/PipelineTemplatesSettings';
+import { WorkflowTemplatesSettings } from './tabs/WorkflowTemplatesSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import type { SettingsCategory } from './types';
 
@@ -171,7 +171,7 @@ export function SettingsModal({
               )}
 
               {activeCategory === 'pipelineTemplates' && (
-                <PipelineTemplatesSettings />
+                <WorkflowTemplatesSettings />
               )}
 
               {activeCategory === 'mcp' && (

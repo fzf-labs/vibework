@@ -11,9 +11,12 @@ import { useProjects } from '@/hooks/useProjects';
 import { db } from '@/data';
 import { useLanguage } from '@/providers/language-provider';
 import {
-  PipelineTemplateDialog,
-  type PipelineTemplateFormValues,
+  WorkflowTemplateDialog,
+  type WorkflowTemplateFormValues,
 } from '@/components/pipeline';
+
+// Legacy type alias for backward compatibility
+type PipelineTemplateFormValues = WorkflowTemplateFormValues;
 
 interface PipelineTemplateStage {
   id: string;
@@ -39,12 +42,12 @@ interface PipelineTemplate {
 }
 
 const toStageInputs = (values: PipelineTemplateFormValues) =>
-  values.stages.map((stage, index) => ({
-    name: stage.name,
-    prompt: stage.prompt,
+  values.nodes.map((node, index) => ({
+    name: node.name,
+    prompt: node.prompt,
     stage_order: index + 1,
-    requires_approval: stage.requiresApproval,
-    continue_on_error: stage.continueOnError,
+    requires_approval: node.requiresApproval,
+    continue_on_error: node.continueOnError,
   }));
 
 export function PipelineTemplatesPage() {
@@ -64,14 +67,14 @@ export function PipelineTemplatesPage() {
       setTemplates([]);
       return;
     }
-    const list = (await db.getPipelineTemplatesByProject(
+    const list = (await db.getWorkflowTemplatesByProject(
       projectId
     )) as PipelineTemplate[];
     setTemplates(list);
   };
 
   const loadGlobalTemplates = async () => {
-    const list = (await db.getGlobalPipelineTemplates()) as PipelineTemplate[];
+    const list = (await db.getGlobalWorkflowTemplates()) as PipelineTemplate[];
     setGlobalTemplates(list);
   };
 
@@ -278,7 +281,7 @@ export function PipelineTemplatesPage() {
         </div>
       )}
 
-      <PipelineTemplateDialog
+      <WorkflowTemplateDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={dialogTitle}
@@ -287,7 +290,7 @@ export function PipelineTemplatesPage() {
             ? {
                 name: editingTemplate.name,
                 description: editingTemplate.description || undefined,
-                stages: editingTemplate.stages.map((stage) => ({
+                nodes: editingTemplate.stages.map((stage) => ({
                   name: stage.name,
                   prompt: stage.prompt,
                   requiresApproval: stage.requires_approval,

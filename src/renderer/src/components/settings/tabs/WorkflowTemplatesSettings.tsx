@@ -10,14 +10,14 @@ import { MoreVertical } from 'lucide-react';
 import { db } from '@/data';
 import { useLanguage } from '@/providers/language-provider';
 import {
-  PipelineTemplateDialog,
-  type PipelineTemplateFormValues,
+  WorkflowTemplateDialog,
+  type WorkflowTemplateFormValues,
 } from '@/components/pipeline';
 
-interface PipelineTemplateStage {
+interface WorkNodeTemplate {
   id: string;
-  template_id: string;
-  stage_order: number;
+  workflow_template_id: string;
+  node_order: number;
   name: string;
   prompt: string;
   requires_approval: boolean;
@@ -26,35 +26,35 @@ interface PipelineTemplateStage {
   updated_at: string;
 }
 
-interface PipelineTemplate {
+interface WorkflowTemplate {
   id: string;
   name: string;
   description?: string | null;
   scope: 'global' | 'project';
   project_id?: string | null;
-  stages: PipelineTemplateStage[];
+  nodes: WorkNodeTemplate[];
   created_at: string;
   updated_at: string;
 }
 
-const toStageInputs = (values: PipelineTemplateFormValues) =>
-  values.stages.map((stage, index) => ({
-    name: stage.name,
-    prompt: stage.prompt,
-    stage_order: index + 1,
-    requires_approval: stage.requiresApproval,
-    continue_on_error: stage.continueOnError,
+const toNodeInputs = (values: WorkflowTemplateFormValues) =>
+  values.nodes.map((node, index) => ({
+    name: node.name,
+    prompt: node.prompt,
+    node_order: index + 1,
+    requires_approval: node.requiresApproval,
+    continue_on_error: node.continueOnError,
   }));
 
-export function PipelineTemplatesSettings() {
+export function WorkflowTemplatesSettings() {
   const { t } = useLanguage();
-  const [templates, setTemplates] = useState<PipelineTemplate[]>([]);
+  const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] =
-    useState<PipelineTemplate | null>(null);
+    useState<WorkflowTemplate | null>(null);
 
   const loadTemplates = async () => {
-    const list = (await db.getGlobalPipelineTemplates()) as PipelineTemplate[];
+    const list = (await db.getGlobalWorkflowTemplates()) as WorkflowTemplate[];
     setTemplates(list);
   };
 
@@ -67,32 +67,32 @@ export function PipelineTemplatesSettings() {
     setDialogOpen(true);
   };
 
-  const handleEdit = (template: PipelineTemplate) => {
+  const handleEdit = (template: WorkflowTemplate) => {
     setEditingTemplate(template);
     setDialogOpen(true);
   };
 
-  const handleSubmit = async (values: PipelineTemplateFormValues) => {
+  const handleSubmit = async (values: WorkflowTemplateFormValues) => {
     if (editingTemplate) {
-      await db.updatePipelineTemplate({
+      await db.updateWorkflowTemplate({
         id: editingTemplate.id,
         scope: 'global',
         name: values.name,
         description: values.description,
-        stages: toStageInputs(values),
+        nodes: toNodeInputs(values),
       });
     } else {
-      await db.createPipelineTemplate({
+      await db.createWorkflowTemplate({
         scope: 'global',
         name: values.name,
         description: values.description,
-        stages: toStageInputs(values),
+        nodes: toNodeInputs(values),
       });
     }
     await loadTemplates();
   };
 
-  const handleDelete = async (template: PipelineTemplate) => {
+  const handleDelete = async (template: WorkflowTemplate) => {
     if (
       !confirm(
         t.task.pipelineTemplateDeleteConfirm.replace('{name}', template.name)
@@ -100,14 +100,14 @@ export function PipelineTemplatesSettings() {
     ) {
       return;
     }
-    await db.deletePipelineTemplate(template.id, 'global');
+    await db.deleteWorkflowTemplate(template.id, 'global');
     await loadTemplates();
   };
 
-  const stageCount = (template: PipelineTemplate) =>
+  const nodeCount = (template: WorkflowTemplate) =>
     t.task.pipelineTemplateStageCount.replace(
       '{count}',
-      `${template.stages?.length || 0}`
+      `${template.nodes?.length || 0}`
     );
 
   const dialogTitle = editingTemplate
@@ -173,7 +173,7 @@ export function PipelineTemplatesSettings() {
                     {template.description || t.task.pipelineTemplateNoDescription}
                   </div>
                   <div className="text-muted-foreground mt-2 text-xs">
-                    {stageCount(template)}
+                    {nodeCount(template)}
                   </div>
                   <div className="text-muted-foreground mt-1 text-[11px]">
                     {t.task.pipelineTemplateUpdatedAt.replace(
@@ -188,7 +188,7 @@ export function PipelineTemplatesSettings() {
         </div>
       )}
 
-      <PipelineTemplateDialog
+      <WorkflowTemplateDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         title={dialogTitle}
@@ -197,11 +197,11 @@ export function PipelineTemplatesSettings() {
             ? {
                 name: editingTemplate.name,
                 description: editingTemplate.description || undefined,
-                stages: editingTemplate.stages.map((stage) => ({
-                  name: stage.name,
-                  prompt: stage.prompt,
-                  requiresApproval: stage.requires_approval,
-                  continueOnError: stage.continue_on_error,
+                nodes: editingTemplate.nodes.map((node) => ({
+                  name: node.name,
+                  prompt: node.prompt,
+                  requiresApproval: node.requires_approval,
+                  continueOnError: node.continue_on_error,
                 })),
               }
             : null
