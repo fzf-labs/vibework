@@ -14,6 +14,8 @@ export default {
   loadingFile: '正在加载文件...',
   fileLoadError: '文件加载失败',
   copyPath: '复制路径',
+  largeFileHint: '检测到大文件，已关闭语法高亮。启用后可能卡顿。',
+  enableHighlight: '启用高亮',
   code: '代码',
   static: '静态',
   live: '实时',

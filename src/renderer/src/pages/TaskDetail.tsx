@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { db, type Task } from '@/data';
 import {
   useAgent,
@@ -137,6 +137,7 @@ function TaskDetailContent() {
   const { t } = useLanguage();
   const { taskId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const state = location.state as LocationState | null;
   const initialPrompt = state?.prompt || '';
   const initialSessionId = state?.sessionId;
@@ -169,6 +170,7 @@ function TaskDetailContent() {
   const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
   const [hasStartedOnce, setHasStartedOnce] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editPrompt, setEditPrompt] = useState('');
   const [editCliToolId, setEditCliToolId] = useState('');
@@ -343,6 +345,17 @@ function TaskDetailContent() {
     editTitle,
     taskId,
   ]);
+
+  const handleDeleteTask = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      await db.deleteTask(taskId);
+      setIsDeleteOpen(false);
+      navigate('/');
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+    }
+  }, [taskId, navigate]);
 
   // Handle title input key down
   const handleTitleKeyDown = useCallback(
@@ -1368,6 +1381,12 @@ function TaskDetailContent() {
                     >
                       {t.common.edit}
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIsDeleteOpen(true)}
+                      className="cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      {t.common.delete}
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -1641,6 +1660,26 @@ function TaskDetailContent() {
               {t.common.cancel}
             </Button>
             <Button onClick={handleSaveEdit}>{t.common.save}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t.common.deleteTask}</DialogTitle>
+          </DialogHeader>
+          <div className="text-muted-foreground text-sm">
+            <p>{t.common.deleteTaskConfirm}</p>
+            <p className="mt-2">{t.common.deleteTaskDescription}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+              {t.common.cancel}
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteTask}>
+              {t.common.delete}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

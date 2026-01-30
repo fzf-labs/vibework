@@ -19,6 +19,9 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
     let blobUrl: string | null = null;
 
     async function loadAudio() {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
       // If content is already a data URL or http URL, use it directly
       if (
         artifact.content &&
@@ -73,6 +76,11 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
 
     // Cleanup blob URL on unmount
     return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+      }
       if (blobUrl) {
         URL.revokeObjectURL(blobUrl);
       }

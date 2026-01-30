@@ -14,6 +14,8 @@ export default {
   loadingFile: 'Loading file...',
   fileLoadError: 'Failed to load file',
   copyPath: 'Copy Path',
+  largeFileHint: 'Large file detected. Syntax highlighting is disabled. It may be slow if enabled.',
+  enableHighlight: 'Enable highlighting',
   code: 'Code',
   static: 'Static',
   live: 'Live',

@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '@/providers/theme-provider';
+import { useLanguage } from '@/providers/language-provider';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import {
   oneDark,
@@ -8,10 +10,31 @@ import {
 import type { PreviewComponentProps } from './types';
 import { getLanguageHint } from './utils';
 
+const MAX_HIGHLIGHT_LINES = 1000;
+const MAX_HIGHLIGHT_BYTES = 200 * 1024;
+
 export function CodePreview({ artifact }: PreviewComponentProps) {
   const { theme } = useTheme();
+  const { t } = useLanguage();
+  const [forceHighlight, setForceHighlight] = useState(false);
 
-  if (!artifact.content) {
+  const content = artifact.content || '';
+
+  const lineCount = useMemo(() => content.split('\n').length, [content]);
+  const contentBytes = useMemo(
+    () => new TextEncoder().encode(content).length,
+    [content]
+  );
+  const isLarge = useMemo(
+    () => lineCount > MAX_HIGHLIGHT_LINES || contentBytes > MAX_HIGHLIGHT_BYTES,
+    [lineCount, contentBytes]
+  );
+
+  useEffect(() => {
+    setForceHighlight(false);
+  }, [artifact.id, artifact.name, content]);
+
+  if (!content) {
     return (
       <div className="flex h-full items-center justify-center p-4">
         <p className="text-muted-foreground text-sm">No content available</p>
@@ -24,6 +47,27 @@ export function CodePreview({ artifact }: PreviewComponentProps) {
     theme === 'dark' ||
     (theme === 'system' &&
       window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  if (isLarge && !forceHighlight) {
+    return (
+      <div className="h-full overflow-auto">
+        <div className="border-border/50 bg-muted/20 flex items-center justify-between border-b px-3 py-2 text-xs">
+          <span className="text-muted-foreground">
+            {t.preview.largeFileHint}
+          </span>
+          <button
+            onClick={() => setForceHighlight(true)}
+            className="text-primary hover:text-primary/80 font-medium"
+          >
+            {t.preview.enableHighlight}
+          </button>
+        </div>
+        <pre className="text-foreground whitespace-pre-wrap break-words px-3 py-2 text-xs leading-relaxed">
+          {content}
+        </pre>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-auto">
