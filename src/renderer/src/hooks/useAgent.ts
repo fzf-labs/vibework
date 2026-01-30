@@ -342,7 +342,7 @@ export function useAgent(): UseAgentReturn {
             const taskStatus = await db.getTask(pollingTaskId);
             if (
               taskStatus &&
-              ['completed', 'error', 'stopped'].includes(taskStatus.status)
+              ['done', 'in_review'].includes(taskStatus.status)
             ) {
               console.log(
                 '[useAgent] Task completed in database, stopping poll:',
@@ -1011,7 +1011,7 @@ export function useAgent(): UseAgentReturn {
                     if (task?.pipeline_template_id) {
                       await db.updateTask(currentTaskId, { status: 'in_review' });
                     } else {
-                      await db.updateTask(currentTaskId, { status: 'completed' });
+                      await db.updateTask(currentTaskId, { status: 'done' });
                     }
                   } catch (dbError) {
                     console.error('Failed to save direct answer:', dbError);
@@ -1063,7 +1063,7 @@ export function useAgent(): UseAgentReturn {
               type: 'error',
               error_message: errorMessage,
             });
-            await db.updateTask(currentTaskId, { status: 'error' });
+            // Keep in_progress status on error - user can retry
           } catch (dbError) {
             console.error('Failed to save error:', dbError);
           }
@@ -1166,7 +1166,7 @@ export function useAgent(): UseAgentReturn {
             type: 'error',
             error_message: errorMessage,
           });
-          await db.updateTask(taskId, { status: 'error' });
+          // Keep in_progress status on error - user can retry
         } catch (dbError) {
           console.error('Failed to save error:', dbError);
         }
@@ -1391,7 +1391,7 @@ export function useAgent(): UseAgentReturn {
               type: 'error',
               error_message: errorMessage,
             });
-            await db.updateTask(taskId, { status: 'error' });
+            // Keep in_progress status on error - user can retry
           } catch (dbError) {
             console.error('Failed to save error:', dbError);
           }
@@ -1438,15 +1438,7 @@ export function useAgent(): UseAgentReturn {
       }
     }
 
-    // Update task status
-    if (taskId) {
-      try {
-        await db.updateTask(taskId, { status: 'stopped' });
-      } catch (error) {
-        console.error('Failed to update task status:', error);
-      }
-    }
-
+    // Keep task in in_progress status when stopped - user can continue
     setIsRunning(false);
   }, [taskId]);
 

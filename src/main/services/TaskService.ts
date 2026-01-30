@@ -136,6 +136,15 @@ export class TaskService {
       try {
         const projectPath = path.dirname(path.dirname(task.worktree_path))
         await this.git.removeWorktree(projectPath, task.worktree_path, true)
+
+        // 删除分支
+        if (task.branch_name) {
+          try {
+            await this.git.deleteBranch(projectPath, task.branch_name, true)
+          } catch (branchError) {
+            console.error('Failed to delete branch:', branchError)
+          }
+        }
       } catch (error) {
         console.error('Failed to remove worktree:', error)
       }

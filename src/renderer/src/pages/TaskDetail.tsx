@@ -188,7 +188,7 @@ function TaskDetailContent() {
     id: string;
     name: string;
     prompt: string;
-    status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error';
+    status: 'todo' | 'in_progress' | 'in_review' | 'done';
   } | null>(null);
   const [workNodeExecutions, setWorkNodeExecutions] = useState<Array<{
     id: string;
@@ -373,7 +373,6 @@ function TaskDetailContent() {
 
   // Handle closing preview
   const handleClosePreview = useCallback(() => {
-    setIsPreviewVisible(false);
     setSelectedArtifact(null);
   }, []);
 
@@ -519,10 +518,6 @@ function TaskDetailContent() {
       });
 
       setArtifacts(extractedArtifacts);
-      // Auto-select first artifact if none selected
-      if (extractedArtifacts.length > 0 && !selectedArtifact) {
-        setSelectedArtifact(extractedArtifacts[0]);
-      }
     };
 
     loadArtifacts();
@@ -859,7 +854,7 @@ function TaskDetailContent() {
       if (!stage) {
         setPipelineStatus('completed');
         try {
-          await db.updateTask(taskId, { status: 'completed' });
+          await db.updateTask(taskId, { status: 'done' });
         } catch (error) {
           console.error('Failed to update task status:', error);
         }
@@ -875,7 +870,7 @@ function TaskDetailContent() {
       setPipelineStatus('running');
       setPipelineStageMessageStart(messages.length);
       try {
-        await db.updateTask(taskId, { status: 'running' });
+        await db.updateTask(taskId, { status: 'in_progress' });
       } catch (error) {
         console.error('Failed to update task status:', error);
       }
@@ -972,9 +967,7 @@ function TaskDetailContent() {
       );
     } else {
       setPipelineStatus('failed');
-      db.updateTask(taskId, { status: 'error' }).catch((error) => {
-        console.error('Failed to update task status:', error);
-      });
+      // Keep in_progress status on failure - user can retry
       appendPipelineNotice(
         `${t.task.pipelineStageFailed.replace('{name}', stageName)}`
       );
@@ -1225,19 +1218,12 @@ function TaskDetailContent() {
 
   const displayStatus = useMemo<PipelineDisplayStatus | null>(() => {
     if (!task?.status) return null;
+    // Only 4 standard statuses: todo, in_progress, in_review, done
     if (['todo', 'in_progress', 'in_review', 'done'].includes(task.status)) {
       return task.status as PipelineDisplayStatus;
     }
-    switch (task.status) {
-      case 'running':
-        return 'in_progress';
-      case 'completed':
-        return 'done';
-      case 'stopped':
-      case 'error':
-      default:
-        return 'todo';
-    }
+    // Fallback for any legacy status
+    return 'todo';
   }, [task?.status]);
 
   const statusInfo = displayStatus ? statusConfig[displayStatus] : null;
@@ -1553,7 +1539,8 @@ function TaskDetailContent() {
             <div className="bg-muted/10 flex min-w-0 flex-1 flex-col overflow-hidden">
               <RightPanel
                 workingDir={workingDir}
-                artifacts={artifacts}
+                branchName={task?.branch_name || null}
+                baseBranch={task?.base_branch || null}
                 selectedArtifact={selectedArtifact}
                 onSelectArtifact={handleSelectArtifact}
                 livePreviewUrl={livePreviewUrl}

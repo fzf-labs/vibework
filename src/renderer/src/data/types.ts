@@ -1,13 +1,10 @@
 // Database types for sessions, tasks and messages
 
-// Task status (workflow state) - includes legacy values for backward compatibility
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'running' | 'completed' | 'stopped' | 'error';
+// Task status (workflow state) - 4 standard states
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 
-// Legacy alias for backward compatibility
-export type TaskPipelineStatus = TaskStatus;
-
-// WorkNode status
-export type WorkNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'error';
+// WorkNode status - 4 standard states
+export type WorkNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 
 // Agent execution status (CLI process state)
 export type AgentExecutionStatus = 'idle' | 'running' | 'completed';

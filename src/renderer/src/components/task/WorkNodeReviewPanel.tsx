@@ -7,7 +7,7 @@ interface WorkNode {
   id: string;
   name: string;
   prompt: string;
-  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error';
+  status: 'todo' | 'in_progress' | 'in_review' | 'done';
 }
 
 interface AgentExecution {

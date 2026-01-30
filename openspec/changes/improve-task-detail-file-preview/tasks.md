@@ -1,6 +1,6 @@
 ## 1. File List UI
 
-- [x] 1.1 Add a file list panel to the RightPanel “files” tab with artifact/workspace sections
+- [x] 1.1 Add a file list panel to the RightPanel “files” tab with workspace section only
 - [x] 1.2 Implement workspace directory loading via fs.readDir with lazy expand and refresh handling
 - [x] 1.3 Wire file list selection to TaskDetail selectedArtifact state
 

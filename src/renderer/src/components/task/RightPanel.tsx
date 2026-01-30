@@ -10,7 +10,8 @@ export type RightPanelTab = 'files' | 'server' | 'git';
 
 interface RightPanelProps {
   workingDir: string;
-  artifacts: Artifact[];
+  branchName?: string | null;
+  baseBranch?: string | null;
   selectedArtifact: Artifact | null;
   onSelectArtifact: (artifact: Artifact) => void;
   // Live preview props
@@ -25,7 +26,8 @@ interface RightPanelProps {
 
 export function RightPanel({
   workingDir,
-  artifacts,
+  branchName,
+  baseBranch,
   selectedArtifact,
   onSelectArtifact,
   livePreviewUrl,
@@ -40,8 +42,8 @@ export function RightPanel({
 
   const tabs: { id: RightPanelTab; label: string; icon: typeof FileText }[] = [
     { id: 'files', label: t.preview.filesTab, icon: FileText },
-    { id: 'server', label: t.preview.serverTab, icon: Play },
     { id: 'git', label: t.preview.gitTab, icon: GitBranch },
+    { id: 'server', label: t.preview.serverTab, icon: Play },
   ];
 
   return (
@@ -72,8 +74,8 @@ export function RightPanel({
         {activeTab === 'files' && (
           <div className="flex h-full min-w-0">
             <FileListPanel
-              artifacts={artifacts}
               workingDir={workingDir}
+              branchName={branchName}
               selectedArtifact={selectedArtifact}
               onSelectArtifact={onSelectArtifact}
             />
@@ -93,7 +95,7 @@ export function RightPanel({
         )}
 
         {activeTab === 'git' && (
-          <GitPanel workingDir={workingDir} />
+          <GitPanel workingDir={workingDir} baseBranch={baseBranch} />
         )}
       </div>
     </div>
@@ -175,9 +177,10 @@ function DevServerPanel({
 // Git Panel Component
 interface GitPanelProps {
   workingDir: string;
+  baseBranch?: string | null;
 }
 
-type GitSubTab = 'changes' | 'history' | 'branches';
+type GitSubTab = 'changes' | 'compare';
 
 interface GitFile {
   path: string;
@@ -185,11 +188,9 @@ interface GitFile {
   staged: boolean;
 }
 
-interface GitCommit {
-  hash: string;
-  message: string;
-  author: string;
-  date: string;
+interface BranchDiffFile {
+  path: string;
+  status: string;
 }
 
 type RepoStatus =
@@ -229,22 +230,18 @@ function getStatusCode(status: string) {
   return '?';
 }
 
-function GitPanel({ workingDir }: GitPanelProps) {
+function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
   const [subTab, setSubTab] = useState<GitSubTab>('changes');
   const [files, setFiles] = useState<GitFile[]>([]);
-  const [commits, setCommits] = useState<GitCommit[]>([]);
-  const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [repoStatus, setRepoStatus] = useState<RepoStatus>('idle');
   const [repoError, setRepoError] = useState<string | null>(null);
   const [changesLoading, setChangesLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchDiffLoading, setBranchDiffLoading] = useState(false);
   const [changesError, setChangesError] = useState<string | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [branchesError, setBranchesError] = useState<string | null>(null);
+  const [branchDiffError, setBranchDiffError] = useState<string | null>(null);
   const [fileActions, setFileActions] = useState<Record<string, boolean>>({});
-  const [checkoutBranch, setCheckoutBranch] = useState<string | null>(null);
+  const [branchDiffFiles, setBranchDiffFiles] = useState<BranchDiffFile[]>([]);
 
   const gitApi = window.api?.git;
 
@@ -309,43 +306,26 @@ function GitPanel({ workingDir }: GitPanelProps) {
     setChangesLoading(false);
   }, [ensureRepoReady, gitApi, workingDir]);
 
-  const loadHistory = useCallback(async (force = false) => {
+  const loadBranchDiff = useCallback(async (force = false) => {
     if (!(await ensureRepoReady({ force })) || !workingDir || !gitApi) return;
-    setHistoryLoading(true);
-    setHistoryError(null);
-    const result = unwrapResult<GitCommit[]>(
-      await gitApi.getCommitLog(workingDir, 20)
+    if (!baseBranch) {
+      setBranchDiffFiles([]);
+      setBranchDiffError(null);
+      return;
+    }
+    setBranchDiffLoading(true);
+    setBranchDiffError(null);
+    const result = unwrapResult<BranchDiffFile[]>(
+      await gitApi.getBranchDiffFiles(workingDir, baseBranch, currentBranch || undefined)
     );
     if (result.ok) {
-      setCommits(Array.isArray(result.data) ? result.data : []);
+      setBranchDiffFiles(Array.isArray(result.data) ? result.data : []);
     } else {
-      setCommits([]);
-      setHistoryError(formatError(result.error));
+      setBranchDiffFiles([]);
+      setBranchDiffError(formatError(result.error));
     }
-    setHistoryLoading(false);
-  }, [ensureRepoReady, gitApi, workingDir]);
-
-  const loadBranches = useCallback(async (force = false) => {
-    if (!(await ensureRepoReady({ force })) || !workingDir || !gitApi) return;
-    setBranchesLoading(true);
-    setBranchesError(null);
-    const [branchesResult, currentResult] = await Promise.all([
-      gitApi.getBranches(workingDir),
-      gitApi.getCurrentBranch(workingDir)
-    ]);
-    const parsedBranches = unwrapResult<string[]>(branchesResult);
-    const parsedCurrent = unwrapResult<string>(currentResult);
-    if (!parsedBranches.ok || !parsedCurrent.ok) {
-      setBranches([]);
-      setBranchesError(
-        formatError(parsedBranches.error || parsedCurrent.error || undefined)
-      );
-    } else {
-      setBranches(Array.isArray(parsedBranches.data) ? parsedBranches.data : []);
-      setCurrentBranch(parsedCurrent.data || null);
-    }
-    setBranchesLoading(false);
-  }, [ensureRepoReady, gitApi, workingDir]);
+    setBranchDiffLoading(false);
+  }, [baseBranch, currentBranch, ensureRepoReady, gitApi, workingDir]);
 
   const handleStageToggle = useCallback(
     async (file: GitFile) => {
@@ -367,42 +347,23 @@ function GitPanel({ workingDir }: GitPanelProps) {
     [gitApi, loadChanges, workingDir]
   );
 
-  const handleCheckout = useCallback(
-    async (branchName: string) => {
-      if (!workingDir || !gitApi || branchName === currentBranch) return;
-      setCheckoutBranch(branchName);
-      setBranchesError(null);
-      const result = unwrapResult(await gitApi.checkoutBranch(workingDir, branchName));
-      if (!result.ok) {
-        setBranchesError(formatError(result.error));
-      }
-      await Promise.all([loadBranches(), loadChanges(), loadHistory()]);
-      setCheckoutBranch(null);
-    },
-    [currentBranch, gitApi, loadBranches, loadChanges, loadHistory, workingDir]
-  );
-
   useEffect(() => {
     setRepoStatus('idle');
     setRepoError(null);
     setChangesError(null);
-    setHistoryError(null);
-    setBranchesError(null);
+    setBranchDiffError(null);
     setFiles([]);
-    setCommits([]);
-    setBranches([]);
+    setBranchDiffFiles([]);
     setCurrentBranch(null);
   }, [workingDir]);
 
   useEffect(() => {
     if (subTab === 'changes') {
       void loadChanges();
-    } else if (subTab === 'history') {
-      void loadHistory();
     } else {
-      void loadBranches();
+      void loadBranchDiff();
     }
-  }, [loadBranches, loadChanges, loadHistory, subTab]);
+  }, [loadBranchDiff, loadChanges, subTab]);
 
   const repoMessage = useMemo(() => {
     switch (repoStatus) {
@@ -421,8 +382,6 @@ function GitPanel({ workingDir }: GitPanelProps) {
     }
   }, [repoError, repoStatus]);
 
-  const actionsDisabled = repoStatus !== 'ready';
-
   return (
     <div className="flex h-full flex-col">
       {/* Sub Tab Bar */}
@@ -432,21 +391,14 @@ function GitPanel({ workingDir }: GitPanelProps) {
           size="sm"
           onClick={() => setSubTab('changes')}
         >
-          变更文件
+          变更
         </Button>
         <Button
-          variant={subTab === 'history' ? 'secondary' : 'ghost'}
+          variant={subTab === 'compare' ? 'secondary' : 'ghost'}
           size="sm"
-          onClick={() => setSubTab('history')}
+          onClick={() => setSubTab('compare')}
         >
-          提交历史
-        </Button>
-        <Button
-          variant={subTab === 'branches' ? 'secondary' : 'ghost'}
-          size="sm"
-          onClick={() => setSubTab('branches')}
-        >
-          分支
+          对比
         </Button>
       </div>
 
@@ -456,7 +408,7 @@ function GitPanel({ workingDir }: GitPanelProps) {
           <GitEmptyState title={repoMessage.title} description={repoMessage.description} />
         ) : (
           <>
-            {subTab === 'changes' && (
+            {subTab === 'changes' ? (
               <GitChangesPanel
                 files={files}
                 loading={changesLoading}
@@ -465,24 +417,14 @@ function GitPanel({ workingDir }: GitPanelProps) {
                 onToggleStage={handleStageToggle}
                 busyMap={fileActions}
               />
-            )}
-            {subTab === 'history' && (
-              <GitHistoryPanel
-                commits={commits}
-                loading={historyLoading}
-                error={historyError}
-                onRefresh={() => loadHistory(true)}
-              />
-            )}
-            {subTab === 'branches' && (
-              <GitBranchesPanel
-                branches={branches}
+            ) : (
+              <GitBranchDiffPanel
+                files={branchDiffFiles}
+                baseBranch={baseBranch}
                 currentBranch={currentBranch}
-                loading={branchesLoading}
-                error={branchesError}
-                onRefresh={() => loadBranches(true)}
-                onCheckout={handleCheckout}
-                checkoutBranch={checkoutBranch}
+                loading={branchDiffLoading}
+                error={branchDiffError}
+                onRefresh={() => loadBranchDiff(true)}
               />
             )}
           </>
@@ -502,11 +444,6 @@ function GitPanel({ workingDir }: GitPanelProps) {
             变基
           </Button>
         </div>
-        {actionsDisabled && (
-          <div className="text-muted-foreground mt-2 text-xs">
-            Git 功能准备就绪后将开放更多操作
-          </div>
-        )}
       </div>
     </div>
   );
@@ -539,9 +476,8 @@ function GitChangesPanel({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">变更文件</span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">
         <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
           {loading ? '加载中...' : '刷新'}
         </Button>
@@ -552,9 +488,7 @@ function GitChangesPanel({
       )}
 
       {files.length === 0 ? (
-        <div className="text-muted-foreground py-8 text-center text-sm">
-          暂无变更文件
-        </div>
+        <GitEmptyState title="暂无变更" />
       ) : (
         <div className="space-y-1">
           {files.map((file) => (
@@ -592,22 +526,47 @@ function GitChangesPanel({
   );
 }
 
-function GitHistoryPanel({
-  commits,
+function GitBranchDiffPanel({
+  files,
+  baseBranch,
+  currentBranch,
   loading,
   error,
   onRefresh,
 }: {
-  commits: GitCommit[];
+  files: BranchDiffFile[];
+  baseBranch?: string | null;
+  currentBranch: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
 }) {
+  const statusColors: Record<string, string> = {
+    M: 'text-amber-500',
+    A: 'text-green-500',
+    D: 'text-red-500',
+    R: 'text-blue-500',
+    '?': 'text-muted-foreground',
+  };
+
+  const compareLabel = baseBranch
+    ? `${baseBranch} → ${currentBranch || '当前'}`
+    : null;
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">提交历史</span>
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        {compareLabel ? (
+          <div className="text-muted-foreground truncate text-xs">{compareLabel}</div>
+        ) : (
+          <span />
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          disabled={loading || !baseBranch}
+        >
           {loading ? '加载中...' : '刷新'}
         </Button>
       </div>
@@ -616,18 +575,26 @@ function GitHistoryPanel({
         <div className="text-destructive text-sm">{error}</div>
       )}
 
-      {commits.length === 0 ? (
-        <div className="text-muted-foreground py-8 text-center text-sm">
-          暂无提交记录
-        </div>
+      {!baseBranch ? (
+        <GitEmptyState title="缺少基准分支" />
+      ) : files.length === 0 ? (
+        <GitEmptyState title="无差异" />
       ) : (
-        <div className="space-y-2">
-          {commits.map((commit) => (
-            <div key={commit.hash} className="border-border/60 rounded border p-2">
-              <div className="text-sm font-medium">{commit.message}</div>
-              <div className="text-muted-foreground mt-1 text-xs">
-                {commit.author} · {commit.date} · {commit.hash.slice(0, 7)}
-              </div>
+        <div className="space-y-1">
+          {files.map((file) => (
+            <div
+              key={`${file.status}-${file.path}`}
+              className="hover:bg-muted/50 flex items-center gap-2 rounded px-2 py-1 text-sm"
+            >
+              <span
+                className={cn(
+                  'font-mono',
+                  statusColors[getStatusCode(file.status)]
+                )}
+              >
+                {getStatusCode(file.status)}
+              </span>
+              <span className="flex-1 truncate">{file.path}</span>
             </div>
           ))}
         </div>
@@ -636,82 +603,11 @@ function GitHistoryPanel({
   );
 }
 
-function GitBranchesPanel({
-  branches,
-  currentBranch,
-  loading,
-  error,
-  onRefresh,
-  onCheckout,
-  checkoutBranch,
-}: {
-  branches: string[];
-  currentBranch: string | null;
-  loading: boolean;
-  error: string | null;
-  onRefresh: () => void;
-  onCheckout: (branchName: string) => void;
-  checkoutBranch: string | null;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">分支</span>
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
-          {loading ? '加载中...' : '刷新'}
-        </Button>
-      </div>
-
-      {error && (
-        <div className="text-destructive text-sm">{error}</div>
-      )}
-
-      {branches.length === 0 ? (
-        <div className="text-muted-foreground py-8 text-center text-sm">
-          暂无分支
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {branches.map((branch) => {
-            const isCurrent = branch === currentBranch;
-            return (
-              <div
-                key={branch}
-                className={cn(
-                  'hover:bg-muted/50 flex items-center gap-2 rounded px-2 py-1 text-sm',
-                  isCurrent && 'bg-muted/40'
-                )}
-              >
-                <span className="flex-1 truncate">
-                  {branch}
-                  {isCurrent && (
-                    <span className="text-muted-foreground ml-2 text-xs">当前</span>
-                  )}
-                </span>
-                {!isCurrent && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onCheckout(branch)}
-                    disabled={loading || checkoutBranch === branch}
-                  >
-                    {checkoutBranch === branch ? '切换中...' : '切换'}
-                  </Button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GitEmptyState({ title, description }: { title: string; description: string }) {
+function GitEmptyState({ title, description }: { title: string; description?: string }) {
   return (
     <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 text-center text-sm">
       <div className="text-foreground text-sm font-medium">{title}</div>
-      <div className="max-w-[240px] text-xs">{description}</div>
+      {description && <div className="max-w-[240px] text-xs">{description}</div>}
     </div>
   );
 }

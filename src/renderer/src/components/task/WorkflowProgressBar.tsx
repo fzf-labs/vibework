@@ -4,7 +4,7 @@ import { Check, Circle, Clock, AlertCircle } from 'lucide-react';
 interface WorkNode {
   id: string;
   name: string;
-  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error';
+  status: 'todo' | 'in_progress' | 'in_review' | 'done';
   node_order: number;
 }
 

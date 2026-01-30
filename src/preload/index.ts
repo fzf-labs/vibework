@@ -43,6 +43,11 @@ const api = {
     getBranches: (repoPath: string) => ipcRenderer.invoke('git:getBranches', repoPath),
     getCurrentBranch: (repoPath: string) => ipcRenderer.invoke('git:getCurrentBranch', repoPath),
     getChangedFiles: (repoPath: string) => ipcRenderer.invoke('git:getChangedFiles', repoPath),
+    getBranchDiffFiles: (
+      repoPath: string,
+      baseBranch: string,
+      compareBranch?: string
+    ) => ipcRenderer.invoke('git:getBranchDiffFiles', repoPath, baseBranch, compareBranch),
     stageFiles: (repoPath: string, filePaths: string[]) =>
       ipcRenderer.invoke('git:stageFiles', repoPath, filePaths),
     unstageFiles: (repoPath: string, filePaths: string[]) =>
@@ -238,6 +243,7 @@ const api = {
       ipcRenderer.invoke('db:updateWorkNodeStatus', id, status),
     approveWorkNode: (id: string) => ipcRenderer.invoke('db:approveWorkNode', id),
     rejectWorkNode: (id: string) => ipcRenderer.invoke('db:rejectWorkNode', id),
+    approveTask: (id: string) => ipcRenderer.invoke('db:approveTask', id),
     // AgentExecution operations
     createAgentExecution: (workNodeId: string) =>
       ipcRenderer.invoke('db:createAgentExecution', workNodeId),

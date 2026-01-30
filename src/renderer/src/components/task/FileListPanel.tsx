@@ -1,10 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
   FileCode2,
   FileText,
   Folder,
+  GitBranch,
   Image,
   Music,
   RefreshCw,
@@ -26,8 +27,8 @@ interface WorkspaceEntry {
 }
 
 interface FileListPanelProps {
-  artifacts: Artifact[];
   workingDir: string;
+  branchName?: string | null;
   selectedArtifact: Artifact | null;
   onSelectArtifact: (artifact: Artifact) => void;
 }
@@ -87,8 +88,8 @@ const updateChildren = (
 };
 
 export function FileListPanel({
-  artifacts,
   workingDir,
+  branchName,
   selectedArtifact,
   onSelectArtifact,
 }: FileListPanelProps) {
@@ -197,8 +198,6 @@ export function FileListPanel({
     [selectedArtifact]
   );
 
-  const artifactItems = useMemo(() => artifacts, [artifacts]);
-
   const renderWorkspaceEntries = (
     entries: WorkspaceEntry[],
     depth = 0
@@ -258,9 +257,16 @@ export function FileListPanel({
     <div className="flex h-full w-72 shrink-0 flex-col border-r">
       <div className="border-b px-3 py-2">
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground text-xs font-medium">
-            {t.preview.fileList}
-          </span>
+          {branchName ? (
+            <div className="text-muted-foreground flex items-center gap-2 text-[11px]">
+              <GitBranch className="size-3" />
+              <code className="bg-muted rounded px-1.5 py-0.5">
+                {branchName}
+              </code>
+            </div>
+          ) : (
+            <span />
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -277,44 +283,6 @@ export function FileListPanel({
       <div className="flex-1 overflow-auto p-3">
         <div className="space-y-4">
           <div>
-            <div className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
-              {t.preview.artifactsSection}
-            </div>
-            <div className="space-y-1">
-              {artifactItems.length === 0 ? (
-                <div className="text-muted-foreground text-xs">
-                  {t.preview.artifactsEmpty}
-                </div>
-              ) : (
-                artifactItems.map((artifact) => {
-                  const Icon = getArtifactIcon(artifact);
-                  return (
-                    <button
-                      key={artifact.id}
-                      type="button"
-                      onClick={() => onSelectArtifact(artifact)}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
-                        isSelected(artifact)
-                          ? 'bg-accent text-foreground'
-                          : 'hover:bg-accent/60'
-                      )}
-                    >
-                      <Icon className="size-3.5 text-muted-foreground" />
-                      <span className="truncate" title={artifact.name}>
-                        {artifact.name}
-                      </span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
-              {t.preview.workspaceSection}
-            </div>
             <div className="space-y-1">
               {!hasWorkspace && (
                 <div className="text-muted-foreground text-xs">
@@ -346,14 +314,6 @@ export function FileListPanel({
                 </>
               )}
             </div>
-            {hasWorkspace && (
-              <div
-                className="text-muted-foreground mt-2 truncate text-[10px]"
-                title={workingDir}
-              >
-                {workingDir}
-              </div>
-            )}
           </div>
         </div>
       </div>

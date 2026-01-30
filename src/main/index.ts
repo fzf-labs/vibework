@@ -307,6 +307,22 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle(
+    'git:getBranchDiffFiles',
+    async (_, repoPath: string, baseBranch: string, compareBranch?: string) => {
+      try {
+        const files = await gitService.getBranchDiffFiles(
+          repoPath,
+          baseBranch,
+          compareBranch
+        )
+        return { success: true, data: files }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
   ipcMain.handle('git:stageFiles', async (_, repoPath: string, filePaths: string[]) => {
     try {
       await gitService.stageFiles(repoPath, filePaths)
@@ -997,6 +1013,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('db:rejectWorkNode', (_, id: string) => {
     return databaseService.rejectWorkNode(id)
+  })
+
+  ipcMain.handle('db:approveTask', (_, id: string) => {
+    return databaseService.approveTask(id)
   })
 
   // AgentExecution operations

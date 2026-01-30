@@ -38,6 +38,11 @@ interface GitAPI {
   getBranches: (repoPath: string) => Promise<unknown>
   getCurrentBranch: (repoPath: string) => Promise<unknown>
   getChangedFiles: (repoPath: string) => Promise<unknown>
+  getBranchDiffFiles: (
+    repoPath: string,
+    baseBranch: string,
+    compareBranch?: string
+  ) => Promise<unknown>
   stageFiles: (repoPath: string, filePaths: string[]) => Promise<unknown>
   unstageFiles: (repoPath: string, filePaths: string[]) => Promise<unknown>
   mergeBranch: (repoPath: string, branchName: string) => Promise<unknown>
@@ -211,6 +216,9 @@ interface DatabaseAPI {
   createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) => Promise<unknown>
   getWorkNodesByWorkflowId: (workflowId: string) => Promise<unknown[]>
   updateWorkNodeStatus: (id: string, status: string) => Promise<unknown>
+  approveWorkNode: (id: string) => Promise<void>
+  rejectWorkNode: (id: string) => Promise<void>
+  approveTask: (id: string) => Promise<boolean>
   // AgentExecution
   createAgentExecution: (workNodeId: string) => Promise<unknown>
   getAgentExecutionsByWorkNodeId: (workNodeId: string) => Promise<unknown[]>

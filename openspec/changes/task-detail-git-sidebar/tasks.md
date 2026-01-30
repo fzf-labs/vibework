@@ -7,11 +7,14 @@
 
 - [x] 2.1 Replace placeholder with change list UI (status, staged indicator, empty state)
 - [x] 2.2 Add stage/unstage actions per file and refresh after updates
+- [x] 2.3 Add branch diff section comparing base branch and current branch
 
-## 3. History & Branches Tabs
+## 3. Tabs Simplification
 
-- [x] 3.1 Render commit history list with message/author/date/short hash and empty state
-- [x] 3.2 Render branch list with current branch highlight and checkout action
+- [x] 3.1 Split changes and branch diff into separate tabs
+- [x] 3.2 Remove history and branches tabs and related UI
+
+<!-- History & branches tabs removed -->
 
 ## 4. UX & Errors
 

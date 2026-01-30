@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Task detail file list
-The system SHALL display a file list in the task detail right panel that includes task artifacts and workspace files when available.
+The system SHALL display a file list in the task detail right panel that includes workspace files when available.
 
-#### Scenario: Show artifact and workspace sections
+#### Scenario: Show workspace section
 - **WHEN** the task detail page renders and a working directory is available
-- **THEN** the file list shows a task artifacts section and a workspace section
+- **THEN** the file list shows a workspace section
 
 #### Scenario: Workspace unavailable
 - **WHEN** the task detail page renders without a working directory

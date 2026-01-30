@@ -98,6 +98,7 @@ interface WorkflowTemplate {
   id: string
   name: string
   description: string | null
+  workflow_type: 'single_node' | 'spec' | 'bmad' | 'tdd'
   scope: 'global' | 'project'
   project_id: string | null
   created_at: string
@@ -123,7 +124,7 @@ interface Workflow {
   workflow_template_id: string
   workflow_template_scope: 'global' | 'project'
   current_node_index: number
-  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error'
+  status: 'todo' | 'in_progress' | 'in_review' | 'done'
   created_at: string
   updated_at: string
 }
@@ -133,7 +134,7 @@ interface WorkNode {
   workflow_id: string
   work_node_template_id: string
   node_order: number
-  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'error'
+  status: 'todo' | 'in_progress' | 'in_review' | 'done'
   created_at: string
   updated_at: string
 }
@@ -162,6 +163,7 @@ interface CreateWorkNodeTemplateInput {
 interface CreateWorkflowTemplateInput {
   name: string
   description?: string
+  workflow_type?: 'single_node' | 'spec' | 'bmad' | 'tdd'
   scope: 'global' | 'project'
   project_id?: string
   nodes: CreateWorkNodeTemplateInput[]
@@ -171,6 +173,7 @@ interface UpdateWorkflowTemplateInput {
   id: string
   name: string
   description?: string
+  workflow_type?: 'single_node' | 'spec' | 'bmad' | 'tdd'
   scope: 'global' | 'project'
   project_id?: string
   nodes: CreateWorkNodeTemplateInput[]
@@ -316,6 +319,7 @@ export class DatabaseService {
     this.ensureColumn('tasks', 'favorite', 'INTEGER DEFAULT 0')
     this.ensureColumn('tasks', 'workflow_id', 'TEXT')
     this.ensureWorkflowTables()
+    this.migrateWorkflowType()
     this.backfillTaskTitles()
     this.backfillWorkspacePaths()
     this.migrateToUlidIdentifiers()
@@ -329,6 +333,7 @@ export class DatabaseService {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
+        workflow_type TEXT NOT NULL DEFAULT 'single_node',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -355,6 +360,7 @@ export class DatabaseService {
         project_id TEXT NOT NULL,
         name TEXT NOT NULL,
         description TEXT,
+        workflow_type TEXT NOT NULL DEFAULT 'single_node',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
@@ -417,6 +423,16 @@ export class DatabaseService {
         FOREIGN KEY (work_node_id) REFERENCES work_nodes(id) ON DELETE CASCADE
       )
     `)
+  }
+
+  private migrateWorkflowType(): void {
+    // 为已存在的工作流模板表添加 workflow_type 字段
+    if (this.tableExists('global_workflow_templates')) {
+      this.ensureColumn('global_workflow_templates', 'workflow_type', "TEXT NOT NULL DEFAULT 'single_node'")
+    }
+    if (this.tableExists('project_workflow_templates')) {
+      this.ensureColumn('project_workflow_templates', 'workflow_type', "TEXT NOT NULL DEFAULT 'single_node'")
+    }
   }
 
   private backfillTaskTitles(): void {
@@ -993,15 +1009,21 @@ export class DatabaseService {
 
   private deriveTaskStatusFromWorkflow(workflow: Workflow): string | null {
     const nodes = this.getWorkNodesByWorkflowId(workflow.id)
+    if (nodes.length === 0) return null
 
-    // 检查是否有节点在审核中
+    // 原则2: Work Node → Task 自动联动
+    // 1. 任意 Work Node = in_progress → Task in_progress
+    const hasInProgressNode = nodes.some(n => n.status === 'in_progress')
+    if (hasInProgressNode) return 'in_progress'
+
+    // 2. 任意 Work Node = in_review 且无 in_progress → Task in_progress
     const hasReviewNode = nodes.some(n => n.status === 'in_review')
-    if (hasReviewNode) return 'in_review'
+    if (hasReviewNode) return 'in_progress'
 
-    // 检查工作流状态
-    if (workflow.status === 'done') return 'done'
-    if (workflow.status === 'error') return 'error'
-    if (workflow.status === 'in_progress') return 'in_progress'
+    // 3. 最后一个 Work Node = done → Task in_review
+    // 注意：Task 的 done 状态由用户手动审核通过触发，不在此自动联动
+    const lastNode = nodes[nodes.length - 1]
+    if (lastNode.status === 'done') return 'in_review'
 
     return null
   }
@@ -1049,6 +1071,19 @@ export class DatabaseService {
 
   rejectWorkNode(workNodeId: string): void {
     this.startWorkNode(workNodeId)
+  }
+
+  /**
+   * 原则3: 用户审核任务通过 → Task: in_review → done
+   */
+  approveTask(taskId: string): boolean {
+    const task = this.getTask(taskId)
+    if (!task || task.status !== 'in_review') return false
+
+    const now = new Date().toISOString()
+    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
+      .run('done', now, taskId)
+    return true
   }
 
   // ============ Message 操作 ============
@@ -1172,6 +1207,7 @@ export class DatabaseService {
     const now = new Date().toISOString()
     const templateId = newUlid()
     const nodes = input.nodes ?? []
+    const workflowType = input.workflow_type || 'single_node'
 
     if (input.scope === 'project' && !input.project_id) {
       throw new Error('Project workflow template requires project_id')
@@ -1180,14 +1216,14 @@ export class DatabaseService {
     const create = this.db.transaction(() => {
       if (input.scope === 'global') {
         this.db.prepare(`
-          INSERT INTO global_workflow_templates (id, name, description, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(templateId, input.name, input.description || null, now, now)
+          INSERT INTO global_workflow_templates (id, name, description, workflow_type, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(templateId, input.name, input.description || null, workflowType, now, now)
       } else {
         this.db.prepare(`
-          INSERT INTO project_workflow_templates (id, project_id, name, description, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).run(templateId, input.project_id!, input.name, input.description || null, now, now)
+          INSERT INTO project_workflow_templates (id, project_id, name, description, workflow_type, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(templateId, input.project_id!, input.name, input.description || null, workflowType, now, now)
       }
 
       const insertNode = this.db.prepare(
@@ -1245,17 +1281,18 @@ export class DatabaseService {
     const now = new Date().toISOString()
     const existing = this.getWorkflowTemplateByScope(input.id, input.scope)
     if (!existing) throw new Error('Workflow template not found')
+    const workflowType = input.workflow_type || existing.workflow_type || 'single_node'
 
     const update = this.db.transaction(() => {
       if (input.scope === 'global') {
         this.db.prepare(
-          'UPDATE global_workflow_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
-        ).run(input.name, input.description || null, now, input.id)
+          'UPDATE global_workflow_templates SET name = ?, description = ?, workflow_type = ?, updated_at = ? WHERE id = ?'
+        ).run(input.name, input.description || null, workflowType, now, input.id)
         this.db.prepare('DELETE FROM global_work_node_templates WHERE workflow_template_id = ?').run(input.id)
       } else {
         this.db.prepare(
-          'UPDATE project_workflow_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
-        ).run(input.name, input.description || null, now, input.id)
+          'UPDATE project_workflow_templates SET name = ?, description = ?, workflow_type = ?, updated_at = ? WHERE id = ?'
+        ).run(input.name, input.description || null, workflowType, now, input.id)
         this.db.prepare('DELETE FROM project_work_node_templates WHERE workflow_template_id = ?').run(input.id)
       }
 
@@ -1290,6 +1327,7 @@ export class DatabaseService {
     return this.createWorkflowTemplate({
       name: template.name,
       description: template.description ?? undefined,
+      workflow_type: template.workflow_type,
       scope: 'project',
       project_id: projectId,
       nodes: template.nodes.map((node) => ({
@@ -1324,6 +1362,55 @@ export class DatabaseService {
       requires_approval: Boolean(node.requires_approval),
       continue_on_error: Boolean(node.continue_on_error)
     }))
+  }
+
+  getWorkNodeTemplate(templateId: string): WorkNodeTemplate | null {
+    // 先尝试从全局模板查找
+    let template = this.db.prepare(
+      'SELECT * FROM global_work_node_templates WHERE id = ?'
+    ).get(templateId) as WorkNodeTemplate | undefined
+    if (template) {
+      return {
+        ...template,
+        requires_approval: Boolean(template.requires_approval),
+        continue_on_error: Boolean(template.continue_on_error)
+      }
+    }
+    // 再尝试从项目模板查找
+    template = this.db.prepare(
+      'SELECT * FROM project_work_node_templates WHERE id = ?'
+    ).get(templateId) as WorkNodeTemplate | undefined
+    if (template) {
+      return {
+        ...template,
+        requires_approval: Boolean(template.requires_approval),
+        continue_on_error: Boolean(template.continue_on_error)
+      }
+    }
+    return null
+  }
+
+  /**
+   * 获取工作节点的组合提示词（任务提示词 + 节点提示词）
+   */
+  getCombinedPromptForWorkNode(workNodeId: string): string | null {
+    const workNode = this.getWorkNode(workNodeId)
+    if (!workNode) return null
+
+    const workflow = this.getWorkflow(workNode.workflow_id)
+    if (!workflow) return null
+
+    const task = this.getTask(workflow.task_id)
+    if (!task) return null
+
+    const nodeTemplate = this.getWorkNodeTemplate(workNode.work_node_template_id)
+    const nodePrompt = nodeTemplate?.prompt || ''
+
+    // 组合提示词：任务提示词 + 节点提示词
+    if (nodePrompt) {
+      return `${task.prompt}\n\n${nodePrompt}`
+    }
+    return task.prompt
   }
 
   // ============ Workflow 实例操作 ============
@@ -1423,7 +1510,30 @@ export class DatabaseService {
     } else {
       this.db.prepare('UPDATE agent_executions SET status = ? WHERE id = ?').run(status, id)
     }
-    return this.getAgentExecution(id)
+
+    // 原则1: Agent CLI → Work Node 自动联动（idle 除外）
+    const execution = this.getAgentExecution(id)
+    if (execution && status !== 'idle') {
+      this.syncWorkNodeFromAgentStatus(execution.work_node_id, status)
+    }
+
+    return execution
+  }
+
+  /**
+   * 原则1: Agent CLI 状态同步到 Work Node
+   * - running → in_progress
+   * - completed → in_review
+   */
+  private syncWorkNodeFromAgentStatus(workNodeId: string, agentStatus: 'running' | 'completed'): void {
+    const workNodeStatus = agentStatus === 'running' ? 'in_progress' : 'in_review'
+    this.updateWorkNodeStatus(workNodeId, workNodeStatus)
+
+    // 同步更新 Task 状态
+    const workNode = this.getWorkNode(workNodeId)
+    if (workNode) {
+      this.syncTaskStatusFromWorkflow(workNode.workflow_id)
+    }
   }
 
   // ============ 清理和关闭 ============

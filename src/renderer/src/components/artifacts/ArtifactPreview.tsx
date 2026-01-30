@@ -521,14 +521,6 @@ export function ArtifactPreview({
   if (!artifact) {
     return (
       <div className="bg-background flex h-full flex-col">
-        <div className="border-border/50 bg-muted/30 flex shrink-0 items-center justify-between border-b px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Eye className="text-muted-foreground size-4" />
-            <span className="text-muted-foreground text-sm font-medium">
-              {t.task.artifacts}
-            </span>
-          </div>
-        </div>
         <div className="bg-muted/20 flex flex-1 flex-col items-center justify-center p-8">
           <div className="flex flex-col items-center text-center">
             <div className="border-border bg-background mb-4 flex size-16 items-center justify-center rounded-xl border">

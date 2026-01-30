@@ -29,16 +29,15 @@ The system SHALL allow users to stage or unstage individual changed files from t
 - **WHEN** the user unstages a file that is currently staged
 - **THEN** the system calls the unstage API for that file and the file appears as unstaged in the list
 
-### Requirement: Commit history is displayed
-The system SHALL display recent commits for the working directory, including commit message, author, date, and short hash.
+### Requirement: Branch comparison is visible
+The system SHALL display the file list diff between the current worktree branch and the task base branch in the branch comparison tab.
 
-#### Scenario: Load commit history
-- **WHEN** the user opens the history tab
-- **THEN** the system fetches the commit log and displays the latest commits
+#### Scenario: Base branch comparison
+- **WHEN** the branch comparison tab is active and the task has a base branch
+- **THEN** the system shows the diff file list between base branch and current branch
 
-### Requirement: Branch list and current branch are visible
-The system SHALL display all local branches and indicate the current branch, and SHALL allow switching to another branch.
+#### Scenario: Base branch missing
+- **WHEN** the branch comparison tab is active and the task has no base branch
+- **THEN** the system shows an empty state explaining that branch comparison is unavailable
 
-#### Scenario: Switch branches
-- **WHEN** the user selects a non-current branch in the branches tab
-- **THEN** the system checks out the selected branch and refreshes the branch list
+<!-- Removed: commit history and branch management are out of scope for this change -->

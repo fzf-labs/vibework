@@ -244,6 +244,41 @@ export class GitService {
   }
 
   /**
+   * 获取分支之间的变更文件列表
+   */
+  async getBranchDiffFiles(
+    repoPath: string,
+    baseBranch: string,
+    compareBranch?: string
+  ): Promise<
+    Array<{
+      path: string
+      status: string
+    }>
+  > {
+    try {
+      const compare = compareBranch?.trim() || 'HEAD'
+      const range = `${baseBranch}...${compare}`
+      const { stdout } = await execAsync(
+        `git -C "${repoPath}" diff --name-status "${range}"`
+      )
+      const files = stdout
+        .split('\n')
+        .filter((line) => line.trim())
+        .map((line) => {
+          const parts = line.split('\t').filter((part) => part.trim())
+          const status = parts[0]?.trim() || ''
+          const path = parts[parts.length - 1]?.trim() || ''
+          return { path, status }
+        })
+        .filter((file) => file.path)
+      return files
+    } catch (error) {
+      throw new Error(`Failed to get branch diff files: ${error}`)
+    }
+  }
+
+  /**
    * 暂存文件
    */
   async stageFiles(repoPath: string, filePaths: string[]): Promise<void> {
@@ -580,6 +615,18 @@ export class GitService {
       await execAsync(`git -C "${repoPath}" checkout -b "${branchName}"`)
     } catch (error) {
       throw new Error(`Failed to create branch: ${error}`)
+    }
+  }
+
+  /**
+   * 删除分支
+   */
+  async deleteBranch(repoPath: string, branchName: string, force: boolean = false): Promise<void> {
+    try {
+      const flag = force ? '-D' : '-d'
+      await execAsync(`git -C "${repoPath}" branch ${flag} "${branchName}"`)
+    } catch (error) {
+      throw new Error(`Failed to delete branch: ${error}`)
     }
   }
 }

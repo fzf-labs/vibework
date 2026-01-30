@@ -6,8 +6,6 @@ import {
   Clock,
   Play,
   CheckCircle,
-  XCircle,
-  Square,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -43,31 +41,11 @@ const statusConfig: Record<
     label: 'Done',
     color: 'text-green-500 bg-green-500/10',
   },
-  running: {
-    icon: Play,
-    label: 'Running',
-    color: 'text-blue-500 bg-blue-500/10',
-  },
-  completed: {
-    icon: CheckCircle,
-    label: 'Completed',
-    color: 'text-green-500 bg-green-500/10',
-  },
-  error: {
-    icon: XCircle,
-    label: 'Error',
-    color: 'text-red-500 bg-red-500/10',
-  },
-  stopped: {
-    icon: Square,
-    label: 'Stopped',
-    color: 'text-zinc-500 bg-zinc-500/10',
-  },
 };
 
 export function TaskMetadataPanel({
   task,
-  onStatusChange,
+  onStatusChange: _onStatusChange,
   onOpenWorktree,
   className,
 }: TaskMetadataPanelProps) {
@@ -75,7 +53,6 @@ export function TaskMetadataPanel({
 
   const config = statusConfig[task.status];
   const StatusIcon = config?.icon || Clock;
-  const isExecutionStatus = ['running', 'completed', 'error', 'stopped'].includes(task.status);
 
   return (
     <div className={cn('space-y-3 p-3', className)}>
@@ -162,34 +139,6 @@ export function TaskMetadataPanel({
             CLI
           </span>
           <div className="text-xs font-mono">{task.cli_tool_id}</div>
-        </div>
-      )}
-
-      {/* Status Actions */}
-      {onStatusChange && isExecutionStatus && task.status !== 'completed' && (
-        <div className="border-border/50 flex gap-2 border-t pt-3">
-          {task.status === 'running' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 flex-1 text-xs"
-              onClick={() => onStatusChange('stopped')}
-            >
-              <Square className="mr-1 size-3" />
-              Stop
-            </Button>
-          )}
-          {(task.status === 'stopped' || task.status === 'error') && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 flex-1 text-xs"
-              onClick={() => onStatusChange('completed')}
-            >
-              <CheckCircle className="mr-1 size-3" />
-              Mark Complete
-            </Button>
-          )}
         </div>
       )}
 

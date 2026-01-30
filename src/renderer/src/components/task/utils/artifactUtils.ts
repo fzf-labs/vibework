@@ -15,6 +15,34 @@ export function getArtifactTypeFromExt(
   if (ext === 'doc' || ext === 'docx') return 'document';
   if (ext === 'xls' || ext === 'xlsx') return 'spreadsheet';
   if (ext === 'ppt' || ext === 'pptx') return 'presentation';
+  if (
+    [
+      'mp3',
+      'wav',
+      'ogg',
+      'm4a',
+      'aac',
+      'flac',
+      'wma',
+      'aiff',
+    ].includes(ext)
+  )
+    return 'audio';
+  if (
+    [
+      'mp4',
+      'webm',
+      'mov',
+      'avi',
+      'mkv',
+      'm4v',
+      'wmv',
+      'flv',
+      '3gp',
+    ].includes(ext)
+  )
+    return 'video';
+  if (['ttf', 'otf', 'woff', 'woff2'].includes(ext)) return 'font';
   if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'].includes(ext))
     return 'image';
   if (

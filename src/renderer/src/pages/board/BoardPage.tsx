@@ -6,7 +6,7 @@ import { getSettings } from '@/data/settings';
 import { Button } from '@/components/ui/button';
 import { CreateTaskDialog } from '@/components/task/CreateTaskDialog';
 import { useProjects } from '@/hooks/useProjects';
-import type { TaskPipelineStatus } from '@/data/types';
+import type { TaskStatus } from '@/data/types';
 
 // Task type from API (camelCase fields)
 interface TaskWithWorktree {
@@ -31,27 +31,20 @@ interface TaskWithWorktree {
 }
 
 // Column configuration
-const columns: { id: TaskPipelineStatus; title: string; color: string }[] = [
+const columns: { id: TaskStatus; title: string; color: string }[] = [
   { id: 'todo', title: '待办', color: 'bg-zinc-500' },
   { id: 'in_progress', title: '进行中', color: 'bg-blue-500' },
   { id: 'in_review', title: '审查中', color: 'bg-amber-500' },
   { id: 'done', title: '已完成', color: 'bg-green-500' },
 ];
 
-// Map old status to pipeline status
-function mapToPipelineStatus(status: string): TaskPipelineStatus {
+// Map old status to standard status (for backward compatibility)
+function mapToTaskStatus(status: string): TaskStatus {
   switch (status) {
     case 'pending':
       return 'todo';
-    case 'running':
-      return 'in_progress';
-    case 'completed':
-      return 'done';
-    case 'error':
-    case 'stopped':
-      return 'in_review';
     default:
-      return (status as TaskPipelineStatus) || 'todo';
+      return (status as TaskStatus) || 'todo';
   }
 }
 
@@ -82,15 +75,15 @@ export function BoardPage() {
     }
   };
 
-  // Group tasks by pipeline status
+  // Group tasks by status
   const tasksByStatus = columns.reduce(
     (acc, col) => {
       acc[col.id] = tasks.filter(
-        (task) => mapToPipelineStatus(task.status) === col.id
+        (task) => mapToTaskStatus(task.status) === col.id
       );
       return acc;
     },
-    {} as Record<TaskPipelineStatus, TaskWithWorktree[]>
+    {} as Record<TaskStatus, TaskWithWorktree[]>
   );
 
   // Handle drag start
@@ -104,10 +97,10 @@ export function BoardPage() {
   };
 
   // Handle drop - update task status
-  const handleDrop = async (targetStatus: TaskPipelineStatus) => {
+  const handleDrop = async (targetStatus: TaskStatus) => {
     if (!draggedTask) return;
 
-    const currentStatus = mapToPipelineStatus(draggedTask.status);
+    const currentStatus = mapToTaskStatus(draggedTask.status);
     if (currentStatus === targetStatus) {
       setDraggedTask(null);
       return;
@@ -253,7 +246,7 @@ export function BoardPage() {
 
 // Board Column Component
 interface BoardColumnProps {
-  column: { id: TaskPipelineStatus; title: string; color: string };
+  column: { id: TaskStatus; title: string; color: string };
   tasks: TaskWithWorktree[];
   loading: boolean;
   onDragOver: (e: React.DragEvent) => void;
