@@ -275,14 +275,15 @@ export function CreateTaskDialog({
           )}
 
           <div>
-            <label className="text-sm font-medium">{t.task.createPipelineLabel}</label>
+            <label className="text-sm font-medium">{t.task.createPipelineLabel} *</label>
             <select
               value={selectedTemplateId}
               onChange={(e) => setSelectedTemplateId(e.target.value)}
               disabled={!projectId}
+              required
               className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
-              <option value="">{t.task.createPipelineNone}</option>
+              <option value="" disabled>请选择工作流模板</option>
               {renderTemplateOptions().map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -292,6 +293,11 @@ export function CreateTaskDialog({
             {!projectId && (
               <div className="text-muted-foreground mt-1 text-xs">
                 {t.task.createPipelineProjectRequired}
+              </div>
+            )}
+            {projectId && pipelineTemplates.length === 0 && (
+              <div className="text-amber-500 mt-1 text-xs">
+                请先创建工作流模板
               </div>
             )}
           </div>
