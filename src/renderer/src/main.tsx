@@ -4,7 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import { router } from './router';
 import { initializeSettings } from './data/settings';
-import { notifyWorkNodeCompleted } from './lib/notifications';
+import { notifyWorkNodeCompleted, playWorkNodeReviewSound } from './lib/notifications';
 import { LanguageProvider } from './providers/language-provider';
 import { ThemeProvider } from './providers/theme-provider';
 
@@ -16,6 +16,9 @@ initializeSettings()
   .finally(() => {
     window.api?.workNode?.onCompleted?.((data) => {
       void notifyWorkNodeCompleted(data?.name);
+    });
+    window.api?.workNode?.onReview?.(() => {
+      void playWorkNodeReviewSound();
     });
 
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

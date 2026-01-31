@@ -1,5 +1,5 @@
 // 类型定义
-import { notifyTaskCompleted } from '@/lib/notifications'
+import { notifyTaskCompleted, playTaskReviewSound } from '@/lib/notifications'
 import type {
   CreateSessionInput,
   CreateTaskInput,
@@ -49,6 +49,10 @@ export const db = {
     if (updates.status === 'done' && updatedTask?.status === 'done') {
       const taskTitle = updatedTask.title || updatedTask.prompt || undefined
       void notifyTaskCompleted(taskTitle)
+    }
+
+    if (updates.status === 'in_review' && updatedTask?.status === 'in_review') {
+      void playTaskReviewSound()
     }
 
     return updatedTask

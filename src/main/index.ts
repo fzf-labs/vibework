@@ -134,7 +134,18 @@ app.whenReady().then(() => {
   taskService = new TaskService(databaseService, gitService)
 
   databaseService.onWorkNodeStatusChange((node) => {
-    if (node.status === 'done' && mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+
+    if (node.status === 'in_review') {
+      const template = databaseService.getWorkNodeTemplate(node.work_node_template_id)
+      mainWindow.webContents.send('workNode:review', {
+        id: node.id,
+        name: template?.name || ''
+      })
+      return
+    }
+
+    if (node.status === 'done') {
       const template = databaseService.getWorkNodeTemplate(node.work_node_template_id)
       mainWindow.webContents.send('workNode:completed', {
         id: node.id,

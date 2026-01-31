@@ -312,10 +312,6 @@ export const showWorkNodeCompleteNotification = async (
 export const notifyTaskCompleted = async (taskTitle?: string): Promise<void> => {
   const settings = getSettings();
 
-  if (settings.taskCompleteSoundEnabled) {
-    await playSoundChoice(settings.taskCompleteSound);
-  }
-
   if (!settings.taskCompleteNotificationsEnabled) return;
 
   const permissionState = getNotificationPermissionState();
@@ -326,9 +322,6 @@ export const notifyTaskCompleted = async (taskTitle?: string): Promise<void> => 
 
 export const notifyWorkNodeCompleted = async (nodeName?: string): Promise<void> => {
   const settings = getSettings();
-  if (settings.workNodeCompleteSoundEnabled) {
-    void playSoundChoice(settings.workNodeCompleteSound);
-  }
 
   if (!settings.workNodeCompleteNotificationsEnabled) return;
 
@@ -336,4 +329,16 @@ export const notifyWorkNodeCompleted = async (nodeName?: string): Promise<void> 
   if (permissionState !== 'granted') return;
 
   await showWorkNodeCompleteNotification(nodeName);
+};
+
+export const playTaskReviewSound = async (): Promise<void> => {
+  const settings = getSettings();
+  if (!settings.taskCompleteSoundEnabled) return;
+  await playSoundChoice(settings.taskCompleteSound);
+};
+
+export const playWorkNodeReviewSound = async (): Promise<void> => {
+  const settings = getSettings();
+  if (!settings.workNodeCompleteSoundEnabled) return;
+  void playSoundChoice(settings.workNodeCompleteSound);
 };

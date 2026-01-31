@@ -196,11 +196,11 @@ export function SoundSettings({
               <div className="space-y-1">
                 <p className="text-sm font-medium">
                   {t.settings?.soundTaskCompleteLabel ||
-                    'Task completion sound'}
+                    'Task sound'}
                 </p>
                 <p className="text-muted-foreground text-xs">
                   {t.settings?.soundTaskCompleteDesc ||
-                    'Choose the sound for completed tasks.'}
+                    'Choose the sound for tasks entering review.'}
                 </p>
               </div>
               <Switch
@@ -303,11 +303,11 @@ export function SoundSettings({
               <div className="space-y-1">
                 <p className="text-sm font-medium">
                   {t.settings?.soundWorkNodeCompleteLabel ||
-                    'Work node completion sound'}
+                    'Work node sound'}
                 </p>
                 <p className="text-muted-foreground text-xs">
                   {t.settings?.soundWorkNodeCompleteDesc ||
-                    'Choose the sound for completed work nodes.'}
+                    'Choose the sound for work nodes entering review.'}
                 </p>
               </div>
               <Switch

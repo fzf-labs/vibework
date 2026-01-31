@@ -209,6 +209,7 @@ interface NotificationAPI {
 
 interface WorkNodeAPI {
   onCompleted: (callback: (data: { id: string; name?: string }) => void) => () => void
+  onReview: (callback: (data: { id: string; name?: string }) => void) => () => void
 }
 
 interface DatabaseAPI {

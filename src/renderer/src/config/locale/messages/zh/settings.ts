@@ -30,12 +30,12 @@ export default {
 
   // Sound Alerts
   soundAlertsTitle: '提示音提醒',
-  soundAlertsDescription: '任务或节点完成时播放提示音。',
+  soundAlertsDescription: '任务或工作节点进入审核时播放提示音。',
   soundAlertsNote: '部分环境可能需要先与应用交互才能播放声音。',
-  soundTaskCompleteLabel: '任务完成提示音',
-  soundTaskCompleteDesc: '选择任务完成时的提示音。',
-  soundWorkNodeCompleteLabel: '任务节点完成提示音',
-  soundWorkNodeCompleteDesc: '选择任务节点完成时的提示音。',
+  soundTaskCompleteLabel: '任务提示音',
+  soundTaskCompleteDesc: '选择任务进入审核时的提示音。',
+  soundWorkNodeCompleteLabel: '工作节点提示音',
+  soundWorkNodeCompleteDesc: '选择工作节点进入审核时的提示音。',
   soundPreview: '试听',
   soundPresetChime: '清脆',
   soundPresetDing: '叮咚',

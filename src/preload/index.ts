@@ -159,6 +159,11 @@ const api = {
       const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
       ipcRenderer.on('workNode:completed', listener)
       return () => ipcRenderer.removeListener('workNode:completed', listener)
+    },
+    onReview: (callback: (data: { id: string; name?: string }) => void) => {
+      const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
+      ipcRenderer.on('workNode:review', listener)
+      return () => ipcRenderer.removeListener('workNode:review', listener)
     }
   },
   cliTools: {

@@ -30,12 +30,12 @@ export default {
 
   // Sound Alerts
   soundAlertsTitle: 'Sound alerts',
-  soundAlertsDescription: 'Play sounds when tasks or nodes complete.',
+  soundAlertsDescription: 'Play sounds when tasks or work nodes enter review.',
   soundAlertsNote: 'Sound playback may be blocked until you interact with the app.',
-  soundTaskCompleteLabel: 'Task completion sound',
-  soundTaskCompleteDesc: 'Choose the sound for completed tasks.',
-  soundWorkNodeCompleteLabel: 'Work node completion sound',
-  soundWorkNodeCompleteDesc: 'Choose the sound for completed work nodes.',
+  soundTaskCompleteLabel: 'Task sound',
+  soundTaskCompleteDesc: 'Choose the sound for tasks entering review.',
+  soundWorkNodeCompleteLabel: 'Work node sound',
+  soundWorkNodeCompleteDesc: 'Choose the sound for work nodes entering review.',
   soundPreview: 'Preview',
   soundPresetChime: 'Chime',
   soundPresetDing: 'Ding',
