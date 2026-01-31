@@ -19,6 +19,15 @@ export class CLIProcessService extends EventEmitter {
       throw new Error(`Session ${sessionId} already exists`)
     }
 
+    const fullCommand = [command, ...args].join(' ')
+    console.log('[CLIProcessService] startSession:', {
+      sessionId,
+      command,
+      args,
+      cwd
+    })
+    console.log('[CLIProcessService] fullCommand:', fullCommand)
+
     const childProcess = spawn(command, args, {
       cwd,
       shell: true

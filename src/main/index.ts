@@ -550,6 +550,9 @@ app.whenReady().then(() => {
     'claudeCode:startSession',
     (_, sessionId: string, workdir: string, options?: ClaudeCodeSessionOptions) => {
       console.log('[IPC] claudeCode:startSession called:', sessionId, workdir)
+      if (options?.prompt) {
+        console.log('[IPC] claudeCode:startSession prompt:', options.prompt)
+      }
       try {
         claudeCodeService.startSession(sessionId, workdir, options)
         console.log('[IPC] claudeCode:startSession success')
@@ -572,6 +575,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claudeCode:sendInput', (_, sessionId: string, input: string) => {
     try {
+      console.log('[IPC] claudeCode:sendInput prompt:', input)
       claudeCodeService.sendInput(sessionId, input)
       return { success: true }
     } catch (error) {

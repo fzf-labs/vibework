@@ -111,6 +111,9 @@ export class ClaudeCodeService extends EventEmitter {
 
     // 注意：使用 --input-format=stream-json 时，prompt 通过 stdin 发送，不作为命令行参数
     const prompt = options?.prompt
+    if (prompt) {
+      console.log('[ClaudeCodeService] Prompt:', prompt)
+    }
 
     console.log('[ClaudeCodeService] Spawning command:', command, 'args:', args)
 
@@ -121,6 +124,7 @@ export class ClaudeCodeService extends EventEmitter {
 
     console.log('[ClaudeCodeService] HOME:', homeDir)
     console.log('[ClaudeCodeService] Using actual command path:', actualCommand)
+    console.log('[ClaudeCodeService] Full command:', [actualCommand, ...args].join(' '))
     console.log('[ClaudeCodeService] CWD:', workdir)
 
     // 检查文件是否存在
@@ -315,6 +319,7 @@ export class ClaudeCodeService extends EventEmitter {
       throw new Error(`Session ${sessionId} not found`)
     }
 
+    console.log('[ClaudeCodeService] Prompt:', input)
     session.process.stdin?.write(input + '\n')
   }
 

@@ -174,6 +174,15 @@ export class PipelineService extends EventEmitter {
     for (let attempt = 0; attempt <= retryCount; attempt++) {
       try {
         const fullCommand = `${command} ${args.join(' ')}`
+        console.log('[PipelineService] executeCommand:', {
+          command,
+          args,
+          cwd,
+          timeout,
+          attempt,
+          retryCount
+        })
+        console.log('[PipelineService] fullCommand:', fullCommand)
         const { stdout, stderr } = await execAsync(fullCommand, {
           cwd,
           timeout

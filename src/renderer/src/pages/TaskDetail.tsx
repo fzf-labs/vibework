@@ -875,9 +875,11 @@ function TaskDetailContent() {
         return;
       }
 
-      const prompt = approvalNote
+      const nodePrompt = approvalNote
         ? `${stage.prompt}\n\n${t.task.pipelineApprovalNotePrefix}: ${approvalNote}`
         : stage.prompt;
+      const taskPrompt = task?.prompt || initialPrompt || '';
+      const prompt = taskPrompt ? `${taskPrompt}\n\n${nodePrompt}` : nodePrompt;
 
       setPipelineStageIndex(index);
       setPipelineStatus('running');
@@ -927,9 +929,11 @@ function TaskDetailContent() {
     [
       appendPipelineNotice,
       continueConversation,
+      initialPrompt,
       messages.length,
       pipelineTemplate,
       runAgent,
+      task?.prompt,
       task?.session_id,
       task?.task_index,
       taskId,
