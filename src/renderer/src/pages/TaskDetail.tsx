@@ -43,7 +43,6 @@ import {
   RightPanel,
   MessageList,
   RunningIndicator,
-  WorkNodeReviewPanel,
 } from '@/components/task';
 import {
   DropdownMenu,
@@ -187,29 +186,22 @@ function TaskDetailContent() {
   const [cliStatus, setCliStatus] = useState<
     'idle' | 'running' | 'stopped' | 'error'
   >('idle');
+  const [isCliReviewOpen, setIsCliReviewOpen] = useState(false);
   const initialAttachmentsRef = useRef<MessageAttachment[] | undefined>(
     initialAttachments
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
+  const cliReviewAutoOpenedRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   // Workflow state for review panel
   const [currentWorkNode, setCurrentWorkNode] = useState<{
     id: string;
     name: string;
-    prompt: string;
     status: 'todo' | 'in_progress' | 'in_review' | 'done';
   } | null>(null);
-  const [workNodeExecutions, setWorkNodeExecutions] = useState<Array<{
-    id: string;
-    execution_index: number;
-    status: 'idle' | 'running' | 'completed';
-    started_at: string | null;
-    completed_at: string | null;
-    cost: number | null;
-    duration: number | null;
-  }>>([]);
 
   // Panel visibility state - default to visible for new layout
   const [isPreviewVisible, setIsPreviewVisible] = useState(true);
@@ -229,6 +221,10 @@ function TaskDetailContent() {
     }
     return 'todo';
   }, [task?.status]);
+  const isCliTaskReviewPending = useMemo(
+    () => Boolean(useCliSession && !task?.pipeline_template_id && task?.status === 'in_review'),
+    [task?.pipeline_template_id, task?.status, useCliSession]
+  );
 
   // Artifact state
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
@@ -650,6 +646,25 @@ function TaskDetailContent() {
     }
   }, [messages.length]);
 
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!taskId) return;
+    if (isCliTaskReviewPending) {
+      if (!cliReviewAutoOpenedRef.current) {
+        setIsCliReviewOpen(true);
+        cliReviewAutoOpenedRef.current = true;
+      }
+      return;
+    }
+    cliReviewAutoOpenedRef.current = false;
+    setIsCliReviewOpen(false);
+  }, [isCliTaskReviewPending, taskId]);
+
   // Load existing task or start new one
   useEffect(() => {
     async function initialize() {
@@ -741,79 +756,98 @@ function TaskDetailContent() {
     };
   }, [task?.pipeline_template_id]);
 
+  const loadWorkflowStatus = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      const workflow = await db.getWorkflowByTaskId(taskId) as {
+        id: string;
+        current_node_index: number;
+        status: string;
+      } | null;
+
+      if (!workflow) {
+        if (isMountedRef.current) {
+          setCurrentWorkNode(null);
+        }
+        return;
+      }
+
+      const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
+        id: string;
+        work_node_template_id: string;
+        status: string;
+      }>;
+
+      const currentNode = nodes[workflow.current_node_index];
+      if (!currentNode) {
+        if (isMountedRef.current) {
+          setCurrentWorkNode(null);
+        }
+        return;
+      }
+
+      if (currentNode.status === 'in_review') {
+        const nodeTemplate = pipelineTemplate?.nodes.find(
+          n => n.id === currentNode.work_node_template_id
+        );
+        const fallbackName = `${t.task.stageLabel} ${workflow.current_node_index + 1}`;
+        if (isMountedRef.current) {
+          setCurrentWorkNode({
+            id: currentNode.id,
+            name: nodeTemplate?.name || fallbackName,
+            status: currentNode.status as 'in_review',
+          });
+        }
+        return;
+      }
+
+      if (isMountedRef.current) {
+        setCurrentWorkNode(null);
+      }
+    } catch (error) {
+      console.error('Failed to load workflow status:', error);
+    }
+  }, [pipelineTemplate, taskId, t.task.stageLabel]);
+
   // Load workflow instance and current work node status
   useEffect(() => {
     if (!taskId) return;
 
     let active = true;
-    const loadWorkflowStatus = async () => {
-      try {
-        const workflow = await db.getWorkflowByTaskId(taskId) as {
-          id: string;
-          current_node_index: number;
-          status: string;
-        } | null;
-
-        if (!active || !workflow) {
-          setCurrentWorkNode(null);
-          return;
-        }
-
-        const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
-          id: string;
-          work_node_template_id: string;
-          status: string;
-        }>;
-
-        const currentNode = nodes[workflow.current_node_index];
-        if (!currentNode) {
-          setCurrentWorkNode(null);
-          return;
-        }
-
-        // Get node template for name and prompt
-        const nodeTemplate = pipelineTemplate?.nodes.find(
-          n => n.id === currentNode.work_node_template_id
-        );
-
-        if (nodeTemplate && currentNode.status === 'in_review') {
-          setCurrentWorkNode({
-            id: currentNode.id,
-            name: nodeTemplate.name,
-            prompt: nodeTemplate.prompt,
-            status: currentNode.status as 'in_review',
-          });
-
-          // Load executions for this node
-          const executions = await db.getAgentExecutionsByWorkNodeId(currentNode.id) as Array<{
-            id: string;
-            execution_index: number;
-            status: 'idle' | 'running' | 'completed';
-            started_at: string | null;
-            completed_at: string | null;
-            cost: number | null;
-            duration: number | null;
-          }>;
-          setWorkNodeExecutions(executions);
-        } else {
-          setCurrentWorkNode(null);
-          setWorkNodeExecutions([]);
-        }
-      } catch (error) {
-        console.error('Failed to load workflow status:', error);
-      }
+    const run = async () => {
+      if (!active) return;
+      await loadWorkflowStatus();
     };
 
-    loadWorkflowStatus();
+    void run();
     // Poll for updates every 2 seconds when task is running
     const shouldPoll = isRunning || cliStatus === 'running';
-    const interval = shouldPoll ? setInterval(loadWorkflowStatus, 2000) : null;
+    const interval = shouldPoll
+      ? setInterval(() => {
+        if (!active) return;
+        void loadWorkflowStatus();
+      }, 2000)
+      : null;
 
     return () => {
       active = false;
       if (interval) clearInterval(interval);
     };
-  }, [taskId, pipelineTemplate, isRunning, cliStatus]);
+  }, [taskId, loadWorkflowStatus, isRunning, cliStatus]);
+
+  useEffect(() => {
+    if (!taskId) return;
+    if (isRunning || cliStatus === 'running') return;
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts += 1;
+      void loadWorkflowStatus();
+      if (attempts >= 8) {
+        clearInterval(interval);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [taskId, isRunning, cliStatus, loadWorkflowStatus]);
 
   useEffect(() => {
     if (!isEditOpen) return;
@@ -922,18 +956,22 @@ function TaskDetailContent() {
       void markExecutionRunning();
     } else if (status === 'stopped') {
       void markExecutionCompleted();
+      void loadWorkflowStatus();
       void (async () => {
         try {
           const workflow = await db.getWorkflowByTaskId(taskId);
           if (!workflow) {
-            await db.updateTask(taskId, { status: 'in_review' });
+            const updatedTask = await db.updateTask(taskId, { status: 'in_review' });
+            if (updatedTask) {
+              setTask(updatedTask);
+            }
           }
         } catch (error) {
           console.error('[TaskDetail] Failed to sync task status on CLI completion:', error);
         }
       })();
     }
-  }, [markExecutionCompleted, markExecutionRunning, taskId]);
+  }, [loadWorkflowStatus, markExecutionCompleted, markExecutionRunning, taskId]);
 
   const runCliPrompt = useCallback(async (prompt?: string) => {
     const session = cliSessionRef.current;
@@ -1052,12 +1090,56 @@ function TaskDetailContent() {
 
   useEffect(() => {
     if (!pipelineTemplate || pipelineStatus !== 'idle' || isRunning) return;
+    if (useCliSession && cliStatus === 'running') return;
     if (!taskId || messages.length > 0) return;
-    if (normalizedTaskStatus === 'todo') return;
-    startPipelineStage(0).catch((error) => {
-      console.error('Failed to start pipeline stage:', error);
-    });
-  }, [pipelineTemplate, pipelineStatus, isRunning, taskId, messages.length, startPipelineStage, normalizedTaskStatus]);
+    if (normalizedTaskStatus !== 'in_progress') return;
+
+    let active = true;
+    const maybeStart = async () => {
+      try {
+        const workflow = await db.getWorkflowByTaskId(taskId) as {
+          id: string;
+          current_node_index: number;
+        } | null;
+
+        if (workflow) {
+          const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
+            id: string;
+          }>;
+          const currentNode = nodes[workflow.current_node_index];
+          if (!currentNode) return;
+
+          const latestExecution = await db.getLatestAgentExecution(currentNode.id) as {
+            status: 'idle' | 'running' | 'completed';
+          } | null;
+          if (latestExecution && latestExecution.status !== 'idle') return;
+        }
+      } catch (error) {
+        console.error('[TaskDetail] Failed to check workflow execution before auto-start:', error);
+        return;
+      }
+
+      if (!active) return;
+      startPipelineStage(0).catch((error) => {
+        console.error('Failed to start pipeline stage:', error);
+      });
+    };
+
+    void maybeStart();
+    return () => {
+      active = false;
+    };
+  }, [
+    cliStatus,
+    isRunning,
+    messages.length,
+    normalizedTaskStatus,
+    pipelineStatus,
+    pipelineTemplate,
+    startPipelineStage,
+    taskId,
+    useCliSession,
+  ]);
 
   useEffect(() => {
     if (!pipelineTemplate || pipelineStatus !== 'running' || isRunning) return;
@@ -1254,20 +1336,37 @@ function TaskDetailContent() {
     setCurrentWorkNode(null);
   }, [currentWorkNode]);
 
-  const handleRejectWorkNode = useCallback(async () => {
-    if (!currentWorkNode) return;
-    await db.rejectWorkNode(currentWorkNode.id);
-  }, [currentWorkNode]);
-
-  const handleContinueWorkNode = useCallback(async () => {
-    if (!currentWorkNode) return;
+  const handleApproveCliTask = useCallback(async () => {
+    if (!taskId) return;
     try {
-      await db.rejectWorkNode(currentWorkNode.id);
+      const updatedTask = await db.updateTask(taskId, { status: 'done' });
+      if (updatedTask) {
+        setTask(updatedTask);
+      }
+    } catch (error) {
+      console.error('[TaskDetail] Failed to approve task:', error);
+    } finally {
+      setIsCliReviewOpen(false);
+    }
+  }, [taskId]);
+
+  const handleContinueCliTask = useCallback(async () => {
+    if (!taskId) return;
+    setIsCliReviewOpen(false);
+    try {
+      const updatedTask = await db.updateTask(taskId, { status: 'in_progress' });
+      if (updatedTask) {
+        setTask(updatedTask);
+      }
+    } catch (error) {
+      console.error('[TaskDetail] Failed to update task status for CLI continue:', error);
+    }
+    try {
       await runCliPrompt();
     } catch (error) {
-      console.error('Failed to continue work node:', error);
+      console.error('[TaskDetail] Failed to continue CLI task:', error);
     }
-  }, [currentWorkNode, runCliPrompt]);
+  }, [runCliPrompt, taskId]);
 
   const displayTitle = task?.title || task?.prompt || initialPrompt;
   const pipelineBanner = useMemo(() => {
@@ -1351,6 +1450,10 @@ function TaskDetailContent() {
 
   const statusInfo = displayStatus ? statusConfig[displayStatus] : null;
   const StatusIcon = statusInfo?.icon || Clock;
+  const showWorkflowCard = useMemo(
+    () => Boolean(pipelineTemplate?.nodes?.length) || currentWorkNode?.status === 'in_review',
+    [currentWorkNode?.status, pipelineTemplate?.nodes?.length]
+  );
 
   const metaRows = useMemo(
     () => [
@@ -1525,58 +1628,82 @@ function TaskDetailContent() {
               )}
 
               {/* Workflow Nodes Progress */}
-              {pipelineTemplate && pipelineTemplate.nodes && pipelineTemplate.nodes.length > 0 && (
+              {showWorkflowCard && (
                 <div className="bg-muted/40 mt-2 rounded-lg px-2.5 py-2">
                   <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                     <ListChecks className="size-3.5" />
                     <span>{t.task.workflowNodes || 'Workflow Nodes'}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {pipelineTemplate.nodes.map((node, index) => {
-                      const isCompleted = index < pipelineStageIndex;
-                      const isCurrent = index === pipelineStageIndex;
-                      const isFailed = isCurrent && pipelineStatus === 'failed';
-                      const isWaiting = isCurrent && pipelineStatus === 'waiting_approval';
-                      const isRunningNode = isCurrent && pipelineStatus === 'running';
+                  {pipelineTemplate?.nodes && pipelineTemplate.nodes.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      {pipelineTemplate.nodes.map((node, index) => {
+                        const isCompleted = index < pipelineStageIndex;
+                        const isCurrent = index === pipelineStageIndex;
+                        const isFailed = isCurrent && pipelineStatus === 'failed';
+                        const isWaiting = isCurrent && pipelineStatus === 'waiting_approval';
+                        const isRunningNode = isCurrent && pipelineStatus === 'running';
 
-                      return (
-                        <div key={node.id} className="flex items-center">
-                          <div
-                            className={cn(
-                              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                              isCompleted && 'bg-green-500/10 text-green-600',
-                              isFailed && 'bg-red-500/10 text-red-600',
-                              isWaiting && 'bg-amber-500/10 text-amber-600',
-                              isRunningNode && 'bg-blue-500/10 text-blue-600',
-                              !isCompleted && !isCurrent && 'bg-background/60 text-muted-foreground'
-                            )}
-                            title={node.prompt}
-                          >
-                            {isCompleted && <CheckCircle className="size-3" />}
-                            {isRunningNode && (
-                              <span className="size-2 animate-pulse rounded-full bg-blue-500" />
-                            )}
-                            {isWaiting && <Clock className="size-3" />}
-                            {isFailed && <span className="size-2 rounded-full bg-red-500" />}
-                            {!isCompleted && !isCurrent && (
-                              <span className="size-2 rounded-full bg-muted-foreground/30" />
-                            )}
-                            <span className="max-w-[80px] truncate">
-                              {node.name || `${t.task.stageLabel} ${index + 1}`}
-                            </span>
-                          </div>
-                          {index < pipelineTemplate.nodes.length - 1 && (
+                        return (
+                          <div key={node.id} className="flex items-center">
                             <div
                               className={cn(
-                                'mx-0.5 h-px w-3',
-                                isCompleted ? 'bg-green-500/50' : 'bg-muted-foreground/20'
+                                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                                isCompleted && 'bg-green-500/10 text-green-600',
+                                isFailed && 'bg-red-500/10 text-red-600',
+                                isWaiting && 'bg-amber-500/10 text-amber-600',
+                                isRunningNode && 'bg-blue-500/10 text-blue-600',
+                                !isCompleted && !isCurrent && 'bg-background/60 text-muted-foreground'
                               )}
-                            />
-                          )}
+                              title={node.prompt}
+                            >
+                              {isCompleted && <CheckCircle className="size-3" />}
+                              {isRunningNode && (
+                                <span className="size-2 animate-pulse rounded-full bg-blue-500" />
+                              )}
+                              {isWaiting && <Clock className="size-3" />}
+                              {isFailed && <span className="size-2 rounded-full bg-red-500" />}
+                              {!isCompleted && !isCurrent && (
+                                <span className="size-2 rounded-full bg-muted-foreground/30" />
+                              )}
+                              <span className="max-w-[80px] truncate">
+                                {node.name || `${t.task.stageLabel} ${index + 1}`}
+                              </span>
+                            </div>
+                            {index < pipelineTemplate.nodes.length - 1 && (
+                              <div
+                                className={cn(
+                                  'mx-0.5 h-px w-3',
+                                  isCompleted ? 'bg-green-500/50' : 'bg-muted-foreground/20'
+                                )}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {currentWorkNode?.status === 'in_review' && (
+                    <div className="border-amber-500/30 bg-amber-50/30 mt-2 rounded-md border px-2 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-foreground flex items-center gap-2 text-xs font-medium">
+                          <Clock className="size-3 text-amber-500" />
+                          <span className="max-w-[140px] truncate">
+                            {currentWorkNode.name}
+                          </span>
+                          <span className="text-amber-700/80">
+                            {t.task.pendingApproval || 'Pending'}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <Button
+                          size="sm"
+                          onClick={handleApproveWorkNode}
+                          autoFocus
+                        >
+                          {t.task.confirmComplete || 'Confirm complete'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1603,38 +1730,35 @@ function TaskDetailContent() {
 
                   {useCliSession ? (
                     <>
-                      {cliStatus === 'stopped' && (
+                      {cliStatus === 'stopped' && !isCliTaskReviewPending && (
                         <div className="border-emerald-500/30 bg-emerald-50/40 text-emerald-700 mb-3 rounded-lg border px-3 py-2 text-xs">
                           {t.task.executionCompleted || 'Execution completed'}
                         </div>
                       )}
 
-                      {currentWorkNode?.status === 'in_review' && (
+                      {isCliTaskReviewPending && (
                         <div className="border-amber-500/30 bg-amber-50/30 mb-3 rounded-xl border p-4">
                           <div className="flex items-center justify-between">
                             <div className="text-foreground flex items-center gap-2 text-sm font-medium">
                               <Clock className="size-4 text-amber-500" />
-                              <span>{currentWorkNode.name}</span>
+                              <span>{t.task.executionCompleted || 'Execution completed'}</span>
                             </div>
                             <span className="bg-amber-500/20 text-amber-700 rounded-full px-2 py-0.5 text-xs">
                               {t.task.pendingApproval || 'Pending'}
                             </span>
                           </div>
-                          <p className="text-muted-foreground mt-2 text-xs">
-                            {currentWorkNode.prompt}
-                          </p>
                           <div className="mt-3 flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={handleContinueWorkNode}
+                              onClick={handleContinueCliTask}
                               className="flex-1"
                             >
                               {t.task.continueConversation || 'Continue'}
                             </Button>
                             <Button
                               size="sm"
-                              onClick={handleApproveWorkNode}
+                              onClick={handleApproveCliTask}
                               className="flex-1"
                             >
                               {t.task.confirmComplete || 'Confirm complete'}
@@ -1675,16 +1799,6 @@ function TaskDetailContent() {
                         onRejectPlan={rejectPlan}
                       />
                       {isRunning && <RunningIndicator messages={messages} />}
-                      {currentWorkNode?.status === 'in_review' && (
-                        <div className="mt-3">
-                          <WorkNodeReviewPanel
-                            node={currentWorkNode}
-                            executions={workNodeExecutions}
-                            onApprove={handleApproveWorkNode}
-                            onReject={handleRejectWorkNode}
-                          />
-                        </div>
-                      )}
                     </>
                   )}
                   <div ref={messagesEndRef} />
@@ -1738,6 +1852,27 @@ function TaskDetailContent() {
           )}
         </div>
       </div>
+
+      <Dialog open={isCliReviewOpen && isCliTaskReviewPending} onOpenChange={setIsCliReviewOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t.task.executionCompleted || 'Execution completed'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-muted-foreground text-sm">
+            {t.task.pendingApproval || 'Pending approval'}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleContinueCliTask}>
+              {t.task.continueConversation || 'Continue'}
+            </Button>
+            <Button onClick={handleApproveCliTask}>
+              {t.task.confirmComplete || 'Confirm complete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="max-w-lg">
