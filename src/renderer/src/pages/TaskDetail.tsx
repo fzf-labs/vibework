@@ -206,6 +206,7 @@ function TaskDetailContent() {
   const [workflowNodes, setWorkflowNodes] = useState<Array<{
     id: string;
     work_node_template_id: string;
+    node_order: number;
     status: 'todo' | 'in_progress' | 'in_review' | 'done';
   }>>([]);
   const [workflowCurrentNode, setWorkflowCurrentNode] = useState<{
@@ -663,10 +664,11 @@ function TaskDetailContent() {
   }, [messages.length]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [taskId]);
 
   useEffect(() => {
     if (!taskId) return;
@@ -793,6 +795,7 @@ function TaskDetailContent() {
       const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
         id: string;
         work_node_template_id: string;
+        node_order: number;
         status: 'todo' | 'in_progress' | 'in_review' | 'done';
       }>;
 
@@ -1518,16 +1521,43 @@ function TaskDetailContent() {
   const statusInfo = displayStatus ? statusConfig[displayStatus] : null;
   const StatusIcon = statusInfo?.icon || Clock;
   const showWorkflowCard = useMemo(
-    () => Boolean(pipelineTemplate?.nodes?.length) || currentWorkNode?.status === 'in_review',
-    [currentWorkNode?.status, pipelineTemplate?.nodes?.length]
+    () => Boolean(workflowNodes.length || pipelineTemplate?.nodes?.length) ||
+      currentWorkNode?.status === 'in_review',
+    [currentWorkNode?.status, pipelineTemplate?.nodes?.length, workflowNodes.length]
   );
-  const workflowNodeStatusMap = useMemo(() => {
-    const map = new Map<string, 'todo' | 'in_progress' | 'in_review' | 'done'>();
-    workflowNodes.forEach((node) => {
-      map.set(node.work_node_template_id, node.status);
+  const workflowTemplateNodeMap = useMemo(() => {
+    const map = new Map<string, WorkNodeTemplate>();
+    pipelineTemplate?.nodes?.forEach((node) => {
+      map.set(node.id, node);
     });
     return map;
-  }, [workflowNodes]);
+  }, [pipelineTemplate?.nodes]);
+  const workflowNodesForDisplay = useMemo(() => {
+    if (workflowNodes.length > 0) {
+      return [...workflowNodes].sort((a, b) => a.node_order - b.node_order);
+    }
+    if (pipelineTemplate?.nodes?.length) {
+      return pipelineTemplate.nodes.map((node, index) => ({
+        id: `template-${node.id}`,
+        work_node_template_id: node.id,
+        node_order: index,
+        status: 'todo' as const,
+      }));
+    }
+    return [];
+  }, [pipelineTemplate?.nodes, workflowNodes]);
+  const workNodeStatusLabels = useMemo(() => ({
+    todo: statusConfig.todo.label,
+    in_progress: t.task.running || statusConfig.in_progress.label,
+    in_review: t.task.pendingApproval || statusConfig.in_review.label,
+    done: t.task.completed || statusConfig.done.label,
+  }), [t.task.completed, t.task.pendingApproval, t.task.running]);
+  const workNodeStatusClasses = useMemo(() => ({
+    todo: 'text-muted-foreground',
+    in_progress: 'text-blue-600',
+    in_review: 'text-amber-700',
+    done: 'text-green-600',
+  }), []);
 
   const metaRows = useMemo(
     () => [
@@ -1708,14 +1738,17 @@ function TaskDetailContent() {
                     <ListChecks className="size-3.5" />
                     <span>{t.task.workflowNodes || 'Workflow Nodes'}</span>
                   </div>
-                  {pipelineTemplate?.nodes && pipelineTemplate.nodes.length > 0 && (
+                  {workflowNodesForDisplay.length > 0 && (
                     <div className="flex items-center gap-1">
-                      {pipelineTemplate.nodes.map((node, index) => {
-                        const nodeStatus = workflowNodeStatusMap.get(node.id) ?? 'todo';
+                      {workflowNodesForDisplay.map((node, index) => {
+                        const nodeStatus = node.status;
                         const isCompleted = nodeStatus === 'done';
                         const isRunningNode = nodeStatus === 'in_progress';
                         const isWaiting = nodeStatus === 'in_review';
                         const isTodo = nodeStatus === 'todo';
+                        const templateNode = workflowTemplateNodeMap.get(node.work_node_template_id);
+                        const nodeName = templateNode?.name || `${t.task.stageLabel} ${index + 1}`;
+                        const nodePrompt = templateNode?.prompt;
 
                         return (
                           <div key={node.id} className="flex items-center">
@@ -1727,7 +1760,7 @@ function TaskDetailContent() {
                                 isRunningNode && 'bg-blue-500/10 text-blue-600',
                                 isTodo && 'bg-background/60 text-muted-foreground'
                               )}
-                              title={node.prompt}
+                              title={nodePrompt}
                             >
                               {isCompleted && <CheckCircle className="size-3" />}
                               {isRunningNode && (
@@ -1738,10 +1771,13 @@ function TaskDetailContent() {
                                 <span className="size-2 rounded-full bg-muted-foreground/30" />
                               )}
                               <span className="max-w-[80px] truncate">
-                                {node.name || `${t.task.stageLabel} ${index + 1}`}
+                                {nodeName}
+                              </span>
+                              <span className={cn('text-[10px]', workNodeStatusClasses[nodeStatus])}>
+                                {workNodeStatusLabels[nodeStatus]}
                               </span>
                             </div>
-                            {index < pipelineTemplate.nodes.length - 1 && (
+                            {index < workflowNodesForDisplay.length - 1 && (
                               <div
                                 className={cn(
                                   'mx-0.5 h-px w-3',
