@@ -102,6 +102,14 @@ export async function getSkillsDir(): Promise<string> {
 }
 
 /**
+ * Get the default worktrees directory
+ */
+export async function getWorktreesDir(): Promise<string> {
+  const appDir = await getVibeworkDataDir();
+  return `${appDir}/worktrees`;
+}
+
+/**
  * Get the default config file path
  */
 export async function getConfigPath(): Promise<string> {

@@ -73,6 +73,13 @@ export class AppPaths {
   }
 
   /**
+   * 获取 worktree 目录路径 ~/.vibework/worktrees/
+   */
+  getWorktreesDir(): string {
+    return join(this.rootDir, 'worktrees')
+  }
+
+  /**
    * 获取项目配置文件路径
    */
   getProjectsFile(): string {
@@ -104,6 +111,7 @@ export class AppPaths {
       this.getLogsDir(),
       this.getSessionLogsDir(),
       this.getCacheDir(),
+      this.getWorktreesDir(),
     ]
 
     for (const dir of dirs) {

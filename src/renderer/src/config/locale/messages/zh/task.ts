@@ -46,6 +46,9 @@ export default {
   notes: '备注',
   cancel: '取消',
   startExecution: '开始执行',
+  executionCompleted: '执行完成',
+  continueConversation: '继续对话',
+  confirmComplete: '确认完成',
   // Create Task
   createTitle: '新建任务',
   createTitleLabel: '任务标题',

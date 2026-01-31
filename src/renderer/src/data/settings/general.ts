@@ -1,7 +1,12 @@
 // General settings - theme, language, AI providers, sandbox, agent runtime
 
 import { API_BASE_URL } from '@/config';
-import { getAppDataDir, getMcpConfigPath, getSkillsDir } from '../../lib/paths';
+import {
+  getAppDataDir,
+  getMcpConfigPath,
+  getSkillsDir,
+  getWorktreesDir,
+} from '../../lib/paths';
 import type {
   Settings,
   AIProvider,
@@ -159,6 +164,7 @@ export const defaultSettings: Settings = {
   },
   defaultCliToolId: '',
   gitWorktreeBranchPrefix: 'vw-',
+  gitWorktreeDir: '~/.vibework/worktrees',
   claudeCodePath: '',
   codexCliPath: '',
 };
@@ -269,6 +275,9 @@ export async function getSettingsAsync(): Promise<Settings> {
         loadedSettings.gitWorktreeBranchPrefix =
           defaultSettings.gitWorktreeBranchPrefix;
       }
+      if (!loadedSettings.gitWorktreeDir?.trim()) {
+        loadedSettings.gitWorktreeDir = defaultSettings.gitWorktreeDir;
+      }
       if (typeof loadedSettings.desktopNotificationsEnabled === 'boolean') {
         loadedSettings.taskCompleteNotificationsEnabled =
           loadedSettings.taskCompleteNotificationsEnabled ??
@@ -349,6 +358,9 @@ export function getSettings(): Settings {
       if (!loadedSettings.gitWorktreeBranchPrefix?.trim()) {
         loadedSettings.gitWorktreeBranchPrefix =
           defaultSettings.gitWorktreeBranchPrefix;
+      }
+      if (!loadedSettings.gitWorktreeDir?.trim()) {
+        loadedSettings.gitWorktreeDir = defaultSettings.gitWorktreeDir;
       }
       if (typeof loadedSettings.desktopNotificationsEnabled === 'boolean') {
         loadedSettings.taskCompleteNotificationsEnabled =
@@ -464,10 +476,11 @@ export async function saveSettingItem(key: string, value: string): Promise<void>
 }
 
 export async function initializeSettings(): Promise<Settings> {
-  const [appDataDir, mcpConfigPath, skillsDir] = await Promise.all([
+  const [appDataDir, mcpConfigPath, skillsDir, worktreesDir] = await Promise.all([
     getAppDataDir(),
     getMcpConfigPath(),
     getSkillsDir(),
+    getWorktreesDir(),
   ]);
 
   const settings = await getSettingsAsync();
@@ -480,6 +493,9 @@ export async function initializeSettings(): Promise<Settings> {
   const legacySkillsDir = `${settings.workDir}/skills`;
   if (!settings.skillsPath || settings.skillsPath === legacySkillsDir) {
     settings.skillsPath = skillsDir;
+  }
+  if (!settings.gitWorktreeDir) {
+    settings.gitWorktreeDir = worktreesDir;
   }
   if (settings.defaultSandboxProvider && settings.sandboxEnabled !== true) {
     settings.sandboxEnabled = true;

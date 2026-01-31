@@ -117,6 +117,11 @@ export default {
   gitWorktreePrefixPlaceholder: '例如: vw-',
   gitWorktreePrefixDesc: '创建新的 Git worktree 分支时使用的前缀。',
   gitWorktreePrefixError: '前缀不能为空。',
+  gitWorktreeDirLabel: 'Worktree 目录',
+  gitWorktreeDirPlaceholder: '~/.vibework/worktrees',
+  gitWorktreeDirDesc: '创建新的 Git worktree 时使用的目录。',
+  gitWorktreeDirError: '目录不能为空。',
+  gitWorktreeDirOpen: '打开文件夹',
 
   // Pipeline Templates
   globalPipelineTemplatesTitle: '全局工作流',

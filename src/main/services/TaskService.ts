@@ -1,7 +1,10 @@
 import * as path from 'path'
+import { mkdirSync } from 'fs'
+import { homedir } from 'os'
 import { DatabaseService } from './DatabaseService'
 import { GitService } from './GitService'
 import { newUlid } from '../utils/ids'
+import { getAppPaths } from './AppPaths'
 
 interface CreateTaskOptions {
   sessionId: string
@@ -13,6 +16,7 @@ interface CreateTaskOptions {
   createWorktree?: boolean
   baseBranch?: string
   worktreeBranchPrefix?: string
+  worktreeRootPath?: string
   cliToolId?: string
   pipelineTemplateId?: string
 }
@@ -49,6 +53,15 @@ export class TaskService {
     this.git = git
   }
 
+  private resolveWorktreeRoot(pathInput?: string): string {
+    const appPaths = getAppPaths()
+    const fallback = appPaths.getWorktreesDir()
+    if (!pathInput?.trim()) return fallback
+    const trimmed = pathInput.trim()
+    const resolved = trimmed.replace(/^~(?=\/|\\|$)/, homedir())
+    return resolved || fallback
+  }
+
   async createTask(options: CreateTaskOptions): Promise<TaskWithWorktree> {
     const taskId = newUlid()
     let worktreePath: string | null = null
@@ -69,7 +82,13 @@ export class TaskService {
         const prefix =
           options.worktreeBranchPrefix?.trim() || TaskService.DEFAULT_WORKTREE_PREFIX
         branchName = `${prefix}${taskId}`
-        worktreePath = path.join(options.projectPath, '.worktrees', branchName)
+        const projectKey = options.projectId || 'project'
+        const worktreesRoot = path.join(
+          this.resolveWorktreeRoot(options.worktreeRootPath),
+          projectKey
+        )
+        mkdirSync(worktreesRoot, { recursive: true })
+        worktreePath = path.join(worktreesRoot, branchName)
         workspacePath = worktreePath
 
         await this.git.addWorktree(
@@ -134,7 +153,17 @@ export class TaskService {
 
     if (removeWorktree && task.worktree_path) {
       try {
-        const projectPath = path.dirname(path.dirname(task.worktree_path))
+        let projectPath: string | null = null
+        if (task.project_id) {
+          const project = this.db.getProject(task.project_id)
+          projectPath = project?.path ?? null
+        }
+        if (!projectPath) {
+          projectPath = await this.git.inferRepoPathFromWorktree(task.worktree_path)
+        }
+        if (!projectPath) {
+          throw new Error('Failed to determine repository path for worktree removal')
+        }
         await this.git.removeWorktree(projectPath, task.worktree_path, true)
 
         // 删除分支

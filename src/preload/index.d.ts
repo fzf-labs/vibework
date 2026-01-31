@@ -321,6 +321,7 @@ interface TaskAPI {
     createWorktree?: boolean
     baseBranch?: string
     worktreeBranchPrefix?: string
+    worktreeRootPath?: string
     cliToolId?: string
     pipelineTemplateId?: string
   }) => Promise<{ success: boolean; data?: TaskWithWorktree; error?: string }>

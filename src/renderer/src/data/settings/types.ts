@@ -125,6 +125,7 @@ export interface Settings {
   editor: EditorSettings;
   defaultCliToolId: string;
   gitWorktreeBranchPrefix: string;
+  gitWorktreeDir: string;
   // CLI tool paths
   claudeCodePath: string;
   codexCliPath: string;

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { GitBranch, Check, AlertCircle } from 'lucide-react';
+import { GitBranch, Check, AlertCircle, FolderOpen } from 'lucide-react';
 import { useLanguage } from '@/providers/language-provider';
+import { path, shell } from '@/lib/electron-api';
 import type { SettingsTabProps } from '../types';
 
 const DEFAULT_WORKTREE_PREFIX = 'vw-';
+const DEFAULT_WORKTREE_DIR = '~/.vibework/worktrees';
 
 export function GitSettings({
   settings,
@@ -16,10 +18,18 @@ export function GitSettings({
     settings.gitWorktreeBranchPrefix || DEFAULT_WORKTREE_PREFIX
   );
   const [prefixError, setPrefixError] = useState<string | null>(null);
+  const [worktreeDirInput, setWorktreeDirInput] = useState(
+    settings.gitWorktreeDir || DEFAULT_WORKTREE_DIR
+  );
+  const [worktreeDirError, setWorktreeDirError] = useState<string | null>(null);
 
   useEffect(() => {
     setPrefixInput(settings.gitWorktreeBranchPrefix || DEFAULT_WORKTREE_PREFIX);
   }, [settings.gitWorktreeBranchPrefix]);
+
+  useEffect(() => {
+    setWorktreeDirInput(settings.gitWorktreeDir || DEFAULT_WORKTREE_DIR);
+  }, [settings.gitWorktreeDir]);
 
   useEffect(() => {
     let mounted = true;
@@ -76,6 +86,51 @@ export function GitSettings({
       onSettingsChange({ ...settings, gitWorktreeBranchPrefix: trimmed });
     }
     setPrefixError(null);
+  };
+
+  const handleWorktreeDirChange = (value: string) => {
+    setWorktreeDirInput(value);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setWorktreeDirError(
+        t.settings?.gitWorktreeDirError || 'Directory cannot be empty.'
+      );
+      return;
+    }
+    setWorktreeDirError(null);
+    onSettingsChange({ ...settings, gitWorktreeDir: trimmed });
+  };
+
+  const handleWorktreeDirBlur = () => {
+    const trimmed = worktreeDirInput.trim();
+    if (!trimmed) {
+      setWorktreeDirInput(settings.gitWorktreeDir || DEFAULT_WORKTREE_DIR);
+      setWorktreeDirError(
+        t.settings?.gitWorktreeDirError || 'Directory cannot be empty.'
+      );
+      return;
+    }
+    if (trimmed !== worktreeDirInput) {
+      setWorktreeDirInput(trimmed);
+      onSettingsChange({ ...settings, gitWorktreeDir: trimmed });
+    }
+    setWorktreeDirError(null);
+  };
+
+  const openWorktreeDir = async () => {
+    const trimmed = worktreeDirInput.trim();
+    if (!trimmed) return;
+    try {
+      let resolved = trimmed;
+      if (resolved.startsWith('~')) {
+        const homeDir = await path.homeDir();
+        resolved =
+          resolved === '~' ? homeDir : resolved.replace(/^~(?=\/)/, homeDir);
+      }
+      await shell.openPath(resolved);
+    } catch (error) {
+      console.error('[GitSettings] Failed to open worktree dir:', error);
+    }
   };
 
   return (
@@ -138,6 +193,41 @@ export function GitSettings({
         </p>
         {prefixError && (
           <p className="text-destructive text-xs">{prefixError}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-foreground block text-sm font-medium">
+          {t.settings?.gitWorktreeDirLabel || 'Worktree Directory'}
+        </label>
+        <div className="flex w-full max-w-sm items-center gap-2">
+          <input
+            type="text"
+            value={worktreeDirInput}
+            placeholder={
+              t.settings?.gitWorktreeDirPlaceholder || DEFAULT_WORKTREE_DIR
+            }
+            onChange={(e) => handleWorktreeDirChange(e.target.value)}
+            onBlur={handleWorktreeDirBlur}
+            className="border-input bg-background text-foreground focus:ring-ring block h-10 w-full rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={openWorktreeDir}
+            disabled={!worktreeDirInput.trim()}
+            className="border-input bg-background text-muted-foreground hover:text-foreground hover:bg-accent inline-flex h-10 w-10 items-center justify-center rounded-lg border transition-colors"
+            title={t.settings?.gitWorktreeDirOpen || 'Open folder'}
+            aria-label={t.settings?.gitWorktreeDirOpen || 'Open folder'}
+          >
+            <FolderOpen className="size-4" />
+          </button>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          {t.settings?.gitWorktreeDirDesc ||
+            'Directory used to create new Git worktrees.'}
+        </p>
+        {worktreeDirError && (
+          <p className="text-destructive text-xs">{worktreeDirError}</p>
         )}
       </div>
     </div>

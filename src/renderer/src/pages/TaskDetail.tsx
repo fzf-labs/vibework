@@ -7,12 +7,14 @@ import {
 } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { db, type Task } from '@/data';
+import { getSettings } from '@/data/settings';
 import {
   useAgent,
   type AgentMessage,
   type MessageAttachment,
 } from '@/hooks/useAgent';
 import { useVitePreview } from '@/hooks/useVitePreview';
+import { newUlid } from '@/lib/ids';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
@@ -33,7 +35,7 @@ import {
 } from '@/components/artifacts';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
-import { ClaudeCodeSession } from '@/components/cli';
+import { ClaudeCodeSession, type ClaudeCodeSessionHandle } from '@/components/cli';
 import {
   ToolSelectionContext,
   useToolSelection,
@@ -181,6 +183,13 @@ function TaskDetailContent() {
     'idle' | 'running' | 'waiting_approval' | 'failed' | 'completed'
   >('idle');
   const [pipelineStageMessageStart, setPipelineStageMessageStart] = useState(0);
+  const claudeSessionRef = useRef<ClaudeCodeSessionHandle>(null);
+  const [cliStatus, setCliStatus] = useState<
+    'idle' | 'running' | 'stopped' | 'error'
+  >('idle');
+  const initialAttachmentsRef = useRef<MessageAttachment[] | undefined>(
+    initialAttachments
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
@@ -393,6 +402,10 @@ function TaskDetailContent() {
   const [selectedToolIndex, setSelectedToolIndex] = useState<number | null>(
     null
   );
+
+  useEffect(() => {
+    initialAttachmentsRef.current = initialAttachments;
+  }, [initialAttachments]);
 
   // Calculate total tool count for auto-selection
   const toolCount = useMemo(() => {
@@ -609,6 +622,7 @@ function TaskDetailContent() {
         setHasStarted(false);
         setHasStartedOnce(false);
         isInitializingRef.current = false; // Reset for new task
+        setCliStatus('idle');
 
         // Reset preview and artifact state
         setIsPreviewVisible(false);
@@ -662,20 +676,32 @@ function TaskDetailContent() {
       } else if (initialPrompt && !hasStarted) {
         setHasStarted(true);
         setIsLoading(false);
+        setMessages([]);
 
-        // Pass session info if available
-        const sessionInfo = initialSessionId
-          ? { sessionId: initialSessionId, taskIndex: initialTaskIndex }
-          : undefined;
-        await runAgent(
-          initialPrompt,
-          taskId,
-          sessionInfo,
-          initialAttachments,
-          workingDir || undefined
-        );
-        const newTask = await loadTask(taskId);
-        setTask(newTask);
+        const sessionId = initialSessionId || newUlid();
+        const taskIndex = initialTaskIndex || 1;
+
+        try {
+          const existingSession = await db.getSession(sessionId);
+          if (!existingSession) {
+            await db.createSession({ id: sessionId, prompt: initialPrompt });
+          }
+
+          const settings = getSettings();
+          const createdTask = await db.createTask({
+            id: taskId,
+            session_id: sessionId,
+            task_index: taskIndex,
+            title: initialPrompt,
+            prompt: initialPrompt,
+            cli_tool_id: settings.defaultCliToolId || null,
+          });
+          setTask(createdTask);
+        } catch (error) {
+          console.error('[TaskDetail] Failed to initialize task:', error);
+          const newTask = await loadTask(taskId);
+          setTask(newTask);
+        }
       } else {
         setIsLoading(false);
       }
@@ -780,13 +806,14 @@ function TaskDetailContent() {
 
     loadWorkflowStatus();
     // Poll for updates every 2 seconds when task is running
-    const interval = isRunning ? setInterval(loadWorkflowStatus, 2000) : null;
+    const shouldPoll = isRunning || cliStatus === 'running';
+    const interval = shouldPoll ? setInterval(loadWorkflowStatus, 2000) : null;
 
     return () => {
       active = false;
       if (interval) clearInterval(interval);
     };
-  }, [taskId, pipelineTemplate, isRunning]);
+  }, [taskId, pipelineTemplate, isRunning, cliStatus]);
 
   useEffect(() => {
     if (!isEditOpen) return;
@@ -843,6 +870,85 @@ function TaskDetailContent() {
     };
   }, []);
 
+  const resolveCurrentExecutionId = useCallback(async () => {
+    if (!taskId) return null;
+    try {
+      const workflow = await db.getWorkflowByTaskId(taskId) as {
+        id: string;
+        current_node_index: number;
+      } | null;
+      if (!workflow) return null;
+
+      const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
+        id: string;
+      }>;
+      const currentNode = nodes[workflow.current_node_index];
+      if (!currentNode) return null;
+
+      const latestExecution = await db.getLatestAgentExecution(currentNode.id) as {
+        id: string;
+      } | null;
+      return latestExecution?.id ?? null;
+    } catch (error) {
+      console.error('[TaskDetail] Failed to resolve agent execution:', error);
+      return null;
+    }
+  }, [taskId]);
+
+  const markExecutionRunning = useCallback(async () => {
+    const executionId = await resolveCurrentExecutionId();
+    if (!executionId) return;
+    try {
+      await db.updateAgentExecutionStatus(executionId, 'running');
+    } catch (error) {
+      console.error('[TaskDetail] Failed to mark execution running:', error);
+    }
+  }, [resolveCurrentExecutionId]);
+
+  const markExecutionCompleted = useCallback(async () => {
+    const executionId = await resolveCurrentExecutionId();
+    if (!executionId) return;
+    try {
+      await db.updateAgentExecutionStatus(executionId, 'completed');
+    } catch (error) {
+      console.error('[TaskDetail] Failed to mark execution completed:', error);
+    }
+  }, [resolveCurrentExecutionId]);
+
+  const handleClaudeStatusChange = useCallback((status: 'idle' | 'running' | 'stopped' | 'error') => {
+    setCliStatus(status);
+    if (!taskId) return;
+    if (status === 'running') {
+      void markExecutionRunning();
+    } else if (status === 'stopped') {
+      void markExecutionCompleted();
+      void (async () => {
+        try {
+          const workflow = await db.getWorkflowByTaskId(taskId);
+          if (!workflow) {
+            await db.updateTask(taskId, { status: 'in_review' });
+          }
+        } catch (error) {
+          console.error('[TaskDetail] Failed to sync task status on CLI completion:', error);
+        }
+      })();
+    }
+  }, [markExecutionCompleted, markExecutionRunning, taskId]);
+
+  const runClaudePrompt = useCallback(async (prompt?: string) => {
+    const session = claudeSessionRef.current;
+    if (!session) return;
+
+    if (cliStatus === 'running') {
+      if (prompt && prompt.trim()) {
+        await session.sendInput(prompt);
+      }
+      return;
+    }
+
+    await session.start(prompt && prompt.trim() ? prompt : undefined);
+  }, [cliStatus]);
+
   const appendPipelineNotice = useCallback(
     async (content: string) => {
       if (!taskId) return;
@@ -893,15 +999,7 @@ function TaskDetailContent() {
       // 如果使用 Claude Code CLI，使用 claudeCode API
       if (useClaudeCli) {
         try {
-          if (messages.length === 0) {
-            await window.api?.claudeCode?.startSession?.(
-              taskId,
-              workingDir || '',
-              { prompt }
-            );
-          } else {
-            await window.api?.claudeCode?.sendInput?.(taskId, prompt);
-          }
+          await runClaudePrompt(prompt);
         } catch (error) {
           console.error('Failed to execute Claude Code:', error);
           setPipelineStatus('failed');
@@ -939,6 +1037,7 @@ function TaskDetailContent() {
       taskId,
       t.task.pipelineApprovalNotePrefix,
       t.task.pipelineCompleted,
+      runClaudePrompt,
       workingDir,
       useClaudeCli,
     ]
@@ -954,10 +1053,11 @@ function TaskDetailContent() {
   useEffect(() => {
     if (!pipelineTemplate || pipelineStatus !== 'idle' || isRunning) return;
     if (!taskId || messages.length > 0) return;
+    if (task?.status === 'todo') return;
     startPipelineStage(0).catch((error) => {
       console.error('Failed to start pipeline stage:', error);
     });
-  }, [pipelineTemplate, pipelineStatus, isRunning, taskId, messages.length, startPipelineStage]);
+  }, [pipelineTemplate, pipelineStatus, isRunning, taskId, messages.length, startPipelineStage, task?.status]);
 
   useEffect(() => {
     if (!pipelineTemplate || pipelineStatus !== 'running' || isRunning) return;
@@ -1092,19 +1192,12 @@ function TaskDetailContent() {
   const handleStartTask = useCallback(async () => {
     if (!taskId) return;
 
-    // 验证任务必须设置工作流模板
-    if (!task?.pipeline_template_id) {
-      setLocalMessages((prev) => [
-        ...prev,
-        {
-          type: 'error',
-          message: '任务必须设置工作流模板才能执行',
-        },
-      ]);
-      return;
-    }
-
     setHasStartedOnce(true);
+    if (!task?.pipeline_template_id) {
+      db.updateTask(taskId, { status: 'in_progress' }).catch((error) => {
+        console.error('Failed to update task status:', error);
+      });
+    }
     if (task?.pipeline_template_id) {
       if (!pipelineTemplate) return;
       if (pipelineStatus !== 'idle' || isRunning) return;
@@ -1114,11 +1207,7 @@ function TaskDetailContent() {
 
     if (useClaudeCli) {
       try {
-        await window.api?.claudeCode?.startSession?.(
-          taskId,
-          workingDir || '',
-          { prompt: task?.prompt || initialPrompt }
-        );
+        await runClaudePrompt(task?.prompt || initialPrompt);
       } catch (error) {
         console.error('Failed to start Claude Code session:', error);
         setLocalMessages((prev) => [
@@ -1139,16 +1228,19 @@ function TaskDetailContent() {
         ? { sessionId: task.session_id, taskIndex: task.task_index }
         : undefined;
 
+    const pendingAttachments = initialAttachmentsRef.current;
+    initialAttachmentsRef.current = undefined;
     await runAgent(
       task?.prompt || initialPrompt,
       taskId,
       sessionInfo,
-      undefined,
+      pendingAttachments,
       workingDir || undefined
     );
   }, [
     initialPrompt,
     isRunning,
+    runClaudePrompt,
     pipelineStatus,
     pipelineTemplate,
     runAgent,
@@ -1173,6 +1265,16 @@ function TaskDetailContent() {
     if (!currentWorkNode) return;
     await db.rejectWorkNode(currentWorkNode.id);
   }, [currentWorkNode]);
+
+  const handleContinueWorkNode = useCallback(async () => {
+    if (!currentWorkNode) return;
+    try {
+      await db.rejectWorkNode(currentWorkNode.id);
+      await runClaudePrompt();
+    } catch (error) {
+      console.error('Failed to continue work node:', error);
+    }
+  }, [currentWorkNode, runClaudePrompt]);
 
   const displayTitle = task?.title || task?.prompt || initialPrompt;
   const pipelineBanner = useMemo(() => {
@@ -1217,10 +1319,26 @@ function TaskDetailContent() {
   const startDisabled = useMemo(() => {
     if (!taskId) return true;
     if (task?.pipeline_template_id) {
-      return !pipelineTemplate || pipelineStatus !== 'idle' || isRunning;
+      return (
+        !pipelineTemplate ||
+        pipelineStatus !== 'idle' ||
+        isRunning ||
+        (useClaudeCli && cliStatus === 'running')
+      );
     }
-    return !useClaudeCli && isRunning;
-  }, [isRunning, pipelineStatus, pipelineTemplate, task?.pipeline_template_id, taskId, useClaudeCli]);
+    if (useClaudeCli) {
+      return cliStatus === 'running';
+    }
+    return isRunning;
+  }, [
+    cliStatus,
+    isRunning,
+    pipelineStatus,
+    pipelineTemplate,
+    task?.pipeline_template_id,
+    taskId,
+    useClaudeCli,
+  ]);
 
   const hasExecuted = useMemo(() => {
     if (messages.length > 0) return true;
@@ -1497,6 +1615,46 @@ function TaskDetailContent() {
 
                   {useClaudeCli ? (
                     <>
+                      {cliStatus === 'stopped' && (
+                        <div className="border-emerald-500/30 bg-emerald-50/40 text-emerald-700 mb-3 rounded-lg border px-3 py-2 text-xs">
+                          {t.task.executionCompleted || 'Execution completed'}
+                        </div>
+                      )}
+
+                      {currentWorkNode?.status === 'in_review' && (
+                        <div className="border-amber-500/30 bg-amber-50/30 mb-3 rounded-xl border p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="text-foreground flex items-center gap-2 text-sm font-medium">
+                              <Clock className="size-4 text-amber-500" />
+                              <span>{currentWorkNode.name}</span>
+                            </div>
+                            <span className="bg-amber-500/20 text-amber-700 rounded-full px-2 py-0.5 text-xs">
+                              {t.task.pendingApproval || 'Pending'}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground mt-2 text-xs">
+                            {currentWorkNode.prompt}
+                          </p>
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleContinueWorkNode}
+                              className="flex-1"
+                            >
+                              {t.task.continueConversation || 'Continue'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={handleApproveWorkNode}
+                              className="flex-1"
+                            >
+                              {t.task.confirmComplete || 'Confirm complete'}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                       {localMessages.length > 0 && (
                         <div className="mb-3">
                           <MessageList messages={localMessages} />
@@ -1504,11 +1662,14 @@ function TaskDetailContent() {
                       )}
                       <div className="flex min-h-0 flex-1">
                         <ClaudeCodeSession
+                          ref={claudeSessionRef}
                           sessionId={taskId || ''}
                           workdir={workingDir}
                           prompt={task?.prompt || initialPrompt}
                           className="h-full w-full"
                           compact
+                          allowStart={false}
+                          onStatusChange={handleClaudeStatusChange}
                         />
                       </div>
                     </>

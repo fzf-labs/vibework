@@ -1,5 +1,6 @@
 export { TerminalOutput } from './TerminalOutput'
 export { ClaudeCodeSession } from './ClaudeCodeSession'
+export type { ClaudeCodeSessionHandle } from './ClaudeCodeSession'
 export { SessionStatusIndicator } from './SessionStatusIndicator'
 export { NormalizedLogView } from './NormalizedLogView'
 export type { NormalizedEntry, NormalizedEntryType } from './NormalizedLogView'

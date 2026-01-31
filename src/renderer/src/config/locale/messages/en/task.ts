@@ -46,6 +46,9 @@ export default {
   notes: 'Notes',
   cancel: 'Cancel',
   startExecution: 'Start',
+  executionCompleted: 'Execution completed',
+  continueConversation: 'Continue conversation',
+  confirmComplete: 'Confirm complete',
   // Create Task
   createTitle: 'Create New Task',
   createTitleLabel: 'Task Title',

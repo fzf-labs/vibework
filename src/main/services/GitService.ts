@@ -1,4 +1,5 @@
 import { exec } from 'child_process'
+import { isAbsolute, resolve } from 'path'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
@@ -88,6 +89,23 @@ export class GitService {
       return stdout.trim()
     } catch (error) {
       throw new Error(`Failed to get current branch: ${error}`)
+    }
+  }
+
+  async inferRepoPathFromWorktree(worktreePath: string): Promise<string | null> {
+    try {
+      const { stdout } = await execAsync(
+        `git -C "${worktreePath}" rev-parse --git-common-dir`
+      )
+      const rawPath = stdout.trim()
+      if (!rawPath) return null
+      const commonDir = isAbsolute(rawPath) ? rawPath : resolve(worktreePath, rawPath)
+      if (commonDir.endsWith('/.git') || commonDir.endsWith('\\.git')) {
+        return resolve(commonDir, '..')
+      }
+      return commonDir
+    } catch {
+      return null
     }
   }
 

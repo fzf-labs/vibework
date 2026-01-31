@@ -314,6 +314,8 @@ const api = {
       projectPath?: string
       createWorktree?: boolean
       baseBranch?: string
+      worktreeBranchPrefix?: string
+      worktreeRootPath?: string
       cliToolId?: string
       pipelineTemplateId?: string
     }) => ipcRenderer.invoke('task:create', options),

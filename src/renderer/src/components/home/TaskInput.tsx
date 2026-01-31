@@ -1,7 +1,10 @@
 import { useNavigate } from 'react-router-dom';
+import { db } from '@/data';
+import { getSettings } from '@/data/settings';
 import { useAgent, type MessageAttachment } from '@/hooks/useAgent';
 import { cn } from '@/lib/utils';
 import { newUlid } from '@/lib/ids';
+import { generateSessionId } from '@/lib/session';
 import { useLanguage } from '@/providers/language-provider';
 import { FileText, Globe, Palette, Smartphone } from 'lucide-react';
 
@@ -42,8 +45,7 @@ const quickActions: QuickAction[] = [
 export function TaskInput() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const { messages, isRunning, runAgent, stopAgent, setSessionInfo } =
-    useAgent();
+  const { messages, isRunning, stopAgent } = useAgent();
 
   const handleSubmit = async (
     text: string,
@@ -52,16 +54,29 @@ export function TaskInput() {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
     // Generate session info
-    const sessionId = newUlid();
+    const prompt = text.trim();
+    const sessionId = generateSessionId(prompt);
     const taskIndex = 1;
     const taskId = newUlid();
 
-    // Set session info before running agent
-    setSessionInfo(sessionId, taskIndex);
+    try {
+      const existingSession = await db.getSession(sessionId);
+      if (!existingSession) {
+        await db.createSession({ id: sessionId, prompt });
+      }
 
-    // Run the agent with prompt and attachments
-    // When images are attached, runAgent will use direct execution (skip planning)
-    await runAgent(text, taskId, { sessionId, taskIndex }, attachments);
+      const settings = getSettings();
+      await db.createTask({
+        id: taskId,
+        session_id: sessionId,
+        task_index: taskIndex,
+        title: prompt,
+        prompt,
+        cli_tool_id: settings.defaultCliToolId || null,
+      });
+    } catch (error) {
+      console.error('[TaskInput] Failed to initialize task:', error);
+    }
 
     // Navigate to task detail page with attachments in state
     console.log(
@@ -77,7 +92,7 @@ export function TaskInput() {
     }
     navigate(`/task/${taskId}`, {
       state: {
-        prompt: text,
+        prompt,
         sessionId,
         taskIndex,
         attachments,

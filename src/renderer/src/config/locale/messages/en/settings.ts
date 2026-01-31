@@ -124,6 +124,11 @@ export default {
   gitWorktreePrefixPlaceholder: 'e.g., vw-',
   gitWorktreePrefixDesc: 'Prefix used when creating new Git worktree branches.',
   gitWorktreePrefixError: 'Prefix cannot be empty.',
+  gitWorktreeDirLabel: 'Worktree Directory',
+  gitWorktreeDirPlaceholder: '~/.vibework/worktrees',
+  gitWorktreeDirDesc: 'Directory used to create new Git worktrees.',
+  gitWorktreeDirError: 'Directory cannot be empty.',
+  gitWorktreeDirOpen: 'Open folder',
 
   // Pipeline Templates
   globalPipelineTemplatesTitle: 'Global Pipeline Templates',

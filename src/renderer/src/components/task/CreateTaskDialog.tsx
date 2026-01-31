@@ -165,6 +165,7 @@ export function CreateTaskDialog({
       const trimmedTitle = title.trim()
       const settings = getSettings()
       const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'vw-'
+      const worktreeRootPath = settings.gitWorktreeDir || '~/.vibework/worktrees'
       const existingSession = await db.getSession(sessionId)
       if (!existingSession) {
         await db.createSession({ id: sessionId, prompt: trimmedPrompt })
@@ -182,6 +183,7 @@ export function CreateTaskDialog({
         createWorktree: isGitProject && !!projectPath,
         baseBranch: isGitProject ? selectedBaseBranch : undefined,
         worktreeBranchPrefix,
+        worktreeRootPath,
         cliToolId: selectedCliToolId,
         pipelineTemplateId
       })
