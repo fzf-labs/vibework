@@ -17,6 +17,10 @@ import type {
   SoundChoice,
   SoundPresetId,
 } from './types';
+import {
+  DEFAULT_TASK_COMPLETE_SOUND,
+  DEFAULT_WORKNODE_COMPLETE_SOUND,
+} from './sounds';
 
 // ============ Default Values ============
 
@@ -132,16 +136,8 @@ export const defaultSettings: Settings = {
   workNodeCompleteSoundEnabled: false,
   taskCompleteNotificationsEnabled: false,
   workNodeCompleteNotificationsEnabled: false,
-  taskCompleteSound: {
-    source: 'preset',
-    presetId: 'chime',
-    filePath: '',
-  },
-  workNodeCompleteSound: {
-    source: 'preset',
-    presetId: 'pulse',
-    filePath: '',
-  },
+  taskCompleteSound: DEFAULT_TASK_COMPLETE_SOUND,
+  workNodeCompleteSound: DEFAULT_WORKNODE_COMPLETE_SOUND,
   mcpConfigPath: '',
   mcpUserDirEnabled: true,
   mcpAppDirEnabled: true,
@@ -207,19 +203,16 @@ const SOUND_PRESET_IDS = new Set<SoundPresetId>([
   'silent',
 ]);
 
-const normalizeSoundChoice = (
-  value: unknown,
-  fallbackPreset: SoundPresetId
-): SoundChoice => {
+const normalizeSoundChoice = (value: unknown, fallback: SoundChoice): SoundChoice => {
   if (!value) {
-    return { source: 'preset', presetId: fallbackPreset, filePath: '' };
+    return { ...fallback };
   }
 
   if (typeof value === 'string') {
     if (SOUND_PRESET_IDS.has(value as SoundPresetId)) {
-      return { source: 'preset', presetId: value as SoundPresetId, filePath: '' };
+      return { ...fallback };
     }
-    return { source: 'file', presetId: fallbackPreset, filePath: value };
+    return { source: 'file', presetId: fallback.presetId, filePath: value };
   }
 
   if (typeof value === 'object') {
@@ -230,13 +223,18 @@ const normalizeSoundChoice = (
     };
     const presetId = SOUND_PRESET_IDS.has(record.presetId as SoundPresetId)
       ? (record.presetId as SoundPresetId)
-      : fallbackPreset;
+      : fallback.presetId;
     const source = record.source === 'file' ? 'file' : 'preset';
     const filePath = typeof record.filePath === 'string' ? record.filePath : '';
-    return { source, presetId, filePath };
+
+    if (source === 'file' && filePath) {
+      return { source: 'file', presetId, filePath };
+    }
+
+    return { ...fallback };
   }
 
-  return { source: 'preset', presetId: fallbackPreset, filePath: '' };
+  return { ...fallback };
 };
 
 // ============ Core Functions ============
@@ -320,11 +318,11 @@ export async function getSettingsAsync(): Promise<Settings> {
       }
       loadedSettings.taskCompleteSound = normalizeSoundChoice(
         loadedSettings.taskCompleteSound,
-        'chime'
+        defaultSettings.taskCompleteSound
       );
       loadedSettings.workNodeCompleteSound = normalizeSoundChoice(
         loadedSettings.workNodeCompleteSound,
-        'pulse'
+        defaultSettings.workNodeCompleteSound
       );
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
@@ -404,11 +402,11 @@ export function getSettings(): Settings {
       }
       loadedSettings.taskCompleteSound = normalizeSoundChoice(
         loadedSettings.taskCompleteSound,
-        'chime'
+        defaultSettings.taskCompleteSound
       );
       loadedSettings.workNodeCompleteSound = normalizeSoundChoice(
         loadedSettings.workNodeCompleteSound,
-        'pulse'
+        defaultSettings.workNodeCompleteSound
       );
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {

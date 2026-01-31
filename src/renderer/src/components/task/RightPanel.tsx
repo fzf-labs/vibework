@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/providers/language-provider';
 import type { Artifact } from '@/components/artifacts';
+import { GitDiffView } from '@/components/git';
 import { FileListPanel } from './FileListPanel';
 
 export type RightPanelTab = 'files' | 'server' | 'git';
@@ -238,10 +239,15 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
   const [repoError, setRepoError] = useState<string | null>(null);
   const [changesLoading, setChangesLoading] = useState(false);
   const [branchDiffLoading, setBranchDiffLoading] = useState(false);
+  const [diffLoading, setDiffLoading] = useState(false);
   const [changesError, setChangesError] = useState<string | null>(null);
   const [branchDiffError, setBranchDiffError] = useState<string | null>(null);
+  const [diffError, setDiffError] = useState<string | null>(null);
   const [fileActions, setFileActions] = useState<Record<string, boolean>>({});
   const [branchDiffFiles, setBranchDiffFiles] = useState<BranchDiffFile[]>([]);
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const [diffText, setDiffText] = useState('');
+  const [stagedDiffText, setStagedDiffText] = useState('');
 
   const gitApi = window.api?.git;
 
@@ -327,6 +333,37 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
     setBranchDiffLoading(false);
   }, [baseBranch, currentBranch, ensureRepoReady, gitApi, workingDir]);
 
+  const loadDiff = useCallback(async (force = false, filePath?: string | null) => {
+    if (!(await ensureRepoReady({ force })) || !workingDir || !gitApi) return;
+    setDiffLoading(true);
+    setDiffError(null);
+    const targetPath = filePath?.trim() ? filePath.trim() : undefined;
+
+    const [unstagedResultRaw, stagedResultRaw] = await Promise.all([
+      gitApi.getDiff(workingDir, targetPath),
+      gitApi.getStagedDiff(workingDir, targetPath),
+    ]);
+
+    const unstagedResult = unwrapResult<string>(unstagedResultRaw);
+    const stagedResult = unwrapResult<string>(stagedResultRaw);
+
+    if (unstagedResult.ok) {
+      setDiffText(unstagedResult.data || '');
+    } else {
+      setDiffText('');
+      setDiffError(formatError(unstagedResult.error));
+    }
+
+    if (stagedResult.ok) {
+      setStagedDiffText(stagedResult.data || '');
+    } else {
+      setStagedDiffText('');
+      setDiffError((prev) => prev || formatError(stagedResult.error));
+    }
+
+    setDiffLoading(false);
+  }, [ensureRepoReady, gitApi, workingDir]);
+
   const handleStageToggle = useCallback(
     async (file: GitFile) => {
       if (!workingDir || !gitApi) return;
@@ -338,13 +375,22 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
         setChangesError(formatError(result.error));
       }
       await loadChanges();
+      await loadDiff(false, selectedFilePath);
       setFileActions((prev) => {
         const next = { ...prev };
         delete next[file.path];
         return next;
       });
     },
-    [gitApi, loadChanges, workingDir]
+    [gitApi, loadChanges, loadDiff, selectedFilePath, workingDir]
+  );
+
+  const handleSelectFile = useCallback(
+    (filePath: string | null) => {
+      setSelectedFilePath(filePath);
+      void loadDiff(true, filePath);
+    },
+    [loadDiff]
   );
 
   useEffect(() => {
@@ -352,18 +398,32 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
     setRepoError(null);
     setChangesError(null);
     setBranchDiffError(null);
+    setDiffError(null);
     setFiles([]);
     setBranchDiffFiles([]);
+    setDiffText('');
+    setStagedDiffText('');
+    setDiffLoading(false);
     setCurrentBranch(null);
+    setSelectedFilePath(null);
   }, [workingDir]);
 
   useEffect(() => {
     if (subTab === 'changes') {
       void loadChanges();
+      void loadDiff(false, selectedFilePath);
     } else {
       void loadBranchDiff();
     }
-  }, [loadBranchDiff, loadChanges, subTab]);
+  }, [loadBranchDiff, loadChanges, loadDiff, selectedFilePath, subTab]);
+
+  useEffect(() => {
+    if (!selectedFilePath) return;
+    if (!files.some((file) => file.path === selectedFilePath)) {
+      setSelectedFilePath(null);
+      void loadDiff(true, null);
+    }
+  }, [files, loadDiff, selectedFilePath]);
 
   const repoMessage = useMemo(() => {
     switch (repoStatus) {
@@ -403,7 +463,7 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-hidden p-4">
         {repoMessage ? (
           <GitEmptyState title={repoMessage.title} description={repoMessage.description} />
         ) : (
@@ -413,7 +473,16 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
                 files={files}
                 loading={changesLoading}
                 error={changesError}
-                onRefresh={() => loadChanges(true)}
+                diffText={diffText}
+                stagedDiffText={stagedDiffText}
+                diffLoading={diffLoading}
+                diffError={diffError}
+                selectedFilePath={selectedFilePath}
+                onRefresh={() => {
+                  void loadChanges(true);
+                  void loadDiff(true, selectedFilePath);
+                }}
+                onSelectFile={handleSelectFile}
                 onToggleStage={handleStageToggle}
                 busyMap={fileActions}
               />
@@ -425,6 +494,7 @@ function GitPanel({ workingDir, baseBranch }: GitPanelProps) {
                 loading={branchDiffLoading}
                 error={branchDiffError}
                 onRefresh={() => loadBranchDiff(true)}
+                className="h-full overflow-auto"
               />
             )}
           </>
@@ -454,7 +524,13 @@ interface GitChangesPanelProps {
   files: GitFile[];
   loading: boolean;
   error: string | null;
+  diffText: string;
+  stagedDiffText: string;
+  diffLoading: boolean;
+  diffError: string | null;
+  selectedFilePath: string | null;
   onRefresh: () => void;
+  onSelectFile: (filePath: string | null) => void;
   onToggleStage: (file: GitFile) => void;
   busyMap: Record<string, boolean>;
 }
@@ -463,7 +539,13 @@ function GitChangesPanel({
   files,
   loading,
   error,
+  diffText,
+  stagedDiffText,
+  diffLoading,
+  diffError,
+  selectedFilePath,
   onRefresh,
+  onSelectFile,
   onToggleStage,
   busyMap,
 }: GitChangesPanelProps) {
@@ -476,52 +558,100 @@ function GitChangesPanel({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-end">
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
-          {loading ? '加载中...' : '刷新'}
-        </Button>
-      </div>
+    <div className="flex h-full min-h-0 gap-4">
+      <div className="flex w-72 flex-col gap-3 overflow-hidden rounded-lg border bg-muted/10 p-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">文件列表</div>
+          <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading || diffLoading}>
+            {loading || diffLoading ? '加载中...' : '刷新'}
+          </Button>
+        </div>
 
-      {error && (
-        <div className="text-destructive text-sm">{error}</div>
-      )}
+        {error && (
+          <div className="text-destructive text-sm">{error}</div>
+        )}
 
-      {files.length === 0 ? (
-        <GitEmptyState title="暂无变更" />
-      ) : (
-        <div className="space-y-1">
-          {files.map((file) => (
-            <div
-              key={file.path}
-              className="hover:bg-muted/50 flex items-center gap-2 rounded px-2 py-1 text-sm"
-            >
-              <span
+        <div className="flex-1 overflow-auto">
+          {files.length === 0 ? (
+            <GitEmptyState title="暂无变更" />
+          ) : (
+            <div className="space-y-1">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectFile(null)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelectFile(null);
+                  }
+                }}
                 className={cn(
-                  'font-mono',
-                  statusColors[getStatusCode(file.status)]
+                  'hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm',
+                  !selectedFilePath && 'bg-muted/60'
                 )}
               >
-                {getStatusCode(file.status)}
-              </span>
-              <span className="flex-1 truncate">{file.path}</span>
-              {file.staged && (
-                <span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-xs">
-                  已暂存
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onToggleStage(file)}
-                disabled={loading || busyMap[file.path]}
-              >
-                {file.staged ? '取消暂存' : '暂存'}
-              </Button>
+                <span className="text-muted-foreground font-mono">*</span>
+                <span className="flex-1 truncate">全部变更</span>
+              </div>
+              {files.map((file) => (
+                <div
+                  key={file.path}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelectFile(file.path)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelectFile(file.path);
+                    }
+                  }}
+                  className={cn(
+                    'hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm',
+                    selectedFilePath === file.path && 'bg-muted/60'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'font-mono',
+                      statusColors[getStatusCode(file.status)]
+                    )}
+                  >
+                    {getStatusCode(file.status)}
+                  </span>
+                  <span className="flex-1 truncate">{file.path}</span>
+                  {file.staged && (
+                    <span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-xs">
+                      已暂存
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleStage(file);
+                    }}
+                    disabled={loading || busyMap[file.path]}
+                  >
+                    {file.staged ? '取消暂存' : '暂存'}
+                  </Button>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </div>
+
+      <div className="min-w-0 flex-1 overflow-hidden rounded-lg border bg-background p-3">
+        <GitDiffView
+          diffText={diffText}
+          stagedDiffText={stagedDiffText}
+          loading={diffLoading}
+          error={diffError}
+          className="h-full"
+        />
+      </div>
     </div>
   );
 }
@@ -533,6 +663,7 @@ function GitBranchDiffPanel({
   loading,
   error,
   onRefresh,
+  className,
 }: {
   files: BranchDiffFile[];
   baseBranch?: string | null;
@@ -540,6 +671,7 @@ function GitBranchDiffPanel({
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  className?: string;
 }) {
   const statusColors: Record<string, string> = {
     M: 'text-amber-500',
@@ -554,7 +686,7 @@ function GitBranchDiffPanel({
     : null;
 
   return (
-    <div className="space-y-3">
+    <div className={cn('space-y-3', className)}>
       <div className="flex items-center justify-between gap-3">
         {compareLabel ? (
           <div className="text-muted-foreground truncate text-xs">{compareLabel}</div>

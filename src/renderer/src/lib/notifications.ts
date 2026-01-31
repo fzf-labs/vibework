@@ -1,4 +1,5 @@
 import { getSettings, type SoundChoice, type SoundPresetId } from '@/data/settings';
+import { RESOURCE_SOUND_PREFIX } from '@/data/settings/sounds';
 
 export type NotificationPermissionState =
   | 'granted'
@@ -22,6 +23,50 @@ const AUDIO_FILE_EXTENSIONS = new Set([
   'aac',
   'flac',
 ]);
+
+const normalizePathSeparators = (value: string): string => value.replace(/\\/g, '/');
+
+const resolveResourceSoundPath = async (filePath: string): Promise<string> => {
+  const normalized = normalizePathSeparators(filePath);
+  if (!normalized.startsWith(RESOURCE_SOUND_PREFIX)) {
+    return filePath;
+  }
+
+  if (typeof window === 'undefined' || !window.api?.path || !window.api?.fs) {
+    return filePath;
+  }
+
+  const candidates: string[] = [];
+  try {
+    const resourcesDir = await window.api.path.resourcesDir();
+    if (resourcesDir) {
+      candidates.push(`${normalizePathSeparators(resourcesDir)}/${normalized}`);
+    }
+  } catch {
+    // Ignore path resolution errors
+  }
+
+  try {
+    const appPath = await window.api.path.appPath();
+    if (appPath) {
+      candidates.push(`${normalizePathSeparators(appPath)}/${normalized}`);
+    }
+  } catch {
+    // Ignore path resolution errors
+  }
+
+  for (const candidate of candidates) {
+    try {
+      if (await window.api.fs.exists(candidate)) {
+        return candidate;
+      }
+    } catch {
+      // Ignore filesystem errors
+    }
+  }
+
+  return filePath;
+};
 
 export const isElectronNotificationSupported = (): boolean => {
   return typeof window !== 'undefined' && Boolean(window.api?.notification);
@@ -163,11 +208,12 @@ const getAudioMimeType = (ext: string): string => {
 const playAudioFile = async (filePath: string): Promise<void> => {
   if (typeof window === 'undefined' || !window.api?.fs) return;
 
-  const ext = filePath.split('.').pop()?.toLowerCase() || 'mp3';
+  const resolvedPath = await resolveResourceSoundPath(filePath);
+  const ext = resolvedPath.split('.').pop()?.toLowerCase() || 'mp3';
   const mimeType = getAudioMimeType(ext);
 
   try {
-    const data = await window.api.fs.readFile(filePath);
+    const data = await window.api.fs.readFile(resolvedPath);
     const blob = new Blob([data.slice().buffer], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);

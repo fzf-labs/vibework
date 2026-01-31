@@ -1287,6 +1287,14 @@ app.whenReady().then(() => {
     return app.getPath('temp')
   })
 
+  ipcMain.handle('path:resourcesDir', () => {
+    return process.resourcesPath
+  })
+
+  ipcMain.handle('path:appPath', () => {
+    return app.getAppPath()
+  })
+
   ipcMain.handle('path:vibeworkDataDir', () => {
     return appPaths.getRootDir()
   })

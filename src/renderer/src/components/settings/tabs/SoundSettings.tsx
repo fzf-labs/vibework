@@ -2,15 +2,27 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   isAudioFileExtensionSupported,
-  playSoundPreset,
   playSoundChoice,
-  SOUND_PRESETS,
-  type SoundPresetId,
 } from '@/lib/notifications';
+import {
+  RESOURCE_SOUNDS,
+  DEFAULT_TASK_COMPLETE_SOUND_FILE,
+  DEFAULT_WORKNODE_COMPLETE_SOUND_FILE,
+  getResourceSoundPath,
+} from '@/data/settings/sounds';
 import { useLanguage } from '@/providers/language-provider';
 import { Switch } from '../components/Switch';
 import type { SettingsTabProps } from '../types';
 import type { SoundChoice } from '@/data/settings';
+
+const RESOURCE_SOUND_OPTIONS = RESOURCE_SOUNDS.map((sound) => ({
+  value: getResourceSoundPath(sound.fileName),
+  label: sound.label,
+}));
+
+const RESOURCE_SOUND_VALUE_SET = new Set(
+  RESOURCE_SOUND_OPTIONS.map((option) => option.value)
+);
 
 export function SoundSettings({
   settings,
@@ -23,48 +35,43 @@ export function SoundSettings({
 
   const normalizeChoice = (
     choice: SoundChoice | undefined,
-    fallbackPreset: SoundPresetId
-  ): SoundChoice => ({
-    source: choice?.source === 'file' ? 'file' : 'preset',
-    presetId: choice?.presetId || fallbackPreset,
-    filePath: choice?.filePath || '',
-  });
-
-  const taskChoice = normalizeChoice(settings.taskCompleteSound, 'chime');
-  const nodeChoice = normalizeChoice(settings.workNodeCompleteSound, 'pulse');
-
-  const resolvePresetLabel = (presetId: SoundPresetId) => {
-    switch (presetId) {
-      case 'ding':
-        return t.settings?.soundPresetDing || 'Ding';
-      case 'pulse':
-        return t.settings?.soundPresetPulse || 'Pulse';
-      case 'silent':
-        return t.settings?.soundPresetSilent || 'Silent';
-      case 'chime':
-      default:
-        return t.settings?.soundPresetChime || 'Chime';
-    }
+    fallbackFile: string
+  ): SoundChoice => {
+    const hasFile = Boolean(choice?.filePath);
+    return {
+      source: 'file',
+      presetId: choice?.presetId || 'chime',
+      filePath: hasFile ? choice?.filePath || '' : getResourceSoundPath(fallbackFile),
+    };
   };
 
-  const handleTaskSoundChange = (value: string) => {
+  const taskChoice = normalizeChoice(
+    settings.taskCompleteSound,
+    DEFAULT_TASK_COMPLETE_SOUND_FILE
+  );
+  const nodeChoice = normalizeChoice(
+    settings.workNodeCompleteSound,
+    DEFAULT_WORKNODE_COMPLETE_SOUND_FILE
+  );
+
+  const handleTaskSoundChange = (pathValue: string) => {
     onSettingsChange({
       ...settings,
       taskCompleteSound: {
         ...taskChoice,
-        source: 'preset',
-        presetId: value as SoundPresetId,
+        source: 'file',
+        filePath: pathValue,
       },
     });
   };
 
-  const handleWorkNodeSoundChange = (value: string) => {
+  const handleWorkNodeSoundChange = (pathValue: string) => {
     onSettingsChange({
       ...settings,
       workNodeCompleteSound: {
         ...nodeChoice,
-        source: 'preset',
-        presetId: value as SoundPresetId,
+        source: 'file',
+        filePath: pathValue,
       },
     });
   };
@@ -142,16 +149,43 @@ export function SoundSettings({
   const handleTaskFileClear = () => {
     onSettingsChange({
       ...settings,
-      taskCompleteSound: { ...taskChoice, source: 'preset', filePath: '' },
+      taskCompleteSound: { ...taskChoice, source: 'file', filePath: taskSelectValue },
     });
   };
 
   const handleNodeFileClear = () => {
     onSettingsChange({
       ...settings,
-      workNodeCompleteSound: { ...nodeChoice, source: 'preset', filePath: '' },
+      workNodeCompleteSound: { ...nodeChoice, source: 'file', filePath: nodeSelectValue },
     });
   };
+
+  const resolveResourceSelectValue = (
+    choice: SoundChoice,
+    fallbackFile: string
+  ): string => {
+    if (choice.source === 'file' && RESOURCE_SOUND_VALUE_SET.has(choice.filePath)) {
+      return choice.filePath;
+    }
+    return getResourceSoundPath(fallbackFile);
+  };
+
+  const taskSelectValue = resolveResourceSelectValue(
+    taskChoice,
+    DEFAULT_TASK_COMPLETE_SOUND_FILE
+  );
+  const nodeSelectValue = resolveResourceSelectValue(
+    nodeChoice,
+    DEFAULT_WORKNODE_COMPLETE_SOUND_FILE
+  );
+  const taskIsCustomFile =
+    taskChoice.source === 'file' &&
+    Boolean(taskChoice.filePath) &&
+    !RESOURCE_SOUND_VALUE_SET.has(taskChoice.filePath);
+  const nodeIsCustomFile =
+    nodeChoice.source === 'file' &&
+    Boolean(nodeChoice.filePath) &&
+    !RESOURCE_SOUND_VALUE_SET.has(nodeChoice.filePath);
 
   return (
     <div className="space-y-6">
@@ -182,14 +216,14 @@ export function SoundSettings({
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <select
-              value={taskChoice.presetId}
+              value={taskSelectValue}
               onChange={(e) => handleTaskSoundChange(e.target.value)}
               disabled={!settings.taskCompleteSoundEnabled}
               className="border-input bg-background text-foreground block h-10 w-full max-w-xs cursor-pointer rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-ring focus:outline-none"
             >
-              {SOUND_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {resolvePresetLabel(preset.id)}
+              {RESOURCE_SOUND_OPTIONS.map((sound) => (
+                <option key={sound.value} value={sound.value}>
+                  {sound.label}
                 </option>
               ))}
             </select>
@@ -197,7 +231,13 @@ export function SoundSettings({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => playSoundPreset(taskChoice.presetId)}
+              onClick={() =>
+                void playSoundChoice({
+                  ...taskChoice,
+                  source: 'file',
+                  filePath: taskSelectValue,
+                })
+              }
               disabled={!settings.taskCompleteSoundEnabled}
             >
               {t.settings?.soundPreview || 'Preview'}
@@ -220,11 +260,11 @@ export function SoundSettings({
               onClick={handleTaskFilePick}
               disabled={filePickerDisabled || !settings.taskCompleteSoundEnabled}
             >
-              {taskChoice.source === 'file'
+              {taskIsCustomFile
                 ? t.settings?.soundReplaceFile || 'Replace file'
                 : t.settings?.soundChooseFile || 'Choose file'}
             </Button>
-            {taskChoice.source === 'file' && taskChoice.filePath && (
+            {taskIsCustomFile && (
               <Button
                 type="button"
                 variant="ghost"
@@ -235,7 +275,7 @@ export function SoundSettings({
                 {t.settings?.soundClearFile || 'Clear'}
               </Button>
             )}
-            {taskChoice.source === 'file' && taskChoice.filePath && (
+            {taskIsCustomFile && (
               <Button
                 type="button"
                 variant="outline"
@@ -247,7 +287,7 @@ export function SoundSettings({
               </Button>
             )}
           </div>
-          {taskChoice.source === 'file' && (
+          {taskIsCustomFile && (
             <p className="text-muted-foreground text-xs">
               {t.settings?.soundSelectedFile || 'Selected file'}:{' '}
               {taskChoice.filePath || t.settings?.soundNoFile || 'None'}
@@ -283,14 +323,14 @@ export function SoundSettings({
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <select
-              value={nodeChoice.presetId}
+              value={nodeSelectValue}
               onChange={(e) => handleWorkNodeSoundChange(e.target.value)}
               disabled={!settings.workNodeCompleteSoundEnabled}
               className="border-input bg-background text-foreground block h-10 w-full max-w-xs cursor-pointer rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-ring focus:outline-none"
             >
-              {SOUND_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {resolvePresetLabel(preset.id)}
+              {RESOURCE_SOUND_OPTIONS.map((sound) => (
+                <option key={sound.value} value={sound.value}>
+                  {sound.label}
                 </option>
               ))}
             </select>
@@ -298,7 +338,13 @@ export function SoundSettings({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => playSoundPreset(nodeChoice.presetId)}
+              onClick={() =>
+                void playSoundChoice({
+                  ...nodeChoice,
+                  source: 'file',
+                  filePath: nodeSelectValue,
+                })
+              }
               disabled={!settings.workNodeCompleteSoundEnabled}
             >
               {t.settings?.soundPreview || 'Preview'}
@@ -321,11 +367,11 @@ export function SoundSettings({
               onClick={handleNodeFilePick}
               disabled={filePickerDisabled || !settings.workNodeCompleteSoundEnabled}
             >
-              {nodeChoice.source === 'file'
+              {nodeIsCustomFile
                 ? t.settings?.soundReplaceFile || 'Replace file'
                 : t.settings?.soundChooseFile || 'Choose file'}
             </Button>
-            {nodeChoice.source === 'file' && nodeChoice.filePath && (
+            {nodeIsCustomFile && (
               <Button
                 type="button"
                 variant="ghost"
@@ -336,7 +382,7 @@ export function SoundSettings({
                 {t.settings?.soundClearFile || 'Clear'}
               </Button>
             )}
-            {nodeChoice.source === 'file' && nodeChoice.filePath && (
+            {nodeIsCustomFile && (
               <Button
                 type="button"
                 variant="outline"
@@ -348,7 +394,7 @@ export function SoundSettings({
               </Button>
             )}
           </div>
-          {nodeChoice.source === 'file' && (
+          {nodeIsCustomFile && (
             <p className="text-muted-foreground text-xs">
               {t.settings?.soundSelectedFile || 'Selected file'}:{' '}
               {nodeChoice.filePath || t.settings?.soundNoFile || 'None'}

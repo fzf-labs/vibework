@@ -49,6 +49,11 @@ export default {
   executionCompleted: 'Execution completed',
   continueConversation: 'Continue conversation',
   confirmComplete: 'Confirm complete',
+  workNodeReviewTitle: 'Work node review',
+  workNodeNameLabel: 'Node name',
+  workNodePromptLabel: 'Node prompt',
+  workNodeExecutionHistory: 'Execution history',
+  workNodeExecutionItem: 'Execution #{index}',
   // Create Task
   createTitle: 'Create New Task',
   createTitleLabel: 'Task Title',

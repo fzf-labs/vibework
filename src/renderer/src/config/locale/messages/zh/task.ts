@@ -49,6 +49,11 @@ export default {
   executionCompleted: '执行完成',
   continueConversation: '继续对话',
   confirmComplete: '确认完成',
+  workNodeReviewTitle: '节点审核',
+  workNodeNameLabel: '节点名称',
+  workNodePromptLabel: '执行提示词',
+  workNodeExecutionHistory: '执行历史',
+  workNodeExecutionItem: '执行 #{index}',
   // Create Task
   createTitle: '新建任务',
   createTitleLabel: '任务标题',

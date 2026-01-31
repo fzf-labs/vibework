@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
-import { Check, X, Clock, AlertCircle } from 'lucide-react';
+import { Check, Play, Clock, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface WorkNode {
@@ -44,9 +44,9 @@ export function WorkNodeReviewPanel({
       <div className="flex items-center justify-between">
         <div className="text-foreground flex items-center gap-2 text-sm font-medium">
           <Clock className="size-4 text-amber-500" />
-          <span>节点审核</span>
+          <span>{t.task.workNodeReviewTitle || 'Work node review'}</span>
           <span className="bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full px-2 py-0.5 text-xs">
-            等待审核
+            {t.task.pendingApproval || 'Pending'}
           </span>
         </div>
       </div>
@@ -54,11 +54,15 @@ export function WorkNodeReviewPanel({
       {/* Node Info */}
       <div className="space-y-2">
         <div className="space-y-1">
-          <p className="text-muted-foreground text-xs">节点名称</p>
+          <p className="text-muted-foreground text-xs">
+            {t.task.workNodeNameLabel || 'Node name'}
+          </p>
           <p className="text-foreground text-sm font-medium">{node.name}</p>
         </div>
         <div className="space-y-1">
-          <p className="text-muted-foreground text-xs">执行提示词</p>
+          <p className="text-muted-foreground text-xs">
+            {t.task.workNodePromptLabel || 'Node prompt'}
+          </p>
           <p className="text-foreground text-sm">{node.prompt}</p>
         </div>
       </div>
@@ -66,10 +70,12 @@ export function WorkNodeReviewPanel({
       {/* Execution History */}
       {executions.length > 0 && (
         <div className="space-y-2">
-          <p className="text-muted-foreground text-xs">执行历史</p>
+          <p className="text-muted-foreground text-xs">
+            {t.task.workNodeExecutionHistory || 'Execution history'}
+          </p>
           <div className="space-y-1">
             {executions.map((exec) => (
-              <ExecutionItem key={exec.id} execution={exec} />
+              <ExecutionItem key={exec.id} execution={exec} label={t.task.workNodeExecutionItem} />
             ))}
           </div>
         </div>
@@ -81,10 +87,10 @@ export function WorkNodeReviewPanel({
           variant="outline"
           size="sm"
           onClick={onReject}
-          className="flex-1 border-red-500/30 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+          className="flex-1 border-amber-500/30 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/20"
         >
-          <X className="mr-1 size-4" />
-          拒绝
+          <Play className="mr-1 size-4" />
+          {t.task.continueConversation || 'Continue'}
         </Button>
         <Button
           size="sm"
@@ -92,25 +98,35 @@ export function WorkNodeReviewPanel({
           className="flex-1 bg-emerald-600 hover:bg-emerald-700"
         >
           <Check className="mr-1 size-4" />
-          批准
+          {t.task.confirmComplete || 'Confirm complete'}
         </Button>
       </div>
     </div>
   );
 }
 
-function ExecutionItem({ execution }: { execution: AgentExecution }) {
+function ExecutionItem({
+  execution,
+  label,
+}: {
+  execution: AgentExecution;
+  label?: string;
+}) {
   const statusIcon = {
     idle: <Clock className="size-3 text-gray-400" />,
     running: <AlertCircle className="size-3 text-blue-500" />,
     completed: <Check className="size-3 text-emerald-500" />,
   }[execution.status];
 
+  const displayLabel = label
+    ? label.replace('{index}', String(execution.execution_index))
+    : `Execution #${execution.execution_index}`;
+
   return (
     <div className="flex items-center justify-between text-xs text-muted-foreground">
       <div className="flex items-center gap-1">
         {statusIcon}
-        <span>执行 #{execution.execution_index}</span>
+        <span>{displayLabel}</span>
       </div>
       {execution.duration && (
         <span>{(execution.duration / 1000).toFixed(1)}s</span>

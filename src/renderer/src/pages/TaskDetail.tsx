@@ -221,6 +221,15 @@ function TaskDetailContent() {
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const normalizedTaskStatus = useMemo<PipelineDisplayStatus>(() => {
+    const rawStatus = task?.status;
+    if (!rawStatus) return 'todo';
+    if (['todo', 'in_progress', 'in_review', 'done'].includes(rawStatus)) {
+      return rawStatus as PipelineDisplayStatus;
+    }
+    return 'todo';
+  }, [task?.status]);
+
   // Artifact state
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(
@@ -549,19 +558,12 @@ function TaskDetailContent() {
     loadArtifacts();
   }, [messages, taskId]);
 
-  // Auto scroll to bottom only when task is running AND user hasn't scrolled up
+  // Auto scroll to bottom when new output arrives unless user scrolled up
   useEffect(() => {
-    if (isRunning && !userScrolledUpRef.current) {
+    if (!userScrolledUpRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isRunning]);
-
-  // Reset userScrolledUp when task stops running
-  useEffect(() => {
-    if (!isRunning) {
-      userScrolledUpRef.current = false;
-    }
-  }, [isRunning]);
+  }, [messages]);
 
   // Check scroll position to show/hide scroll button and detect manual scroll
   const checkScrollPosition = useCallback(() => {
@@ -572,11 +574,7 @@ function TaskDetailContent() {
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
     // Detect if user scrolled up (scroll position decreased)
-    if (
-      isRunning &&
-      scrollTop < lastScrollTopRef.current &&
-      distanceFromBottom > 100
-    ) {
+    if (scrollTop < lastScrollTopRef.current && distanceFromBottom > 100) {
       userScrolledUpRef.current = true;
     }
 
@@ -587,7 +585,7 @@ function TaskDetailContent() {
 
     lastScrollTopRef.current = scrollTop;
 
-  }, [isRunning]);
+  }, []);
 
   // Add scroll listener to messages container
   useEffect(() => {
@@ -623,6 +621,8 @@ function TaskDetailContent() {
         setHasStartedOnce(false);
         isInitializingRef.current = false; // Reset for new task
         setCliStatus('idle');
+        userScrolledUpRef.current = false;
+        lastScrollTopRef.current = 0;
 
         // Reset preview and artifact state
         setIsPreviewVisible(false);
@@ -639,10 +639,10 @@ function TaskDetailContent() {
   }, [taskId, stopPreview]);
 
   useEffect(() => {
-    if (task?.status && task.status !== 'todo') {
+    if (task?.status && normalizedTaskStatus !== 'todo') {
       setHasStartedOnce(true);
     }
-  }, [task?.status]);
+  }, [normalizedTaskStatus, task?.status]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -1053,11 +1053,11 @@ function TaskDetailContent() {
   useEffect(() => {
     if (!pipelineTemplate || pipelineStatus !== 'idle' || isRunning) return;
     if (!taskId || messages.length > 0) return;
-    if (task?.status === 'todo') return;
+    if (normalizedTaskStatus === 'todo') return;
     startPipelineStage(0).catch((error) => {
       console.error('Failed to start pipeline stage:', error);
     });
-  }, [pipelineTemplate, pipelineStatus, isRunning, taskId, messages.length, startPipelineStage, task?.status]);
+  }, [pipelineTemplate, pipelineStatus, isRunning, taskId, messages.length, startPipelineStage, normalizedTaskStatus]);
 
   useEffect(() => {
     if (!pipelineTemplate || pipelineStatus !== 'running' || isRunning) return;
@@ -1345,21 +1345,16 @@ function TaskDetailContent() {
     if (hasStartedOnce) return true;
     if (isRunning) return true;
     if (!task) return false;
-    if (task.status && task.status !== 'todo') return true;
+    if (task.status && normalizedTaskStatus !== 'todo') return true;
     return false;
-  }, [hasStartedOnce, isRunning, messages.length, task, task?.status]);
+  }, [hasStartedOnce, isRunning, messages.length, normalizedTaskStatus, task, task?.status]);
 
   const showStartButton = !hasExecuted;
 
   const displayStatus = useMemo<PipelineDisplayStatus | null>(() => {
     if (!task?.status) return null;
-    // Only 4 standard statuses: todo, in_progress, in_review, done
-    if (['todo', 'in_progress', 'in_review', 'done'].includes(task.status)) {
-      return task.status as PipelineDisplayStatus;
-    }
-    // Fallback for any legacy status
-    return 'todo';
-  }, [task?.status]);
+    return normalizedTaskStatus;
+  }, [normalizedTaskStatus, task?.status]);
 
   const statusInfo = displayStatus ? statusConfig[displayStatus] : null;
   const StatusIcon = statusInfo?.icon || Clock;

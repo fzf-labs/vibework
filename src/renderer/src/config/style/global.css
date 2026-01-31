@@ -200,6 +200,29 @@ code {
   @apply bg-muted text-foreground;
 }
 
+/* Git diff view (git-diff-view) */
+.git-diff-view {
+  --diff-font-size--: 12px;
+  --diff-line-height--: 1.5;
+  font-size: 12px;
+  line-height: 1.5;
+  width: 100%;
+}
+
+.git-diff-view .diff-line-content-item,
+.git-diff-view .diff-line-syntax-raw,
+.git-diff-view .unified-diff-table,
+.git-diff-view .diff-line-num {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.git-diff-view code,
+.git-diff-view pre {
+  font-size: 12px;
+  font-family: "Monaco", "Menlo", "Consolas", monospace;
+}
+
 .dark pre,
 .dark code {
   @apply bg-muted;

@@ -263,7 +263,7 @@ export class DatabaseService {
         task_index INTEGER NOT NULL,
         title TEXT NOT NULL,
         prompt TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
+        status TEXT NOT NULL DEFAULT 'todo',
         project_id TEXT,
         worktree_path TEXT,
         branch_name TEXT,
@@ -332,6 +332,7 @@ export class DatabaseService {
     this.migrateWorkflowType()
     this.backfillTaskTitles()
     this.backfillWorkspacePaths()
+    this.normalizeTaskStatuses()
     this.migrateToUlidIdentifiers()
     this.migrateRemoveFileLibrary()
   }
@@ -463,6 +464,14 @@ export class DatabaseService {
     }
   }
 
+  private normalizeTaskStatuses(): void {
+    try {
+      this.db.exec(`UPDATE tasks SET status = 'todo' WHERE status = 'pending'`)
+    } catch (error) {
+      console.error('[DatabaseService] Failed to normalize task statuses:', error)
+    }
+  }
+
   private ensureColumn(table: string, column: string, definition: string): void {
     const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
       name: string
@@ -511,7 +520,7 @@ export class DatabaseService {
           task_index INTEGER NOT NULL,
           title TEXT NOT NULL,
           prompt TEXT NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending',
+          status TEXT NOT NULL DEFAULT 'todo',
           project_id TEXT,
           worktree_path TEXT,
           branch_name TEXT,
@@ -831,7 +840,7 @@ export class DatabaseService {
         id, session_id, task_index, title, prompt, status, project_id, worktree_path, branch_name,
         base_branch, workspace_path, cli_tool_id, pipeline_template_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     stmt.run(
       input.id,

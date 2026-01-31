@@ -38,14 +38,11 @@ const columns: { id: TaskStatus; title: string; color: string }[] = [
   { id: 'done', title: '已完成', color: 'bg-green-500' },
 ];
 
-// Map old status to standard status (for backward compatibility)
-function mapToTaskStatus(status: string): TaskStatus {
-  switch (status) {
-    case 'pending':
-      return 'todo';
-    default:
-      return (status as TaskStatus) || 'todo';
+function normalizeTaskStatus(status: string): TaskStatus {
+  if (['todo', 'in_progress', 'in_review', 'done'].includes(status)) {
+    return status as TaskStatus;
   }
+  return 'todo';
 }
 
 export function BoardPage() {
@@ -79,7 +76,7 @@ export function BoardPage() {
   const tasksByStatus = columns.reduce(
     (acc, col) => {
       acc[col.id] = tasks.filter(
-        (task) => mapToTaskStatus(task.status) === col.id
+        (task) => normalizeTaskStatus(task.status) === col.id
       );
       return acc;
     },
@@ -100,7 +97,7 @@ export function BoardPage() {
   const handleDrop = async (targetStatus: TaskStatus) => {
     if (!draggedTask) return;
 
-    const currentStatus = mapToTaskStatus(draggedTask.status);
+    const currentStatus = normalizeTaskStatus(draggedTask.status);
     if (currentStatus === targetStatus) {
       setDraggedTask(null);
       return;

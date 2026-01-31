@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { Play, CheckCircle, XCircle, Clock, GitBranch, Trash2 } from 'lucide-react'
+import { Play, CheckCircle, Clock, GitBranch, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Task {
@@ -24,19 +24,24 @@ interface TaskListProps {
 }
 
 const statusIcons = {
-  pending: Clock,
-  running: Play,
-  completed: CheckCircle,
-  error: XCircle,
-  stopped: XCircle
+  todo: Clock,
+  in_progress: Play,
+  in_review: Clock,
+  done: CheckCircle
 }
 
 const statusColors = {
-  pending: 'text-zinc-400',
-  running: 'text-blue-500',
-  completed: 'text-green-500',
-  error: 'text-red-500',
-  stopped: 'text-zinc-500'
+  todo: 'text-zinc-400',
+  in_progress: 'text-blue-500',
+  in_review: 'text-amber-500',
+  done: 'text-green-500'
+}
+
+function normalizeTaskStatus(status: string): keyof typeof statusIcons {
+  if (['todo', 'in_progress', 'in_review', 'done'].includes(status)) {
+    return status as keyof typeof statusIcons
+  }
+  return 'todo'
 }
 
 export function TaskList({ projectId, onTaskSelect, className }: TaskListProps) {
@@ -90,8 +95,9 @@ export function TaskList({ projectId, onTaskSelect, className }: TaskListProps) 
   return (
     <div className={cn('space-y-2', className)}>
       {tasks.map((task) => {
-        const StatusIcon = statusIcons[task.status as keyof typeof statusIcons] || Clock
-        const statusColor = statusColors[task.status as keyof typeof statusColors] || 'text-zinc-400'
+        const normalizedStatus = normalizeTaskStatus(task.status)
+        const StatusIcon = statusIcons[normalizedStatus] || Clock
+        const statusColor = statusColors[normalizedStatus] || 'text-zinc-400'
 
         return (
           <div

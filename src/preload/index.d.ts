@@ -264,6 +264,8 @@ interface PathAPI {
   appDataDir: () => Promise<string>
   appConfigDir: () => Promise<string>
   tempDir: () => Promise<string>
+  resourcesDir: () => Promise<string>
+  appPath: () => Promise<string>
   vibeworkDataDir: () => Promise<string>
   homeDir: () => Promise<string>
 }

@@ -293,6 +293,8 @@ const api = {
     appDataDir: () => ipcRenderer.invoke('path:appDataDir'),
     appConfigDir: () => ipcRenderer.invoke('path:appConfigDir'),
     tempDir: () => ipcRenderer.invoke('path:tempDir'),
+    resourcesDir: () => ipcRenderer.invoke('path:resourcesDir'),
+    appPath: () => ipcRenderer.invoke('path:appPath'),
     vibeworkDataDir: () => ipcRenderer.invoke('path:vibeworkDataDir'),
     homeDir: () => ipcRenderer.invoke('path:homeDir')
   },
