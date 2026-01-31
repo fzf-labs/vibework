@@ -195,12 +195,24 @@ function TaskDetailContent() {
   const prevTaskIdRef = useRef<string | undefined>(undefined);
   const cliReviewAutoOpenedRef = useRef(false);
   const isMountedRef = useRef(true);
+  const lastAutoRunWorkNodeIdRef = useRef<string | null>(null);
 
   // Workflow state for review panel
   const [currentWorkNode, setCurrentWorkNode] = useState<{
     id: string;
     name: string;
     status: 'todo' | 'in_progress' | 'in_review' | 'done';
+  } | null>(null);
+  const [workflowNodes, setWorkflowNodes] = useState<Array<{
+    id: string;
+    work_node_template_id: string;
+    status: 'todo' | 'in_progress' | 'in_review' | 'done';
+  }>>([]);
+  const [workflowCurrentNode, setWorkflowCurrentNode] = useState<{
+    id: string;
+    templateId: string;
+    status: 'todo' | 'in_progress' | 'in_review' | 'done';
+    index: number;
   } | null>(null);
 
   // Panel visibility state - default to visible for new layout
@@ -626,6 +638,10 @@ function TaskDetailContent() {
         setArtifacts([]);
         setSelectedToolIndex(null);
         setLocalMessages([]);
+        setCurrentWorkNode(null);
+        setWorkflowNodes([]);
+        setWorkflowCurrentNode(null);
+        lastAutoRunWorkNodeIdRef.current = null;
 
         // Stop live preview if running
         stopPreview();
@@ -768,6 +784,8 @@ function TaskDetailContent() {
       if (!workflow) {
         if (isMountedRef.current) {
           setCurrentWorkNode(null);
+          setWorkflowNodes([]);
+          setWorkflowCurrentNode(null);
         }
         return;
       }
@@ -775,15 +793,30 @@ function TaskDetailContent() {
       const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
         id: string;
         work_node_template_id: string;
-        status: string;
+        status: 'todo' | 'in_progress' | 'in_review' | 'done';
       }>;
 
       const currentNode = nodes[workflow.current_node_index];
       if (!currentNode) {
         if (isMountedRef.current) {
           setCurrentWorkNode(null);
+          setWorkflowCurrentNode(null);
+          setWorkflowNodes(nodes);
         }
         return;
+      }
+
+      if (isMountedRef.current) {
+        setWorkflowNodes(nodes);
+        setWorkflowCurrentNode({
+          id: currentNode.id,
+          templateId: currentNode.work_node_template_id,
+          status: currentNode.status,
+          index: workflow.current_node_index,
+        });
+        if (useCliSession) {
+          setPipelineStageIndex(workflow.current_node_index);
+        }
       }
 
       if (currentNode.status === 'in_review') {
@@ -807,7 +840,7 @@ function TaskDetailContent() {
     } catch (error) {
       console.error('Failed to load workflow status:', error);
     }
-  }, [pipelineTemplate, taskId, t.task.stageLabel]);
+  }, [pipelineTemplate, taskId, t.task.stageLabel, useCliSession]);
 
   // Load workflow instance and current work node status
   useEffect(() => {
@@ -986,6 +1019,38 @@ function TaskDetailContent() {
 
     await session.start(prompt && prompt.trim() ? prompt : undefined);
   }, [cliStatus]);
+
+  useEffect(() => {
+    if (!useCliSession) return;
+    if (!workflowCurrentNode) return;
+    if (workflowCurrentNode.status !== 'in_progress') return;
+    if (cliStatus === 'running') return;
+    if (!pipelineTemplate?.nodes || pipelineTemplate.nodes.length === 0) return;
+    if (lastAutoRunWorkNodeIdRef.current === workflowCurrentNode.id) return;
+
+    const templateNode = pipelineTemplate.nodes.find(
+      (node) => node.id === workflowCurrentNode.templateId
+    );
+    if (!templateNode) return;
+
+    lastAutoRunWorkNodeIdRef.current = workflowCurrentNode.id;
+
+    const taskPrompt = task?.prompt || initialPrompt || '';
+    const nodePrompt = templateNode.prompt || '';
+    const prompt = nodePrompt
+      ? (taskPrompt ? `${taskPrompt}\n\n${nodePrompt}` : nodePrompt)
+      : taskPrompt;
+
+    void runCliPrompt(prompt);
+  }, [
+    cliStatus,
+    initialPrompt,
+    pipelineTemplate,
+    runCliPrompt,
+    task?.prompt,
+    useCliSession,
+    workflowCurrentNode,
+  ]);
 
   const appendPipelineNotice = useCallback(
     async (content: string) => {
@@ -1334,7 +1399,9 @@ function TaskDetailContent() {
     if (!currentWorkNode) return;
     await db.approveWorkNode(currentWorkNode.id);
     setCurrentWorkNode(null);
-  }, [currentWorkNode]);
+    lastAutoRunWorkNodeIdRef.current = null;
+    void loadWorkflowStatus();
+  }, [currentWorkNode, loadWorkflowStatus]);
 
   const handleApproveCliTask = useCallback(async () => {
     if (!taskId) return;
@@ -1454,6 +1521,13 @@ function TaskDetailContent() {
     () => Boolean(pipelineTemplate?.nodes?.length) || currentWorkNode?.status === 'in_review',
     [currentWorkNode?.status, pipelineTemplate?.nodes?.length]
   );
+  const workflowNodeStatusMap = useMemo(() => {
+    const map = new Map<string, 'todo' | 'in_progress' | 'in_review' | 'done'>();
+    workflowNodes.forEach((node) => {
+      map.set(node.work_node_template_id, node.status);
+    });
+    return map;
+  }, [workflowNodes]);
 
   const metaRows = useMemo(
     () => [
@@ -1637,11 +1711,11 @@ function TaskDetailContent() {
                   {pipelineTemplate?.nodes && pipelineTemplate.nodes.length > 0 && (
                     <div className="flex items-center gap-1">
                       {pipelineTemplate.nodes.map((node, index) => {
-                        const isCompleted = index < pipelineStageIndex;
-                        const isCurrent = index === pipelineStageIndex;
-                        const isFailed = isCurrent && pipelineStatus === 'failed';
-                        const isWaiting = isCurrent && pipelineStatus === 'waiting_approval';
-                        const isRunningNode = isCurrent && pipelineStatus === 'running';
+                        const nodeStatus = workflowNodeStatusMap.get(node.id) ?? 'todo';
+                        const isCompleted = nodeStatus === 'done';
+                        const isRunningNode = nodeStatus === 'in_progress';
+                        const isWaiting = nodeStatus === 'in_review';
+                        const isTodo = nodeStatus === 'todo';
 
                         return (
                           <div key={node.id} className="flex items-center">
@@ -1649,10 +1723,9 @@ function TaskDetailContent() {
                               className={cn(
                                 'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
                                 isCompleted && 'bg-green-500/10 text-green-600',
-                                isFailed && 'bg-red-500/10 text-red-600',
                                 isWaiting && 'bg-amber-500/10 text-amber-600',
                                 isRunningNode && 'bg-blue-500/10 text-blue-600',
-                                !isCompleted && !isCurrent && 'bg-background/60 text-muted-foreground'
+                                isTodo && 'bg-background/60 text-muted-foreground'
                               )}
                               title={node.prompt}
                             >
@@ -1661,8 +1734,7 @@ function TaskDetailContent() {
                                 <span className="size-2 animate-pulse rounded-full bg-blue-500" />
                               )}
                               {isWaiting && <Clock className="size-3" />}
-                              {isFailed && <span className="size-2 rounded-full bg-red-500" />}
-                              {!isCompleted && !isCurrent && (
+                              {isTodo && (
                                 <span className="size-2 rounded-full bg-muted-foreground/30" />
                               )}
                               <span className="max-w-[80px] truncate">
