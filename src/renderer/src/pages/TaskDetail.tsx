@@ -1546,18 +1546,6 @@ function TaskDetailContent() {
     }
     return [];
   }, [pipelineTemplate?.nodes, workflowNodes]);
-  const workNodeStatusLabels = useMemo(() => ({
-    todo: statusConfig.todo.label,
-    in_progress: t.task.running || statusConfig.in_progress.label,
-    in_review: t.task.pendingApproval || statusConfig.in_review.label,
-    done: t.task.completed || statusConfig.done.label,
-  }), [t.task.completed, t.task.pendingApproval, t.task.running]);
-  const workNodeStatusClasses = useMemo(() => ({
-    todo: 'text-muted-foreground',
-    in_progress: 'text-blue-600',
-    in_review: 'text-amber-700',
-    done: 'text-green-600',
-  }), []);
 
   const metaRows = useMemo(
     () => [
@@ -1739,55 +1727,54 @@ function TaskDetailContent() {
                     <span>{t.task.workflowNodes || 'Workflow Nodes'}</span>
                   </div>
                   {workflowNodesForDisplay.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      {workflowNodesForDisplay.map((node, index) => {
-                        const nodeStatus = node.status;
-                        const isCompleted = nodeStatus === 'done';
-                        const isRunningNode = nodeStatus === 'in_progress';
-                        const isWaiting = nodeStatus === 'in_review';
-                        const isTodo = nodeStatus === 'todo';
-                        const templateNode = workflowTemplateNodeMap.get(node.work_node_template_id);
-                        const nodeName = templateNode?.name || `${t.task.stageLabel} ${index + 1}`;
-                        const nodePrompt = templateNode?.prompt;
+                    <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
+                      <div className="flex min-w-max items-center gap-1 pr-2">
+                        {workflowNodesForDisplay.map((node, index) => {
+                          const nodeStatus = node.status;
+                          const isCompleted = nodeStatus === 'done';
+                          const isRunningNode = nodeStatus === 'in_progress';
+                          const isWaiting = nodeStatus === 'in_review';
+                          const isTodo = nodeStatus === 'todo';
+                          const templateNode = workflowTemplateNodeMap.get(node.work_node_template_id);
+                          const nodeName = templateNode?.name || `${t.task.stageLabel} ${index + 1}`;
+                          const nodePrompt = templateNode?.prompt;
 
-                        return (
-                          <div key={node.id} className="flex items-center">
-                            <div
-                              className={cn(
-                                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                                isCompleted && 'bg-green-500/10 text-green-600',
-                                isWaiting && 'bg-amber-500/10 text-amber-600',
-                                isRunningNode && 'bg-blue-500/10 text-blue-600',
-                                isTodo && 'bg-background/60 text-muted-foreground'
-                              )}
-                              title={nodePrompt}
-                            >
-                              {isCompleted && <CheckCircle className="size-3" />}
-                              {isRunningNode && (
-                                <span className="size-2 animate-pulse rounded-full bg-blue-500" />
-                              )}
-                              {isWaiting && <Clock className="size-3" />}
-                              {isTodo && (
-                                <span className="size-2 rounded-full bg-muted-foreground/30" />
-                              )}
-                              <span className="max-w-[80px] truncate">
-                                {nodeName}
-                              </span>
-                              <span className={cn('text-[10px]', workNodeStatusClasses[nodeStatus])}>
-                                {workNodeStatusLabels[nodeStatus]}
-                              </span>
-                            </div>
-                            {index < workflowNodesForDisplay.length - 1 && (
+                          return (
+                            <div key={node.id} className="flex items-center">
                               <div
                                 className={cn(
-                                  'mx-0.5 h-px w-3',
-                                  isCompleted ? 'bg-green-500/50' : 'bg-muted-foreground/20'
+                                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                                  isCompleted && 'bg-green-500/10 text-green-600',
+                                  isWaiting && 'bg-amber-500/10 text-amber-600',
+                                  isRunningNode && 'bg-blue-500/10 text-blue-600',
+                                  isTodo && 'bg-background/60 text-muted-foreground'
                                 )}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
+                                title={nodePrompt}
+                              >
+                                {isCompleted && <CheckCircle className="size-3" />}
+                                {isRunningNode && (
+                                  <span className="size-2 animate-pulse rounded-full bg-blue-500" />
+                                )}
+                                {isWaiting && <Clock className="size-3" />}
+                                {isTodo && (
+                                  <span className="size-2 rounded-full bg-muted-foreground/30" />
+                                )}
+                                <span className="max-w-[80px] truncate">
+                                  {nodeName}
+                                </span>
+                              </div>
+                              {index < workflowNodesForDisplay.length - 1 && (
+                                <div
+                                  className={cn(
+                                    'mx-0.5 h-px w-3',
+                                    isCompleted ? 'bg-green-500/50' : 'bg-muted-foreground/20'
+                                  )}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                   {currentWorkNode?.status === 'in_review' && (
@@ -1797,9 +1784,6 @@ function TaskDetailContent() {
                           <Clock className="size-3 text-amber-500" />
                           <span className="max-w-[140px] truncate">
                             {currentWorkNode.name}
-                          </span>
-                          <span className="text-amber-700/80">
-                            {t.task.pendingApproval || 'Pending'}
                           </span>
                         </div>
                         <Button

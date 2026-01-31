@@ -111,12 +111,12 @@ export function WorkflowTemplateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="text-sm font-medium">
               {t.task.createTemplateNameLabel}
@@ -150,91 +150,93 @@ export function WorkflowTemplateDialog({
           </div>
 
           <div className="space-y-3">
-            {templateNodes.map((node, index) => (
-              <div key={`node-${index}`} className="rounded-md border p-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-medium">
-                    {t.task.stageLabel} {index + 1}
+            <div className="max-h-[45vh] overflow-y-auto overflow-x-hidden space-y-3 pr-1">
+              {templateNodes.map((node, index) => (
+                <div key={`node-${index}`} className="rounded-md border p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-medium">
+                      {t.task.stageLabel} {index + 1}
+                    </div>
+                    {templateNodes.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setTemplateNodes((prev) =>
+                            prev.filter((_, idx) => idx !== index)
+                          );
+                        }}
+                      >
+                        {t.common.remove}
+                      </Button>
+                    )}
                   </div>
-                  {templateNodes.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setTemplateNodes((prev) =>
-                          prev.filter((_, idx) => idx !== index)
-                        );
-                      }}
-                    >
-                      {t.common.remove}
-                    </Button>
-                  )}
+                  <input
+                    value={node.name}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setTemplateNodes((prev) =>
+                        prev.map((item, idx) =>
+                          idx === index ? { ...item, name: value } : item
+                        )
+                      );
+                    }}
+                    placeholder={t.task.createStageNamePlaceholder}
+                    className="mt-2 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                  />
+                  <textarea
+                    value={node.prompt}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setTemplateNodes((prev) =>
+                        prev.map((item, idx) =>
+                          idx === index ? { ...item, prompt: value } : item
+                        )
+                      );
+                    }}
+                    placeholder={t.task.createStagePromptPlaceholder}
+                    className="mt-2 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={node.requiresApproval}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setTemplateNodes((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index
+                                ? { ...item, requiresApproval: checked }
+                                : item
+                            )
+                          );
+                        }}
+                      />
+                      {t.task.createStageRequiresApproval}
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={node.continueOnError}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setTemplateNodes((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index
+                                ? { ...item, continueOnError: checked }
+                                : item
+                            )
+                          );
+                        }}
+                      />
+                      {t.task.createStageContinueOnError}
+                    </label>
+                  </div>
                 </div>
-                <input
-                  value={node.name}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setTemplateNodes((prev) =>
-                      prev.map((item, idx) =>
-                        idx === index ? { ...item, name: value } : item
-                      )
-                    );
-                  }}
-                  placeholder={t.task.createStageNamePlaceholder}
-                  className="mt-2 w-full rounded-md border bg-background px-2 py-1 text-sm"
-                />
-                <textarea
-                  value={node.prompt}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setTemplateNodes((prev) =>
-                      prev.map((item, idx) =>
-                        idx === index ? { ...item, prompt: value } : item
-                      )
-                    );
-                  }}
-                  placeholder={t.task.createStagePromptPlaceholder}
-                  className="mt-2 w-full rounded-md border bg-background px-2 py-1 text-sm"
-                />
-                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={node.requiresApproval}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setTemplateNodes((prev) =>
-                          prev.map((item, idx) =>
-                            idx === index
-                              ? { ...item, requiresApproval: checked }
-                              : item
-                          )
-                        );
-                      }}
-                    />
-                    {t.task.createStageRequiresApproval}
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={node.continueOnError}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setTemplateNodes((prev) =>
-                          prev.map((item, idx) =>
-                            idx === index
-                              ? { ...item, continueOnError: checked }
-                              : item
-                          )
-                        );
-                      }}
-                    />
-                    {t.task.createStageContinueOnError}
-                  </label>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
             <Button
               type="button"
