@@ -207,6 +207,7 @@ interface Message {
 
 export class DatabaseService {
   private db: Database.Database
+  private workNodeStatusListeners: Array<(node: WorkNode) => void> = []
 
   constructor() {
     const appPaths = getAppPaths()
@@ -215,6 +216,15 @@ export class DatabaseService {
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
     this.initTables()
+  }
+
+  onWorkNodeStatusChange(listener: (node: WorkNode) => void): () => void {
+    this.workNodeStatusListeners.push(listener)
+    return () => {
+      this.workNodeStatusListeners = this.workNodeStatusListeners.filter(
+        (registered) => registered !== listener
+      )
+    }
   }
 
   private initTables(): void {
@@ -1464,7 +1474,17 @@ export class DatabaseService {
   updateWorkNodeStatus(id: string, status: string): WorkNode | null {
     const now = new Date().toISOString()
     this.db.prepare('UPDATE work_nodes SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
-    return this.getWorkNode(id)
+    const updatedNode = this.getWorkNode(id)
+    if (updatedNode) {
+      this.workNodeStatusListeners.forEach((listener) => {
+        try {
+          listener(updatedNode)
+        } catch (error) {
+          console.error('[DatabaseService] Work node status listener failed:', error)
+        }
+      })
+    }
+    return updatedNode
   }
 
   // ============ AgentExecution 操作 ============

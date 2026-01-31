@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom';
 
 import { router } from './router';
 import { initializeSettings } from './data/settings';
+import { notifyWorkNodeCompleted } from './lib/notifications';
 import { LanguageProvider } from './providers/language-provider';
 import { ThemeProvider } from './providers/theme-provider';
 
@@ -13,6 +14,10 @@ import '@/config/style/global.css';
 initializeSettings()
   .catch(console.error)
   .finally(() => {
+    window.api?.workNode?.onCompleted?.((data) => {
+      void notifyWorkNodeCompleted(data?.name);
+    });
+
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>
         <LanguageProvider>

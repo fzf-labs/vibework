@@ -524,12 +524,61 @@ export function useAgent(): UseAgentReturn {
     }
   }, []);
 
+  const getCurrentWorkNodeExecutionId = useCallback(async (currentTaskId: string): Promise<string | null> => {
+    try {
+      const workflow = await db.getWorkflowByTaskId(currentTaskId) as {
+        id: string;
+        current_node_index: number;
+      } | null;
+      if (!workflow) return null;
+
+      const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
+        id: string;
+      }>;
+      const currentNode = nodes[workflow.current_node_index];
+      if (!currentNode) return null;
+
+      const latestExecution = await db.getLatestAgentExecution(currentNode.id) as {
+        id: string;
+      } | null;
+      return latestExecution?.id ?? null;
+    } catch (error) {
+      console.error('[useAgent] Failed to resolve agent execution:', error);
+      return null;
+    }
+  }, []);
+
+  const startAgentExecutionForTask = useCallback(async (currentTaskId: string): Promise<string | null> => {
+    const executionId = await getCurrentWorkNodeExecutionId(currentTaskId);
+    if (!executionId) return null;
+    try {
+      await db.updateAgentExecutionStatus(executionId, 'running');
+    } catch (error) {
+      console.error('[useAgent] Failed to mark agent execution running:', error);
+    }
+    return executionId;
+  }, [getCurrentWorkNodeExecutionId]);
+
+  const completeAgentExecution = useCallback(async (
+    executionId: string | null,
+    cost?: number,
+    duration?: number
+  ): Promise<void> => {
+    if (!executionId) return;
+    try {
+      await db.updateAgentExecutionStatus(executionId, 'completed', cost, duration);
+    } catch (error) {
+      console.error('[useAgent] Failed to mark agent execution completed:', error);
+    }
+  }, []);
+
   // Process SSE stream
   const processStream = useCallback(
     async (
       response: Response,
       currentTaskId: string,
-      _abortController: AbortController
+      _abortController: AbortController,
+      agentExecutionId?: string | null
     ) => {
       const reader = response.body?.getReader();
       if (!reader) {
@@ -542,9 +591,17 @@ export function useAgent(): UseAgentReturn {
       // Track tool execution progress for updating plan steps
       let completedToolCount = 0;
       let totalToolCount = 0;
+      let executionCompleted = false;
+      let lastCost: number | undefined;
+      let lastDuration: number | undefined;
 
       // Helper to check if this stream is still for the active task
       const isActiveTask = () => activeTaskIdRef.current === currentTaskId;
+      const markExecutionCompleted = async (cost?: number, duration?: number) => {
+        if (!agentExecutionId || executionCompleted) return;
+        executionCompleted = true;
+        await completeAgentExecution(agentExecutionId, cost, duration);
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -600,6 +657,14 @@ export function useAgent(): UseAgentReturn {
                 // UI update only for active task
                 if (isActive) {
                   setMessages((prev) => [...prev, normalizedData]);
+                }
+
+                if (normalizedData.type === 'result') {
+                  lastCost = normalizedData.cost ?? lastCost;
+                  lastDuration = normalizedData.duration ?? lastDuration;
+                  await markExecutionCompleted(normalizedData.cost, normalizedData.duration);
+                } else if (normalizedData.type === 'error') {
+                  await markExecutionCompleted(normalizedData.cost, normalizedData.duration);
                 }
 
                 // Track tool_use messages for plan progress
@@ -726,8 +791,9 @@ export function useAgent(): UseAgentReturn {
           }
         }
       }
+      await markExecutionCompleted(lastCost, lastDuration);
     },
-    []
+    [completeAgentExecution]
   );
 
   const resolveTaskWorkDir = useCallback(
@@ -861,6 +927,7 @@ export function useAgent(): UseAgentReturn {
         console.log('[useAgent] Valid images for API:', images?.length || 0);
       }
 
+      let executionId: string | null = null;
       try {
         const modelConfig = getModelConfig();
 
@@ -900,6 +967,7 @@ export function useAgent(): UseAgentReturn {
 
           const mcpConfig = getMcpConfig();
 
+          executionId = await startAgentExecutionForTask(currentTaskId);
           // Use direct execution endpoint with images
           const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
             method: 'POST',
@@ -923,7 +991,7 @@ export function useAgent(): UseAgentReturn {
             throw new Error(`Server error: ${response.status}`);
           }
 
-          await processStream(response, currentTaskId, abortController);
+          await processStream(response, currentTaskId, abortController, executionId);
           return currentTaskId;
         }
 
@@ -1007,12 +1075,13 @@ export function useAgent(): UseAgentReturn {
                       type: 'text',
                       content: normalizedContent,
                     });
-                    const task = await db.getTask(currentTaskId);
-                    if (task?.pipeline_template_id) {
-                      await db.updateTask(currentTaskId, { status: 'in_review' });
-                    } else {
-                      await db.updateTask(currentTaskId, { status: 'done' });
-                    }
+                    await db.updateTask(currentTaskId, { status: 'in_review' });
+                    const executionId = await startAgentExecutionForTask(currentTaskId);
+                    await completeAgentExecution(
+                      executionId,
+                      normalizedData.cost,
+                      normalizedData.duration
+                    );
                   } catch (dbError) {
                     console.error('Failed to save direct answer:', dbError);
                   }
@@ -1067,6 +1136,7 @@ export function useAgent(): UseAgentReturn {
           } catch (dbError) {
             console.error('Failed to save error:', dbError);
           }
+          await completeAgentExecution(executionId);
         }
       } finally {
         // Only update running state if this is still the active task
@@ -1078,7 +1148,7 @@ export function useAgent(): UseAgentReturn {
 
       return currentTaskId;
     },
-    [isRunning, processStream, resolveTaskWorkDir]
+    [completeAgentExecution, isRunning, processStream, resolveTaskWorkDir, startAgentExecutionForTask]
   );
 
   // Phase 2: Execute the approved plan
@@ -1113,6 +1183,7 @@ export function useAgent(): UseAgentReturn {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
+    let executionId: string | null = null;
     try {
       const workDir = await resolveTaskWorkDir(taskId, sessionFolder);
       const modelConfig = getModelConfig();
@@ -1120,6 +1191,7 @@ export function useAgent(): UseAgentReturn {
       const skillsConfig = getSkillsConfig();
       const mcpConfig = getMcpConfig();
 
+      executionId = await startAgentExecutionForTask(taskId);
       const response = await fetchWithRetry(
         `${AGENT_SERVER_URL}/agent/execute`,
         {
@@ -1145,7 +1217,7 @@ export function useAgent(): UseAgentReturn {
         throw new Error(`Server error: ${response.status}`);
       }
 
-      await processStream(response, taskId, abortController);
+      await processStream(response, taskId, abortController, executionId);
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         const errorMessage = formatFetchError(error, '/agent/execute');
@@ -1170,6 +1242,7 @@ export function useAgent(): UseAgentReturn {
         } catch (dbError) {
           console.error('Failed to save error:', dbError);
         }
+        await completeAgentExecution(executionId);
       }
     } finally {
       // Only update running state if this is still the active task
@@ -1260,6 +1333,8 @@ export function useAgent(): UseAgentReturn {
     processStream,
     sessionFolder,
     resolveTaskWorkDir,
+    startAgentExecutionForTask,
+    completeAgentExecution,
   ]);
 
   // Reject the plan
@@ -1303,6 +1378,7 @@ export function useAgent(): UseAgentReturn {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
+      let executionId: string | null = null;
       try {
         // Build conversation history including the new reply
         const currentMessages = [...messages, userMessage];
@@ -1344,6 +1420,7 @@ export function useAgent(): UseAgentReturn {
         }
 
         // Send conversation with full history
+        executionId = await startAgentExecutionForTask(taskId);
         const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
           method: 'POST',
           headers: {
@@ -1367,7 +1444,7 @@ export function useAgent(): UseAgentReturn {
           throw new Error(`Server error: ${response.status}`);
         }
 
-        await processStream(response, taskId, abortController);
+        await processStream(response, taskId, abortController, executionId);
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
           const errorMessage = formatFetchError(error, '/agent');
@@ -1395,6 +1472,7 @@ export function useAgent(): UseAgentReturn {
           } catch (dbError) {
             console.error('Failed to save error:', dbError);
           }
+          await completeAgentExecution(executionId);
         }
       } finally {
         // Only update running state if this is still the active task
@@ -1412,6 +1490,8 @@ export function useAgent(): UseAgentReturn {
       processStream,
       sessionFolder,
       resolveTaskWorkDir,
+      startAgentExecutionForTask,
+      completeAgentExecution,
     ]
   );
 
@@ -1440,7 +1520,11 @@ export function useAgent(): UseAgentReturn {
 
     // Keep task in in_progress status when stopped - user can continue
     setIsRunning(false);
-  }, [taskId]);
+    if (taskId) {
+      const executionId = await getCurrentWorkNodeExecutionId(taskId);
+      await completeAgentExecution(executionId);
+    }
+  }, [taskId, completeAgentExecution, getCurrentWorkNodeExecutionId]);
 
   const clearMessages = useCallback(() => {
     // Stop polling if active

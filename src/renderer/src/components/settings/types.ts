@@ -6,6 +6,8 @@ export type { SettingsType };
 export type SettingsCategory =
   | 'account'
   | 'general'
+  | 'sound'
+  | 'notification'
   | 'editor'
   | 'cli'
   | 'git'

@@ -9,6 +9,8 @@ import type {
   AgentRuntimeSetting,
   AccentColor,
   BackgroundStyle,
+  SoundChoice,
+  SoundPresetId,
 } from './types';
 
 // ============ Default Values ============
@@ -121,6 +123,20 @@ export const defaultSettings: Settings = {
   providers: defaultProviders,
   defaultProvider: 'default',
   defaultModel: '',
+  taskCompleteSoundEnabled: false,
+  workNodeCompleteSoundEnabled: false,
+  taskCompleteNotificationsEnabled: false,
+  workNodeCompleteNotificationsEnabled: false,
+  taskCompleteSound: {
+    source: 'preset',
+    presetId: 'chime',
+    filePath: '',
+  },
+  workNodeCompleteSound: {
+    source: 'preset',
+    presetId: 'pulse',
+    filePath: '',
+  },
   mcpConfigPath: '',
   mcpUserDirEnabled: true,
   mcpAppDirEnabled: true,
@@ -178,6 +194,45 @@ export const backgroundStyles: {
 
 let settingsCache: Settings | null = null;
 
+const SOUND_PRESET_IDS = new Set<SoundPresetId>([
+  'chime',
+  'ding',
+  'pulse',
+  'silent',
+]);
+
+const normalizeSoundChoice = (
+  value: unknown,
+  fallbackPreset: SoundPresetId
+): SoundChoice => {
+  if (!value) {
+    return { source: 'preset', presetId: fallbackPreset, filePath: '' };
+  }
+
+  if (typeof value === 'string') {
+    if (SOUND_PRESET_IDS.has(value as SoundPresetId)) {
+      return { source: 'preset', presetId: value as SoundPresetId, filePath: '' };
+    }
+    return { source: 'file', presetId: fallbackPreset, filePath: value };
+  }
+
+  if (typeof value === 'object') {
+    const record = value as {
+      source?: string;
+      presetId?: string;
+      filePath?: string;
+    };
+    const presetId = SOUND_PRESET_IDS.has(record.presetId as SoundPresetId)
+      ? (record.presetId as SoundPresetId)
+      : fallbackPreset;
+    const source = record.source === 'file' ? 'file' : 'preset';
+    const filePath = typeof record.filePath === 'string' ? record.filePath : '';
+    return { source, presetId, filePath };
+  }
+
+  return { source: 'preset', presetId: fallbackPreset, filePath: '' };
+};
+
 // ============ Core Functions ============
 
 export async function getSettingsAsync(): Promise<Settings> {
@@ -214,6 +269,54 @@ export async function getSettingsAsync(): Promise<Settings> {
         loadedSettings.gitWorktreeBranchPrefix =
           defaultSettings.gitWorktreeBranchPrefix;
       }
+      if (typeof loadedSettings.desktopNotificationsEnabled === 'boolean') {
+        loadedSettings.taskCompleteNotificationsEnabled =
+          loadedSettings.taskCompleteNotificationsEnabled ??
+          loadedSettings.desktopNotificationsEnabled;
+        loadedSettings.workNodeCompleteNotificationsEnabled =
+          loadedSettings.workNodeCompleteNotificationsEnabled ??
+          loadedSettings.desktopNotificationsEnabled;
+        delete (loadedSettings as { desktopNotificationsEnabled?: boolean })
+          .desktopNotificationsEnabled;
+      }
+      if (typeof loadedSettings.soundAlertsEnabled === 'boolean') {
+        loadedSettings.taskCompleteSoundEnabled =
+          loadedSettings.taskCompleteSoundEnabled ??
+          loadedSettings.soundAlertsEnabled;
+        loadedSettings.workNodeCompleteSoundEnabled =
+          loadedSettings.workNodeCompleteSoundEnabled ??
+          loadedSettings.soundAlertsEnabled;
+        delete (loadedSettings as { soundAlertsEnabled?: boolean })
+          .soundAlertsEnabled;
+      }
+      if (
+        typeof loadedSettings.taskCompleteNotificationsEnabled !== 'boolean'
+      ) {
+        loadedSettings.taskCompleteNotificationsEnabled =
+          defaultSettings.taskCompleteNotificationsEnabled;
+      }
+      if (
+        typeof loadedSettings.workNodeCompleteNotificationsEnabled !== 'boolean'
+      ) {
+        loadedSettings.workNodeCompleteNotificationsEnabled =
+          defaultSettings.workNodeCompleteNotificationsEnabled;
+      }
+      if (typeof loadedSettings.taskCompleteSoundEnabled !== 'boolean') {
+        loadedSettings.taskCompleteSoundEnabled =
+          defaultSettings.taskCompleteSoundEnabled;
+      }
+      if (typeof loadedSettings.workNodeCompleteSoundEnabled !== 'boolean') {
+        loadedSettings.workNodeCompleteSoundEnabled =
+          defaultSettings.workNodeCompleteSoundEnabled;
+      }
+      loadedSettings.taskCompleteSound = normalizeSoundChoice(
+        loadedSettings.taskCompleteSound,
+        'chime'
+      );
+      loadedSettings.workNodeCompleteSound = normalizeSoundChoice(
+        loadedSettings.workNodeCompleteSound,
+        'pulse'
+      );
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
           loadedSettings.providers.push(defaultProvider);
@@ -247,6 +350,54 @@ export function getSettings(): Settings {
         loadedSettings.gitWorktreeBranchPrefix =
           defaultSettings.gitWorktreeBranchPrefix;
       }
+      if (typeof loadedSettings.desktopNotificationsEnabled === 'boolean') {
+        loadedSettings.taskCompleteNotificationsEnabled =
+          loadedSettings.taskCompleteNotificationsEnabled ??
+          loadedSettings.desktopNotificationsEnabled;
+        loadedSettings.workNodeCompleteNotificationsEnabled =
+          loadedSettings.workNodeCompleteNotificationsEnabled ??
+          loadedSettings.desktopNotificationsEnabled;
+        delete (loadedSettings as { desktopNotificationsEnabled?: boolean })
+          .desktopNotificationsEnabled;
+      }
+      if (typeof loadedSettings.soundAlertsEnabled === 'boolean') {
+        loadedSettings.taskCompleteSoundEnabled =
+          loadedSettings.taskCompleteSoundEnabled ??
+          loadedSettings.soundAlertsEnabled;
+        loadedSettings.workNodeCompleteSoundEnabled =
+          loadedSettings.workNodeCompleteSoundEnabled ??
+          loadedSettings.soundAlertsEnabled;
+        delete (loadedSettings as { soundAlertsEnabled?: boolean })
+          .soundAlertsEnabled;
+      }
+      if (
+        typeof loadedSettings.taskCompleteNotificationsEnabled !== 'boolean'
+      ) {
+        loadedSettings.taskCompleteNotificationsEnabled =
+          defaultSettings.taskCompleteNotificationsEnabled;
+      }
+      if (
+        typeof loadedSettings.workNodeCompleteNotificationsEnabled !== 'boolean'
+      ) {
+        loadedSettings.workNodeCompleteNotificationsEnabled =
+          defaultSettings.workNodeCompleteNotificationsEnabled;
+      }
+      if (typeof loadedSettings.taskCompleteSoundEnabled !== 'boolean') {
+        loadedSettings.taskCompleteSoundEnabled =
+          defaultSettings.taskCompleteSoundEnabled;
+      }
+      if (typeof loadedSettings.workNodeCompleteSoundEnabled !== 'boolean') {
+        loadedSettings.workNodeCompleteSoundEnabled =
+          defaultSettings.workNodeCompleteSoundEnabled;
+      }
+      loadedSettings.taskCompleteSound = normalizeSoundChoice(
+        loadedSettings.taskCompleteSound,
+        'chime'
+      );
+      loadedSettings.workNodeCompleteSound = normalizeSoundChoice(
+        loadedSettings.workNodeCompleteSound,
+        'pulse'
+      );
       for (const defaultProvider of defaultProviders) {
         if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
           loadedSettings.providers.push(defaultProvider);
@@ -274,6 +425,20 @@ export function saveSettings(settings: Settings): void {
       language: settings.language,
     }).catch((error) => {
       console.error('[Settings] Failed to sync to main process:', error);
+    });
+  }
+
+  if (isElectron && window.api.notification) {
+    const notificationsEnabled =
+      settings.taskCompleteNotificationsEnabled ||
+      settings.workNodeCompleteNotificationsEnabled;
+    window.api.notification.setEnabled(notificationsEnabled).catch((error) => {
+      console.error('[Settings] Failed to sync notification state:', error);
+    });
+    const soundEnabled =
+      settings.taskCompleteSoundEnabled || settings.workNodeCompleteSoundEnabled;
+    window.api.notification.setSoundEnabled(soundEnabled).catch((error) => {
+      console.error('[Settings] Failed to sync sound alert state:', error);
     });
   }
 

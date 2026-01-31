@@ -125,6 +125,13 @@ const api = {
       return () => ipcRenderer.removeListener('logStream:message', listener)
     }
   },
+  workNode: {
+    onCompleted: (callback: (data: { id: string; name?: string }) => void) => {
+      const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
+      ipcRenderer.on('workNode:completed', listener)
+      return () => ipcRenderer.removeListener('workNode:completed', listener)
+    }
+  },
   cliTools: {
     getAll: () => ipcRenderer.invoke('cliTools:getAll'),
     detect: (toolId: string) => ipcRenderer.invoke('cliTools:detect', toolId),

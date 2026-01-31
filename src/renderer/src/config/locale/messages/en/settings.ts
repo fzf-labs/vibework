@@ -4,6 +4,8 @@ export default {
   // Categories
   account: 'Account',
   general: 'General',
+  sound: 'Sound',
+  notification: 'Notifications',
   editor: 'Editor',
   cli: 'Agent CLI',
   git: 'Git',
@@ -25,6 +27,53 @@ export default {
   dark: 'Dark',
   system: 'System',
   backgroundStyle: 'Background Style',
+
+  // Sound Alerts
+  soundAlertsTitle: 'Sound alerts',
+  soundAlertsDescription: 'Play sounds when tasks or nodes complete.',
+  soundAlertsNote: 'Sound playback may be blocked until you interact with the app.',
+  soundTaskCompleteLabel: 'Task completion sound',
+  soundTaskCompleteDesc: 'Choose the sound for completed tasks.',
+  soundWorkNodeCompleteLabel: 'Work node completion sound',
+  soundWorkNodeCompleteDesc: 'Choose the sound for completed work nodes.',
+  soundPreview: 'Preview',
+  soundPresetChime: 'Chime',
+  soundPresetDing: 'Ding',
+  soundPresetPulse: 'Pulse',
+  soundPresetSilent: 'Silent',
+  soundCustomFileLabel: 'Custom file',
+  soundCustomFileDesc: 'Use your own audio file for this alert.',
+  soundChooseFile: 'Choose file',
+  soundReplaceFile: 'Replace file',
+  soundClearFile: 'Clear',
+  soundSelectedFile: 'Selected file',
+  soundNoFile: 'None',
+  soundFileFilterLabel: 'Audio',
+  soundFileUnavailable: 'File picker is not available.',
+  soundFileUnsupported:
+    'Unsupported audio format. Please choose a supported file.',
+
+  // Notifications
+  notificationTaskTitle: 'Task completion notifications',
+  notificationTaskDescription: 'Show a desktop notification when a task completes.',
+  notificationWorkNodeTitle: 'Work node completion notifications',
+  notificationWorkNodeDescription: 'Show a desktop notification when a work node completes.',
+  notificationPermissionLabel: 'Permission',
+  notificationPermissionGranted: 'Granted',
+  notificationPermissionDenied: 'Denied',
+  notificationPermissionDefault: 'Not requested',
+  notificationPermissionUnsupported: 'Not supported',
+  notificationPermissionSystem: 'Managed by system',
+  notificationPermissionSystemHint:
+    'Desktop notifications are managed by your operating system settings.',
+  notificationPermissionDeniedHint:
+    'Enable notifications in system settings to allow alerts.',
+  notificationPermissionDefaultHint:
+    'Turn on notifications to request permission.',
+  notificationPermissionUnsupportedHint:
+    'This environment does not support desktop notifications.',
+  notificationLimitations:
+    'Notifications may be suppressed by focus modes or system policies.',
 
   // Editor
   editorDescription: 'Choose the editor VibeWork uses to open files and projects.',

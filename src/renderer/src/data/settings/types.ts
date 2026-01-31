@@ -85,11 +85,27 @@ export interface EditorSettings {
   customCommand: string;
 }
 
+export type SoundPresetId = 'chime' | 'ding' | 'pulse' | 'silent';
+
+export type SoundChoiceSource = 'preset' | 'file';
+
+export interface SoundChoice {
+  source: SoundChoiceSource;
+  presetId: SoundPresetId;
+  filePath: string;
+}
+
 export interface Settings {
   profile: UserProfile;
   providers: AIProvider[];
   defaultProvider: string;
   defaultModel: string;
+  taskCompleteSoundEnabled: boolean;
+  workNodeCompleteSoundEnabled: boolean;
+  taskCompleteNotificationsEnabled: boolean;
+  workNodeCompleteNotificationsEnabled: boolean;
+  taskCompleteSound: SoundChoice;
+  workNodeCompleteSound: SoundChoice;
   mcpConfigPath: string;
   mcpUserDirEnabled: boolean;
   mcpAppDirEnabled: boolean;

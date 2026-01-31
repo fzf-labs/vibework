@@ -1,4 +1,5 @@
 // 类型定义
+import { notifyTaskCompleted } from '@/lib/notifications'
 import type {
   CreateSessionInput,
   CreateTaskInput,
@@ -41,8 +42,16 @@ export const db = {
     return window.api.database.getAllTasks() as Promise<Task[]>
   },
 
-  updateTask: (id: string, updates: UpdateTaskInput): Promise<Task | null> => {
-    return window.api.database.updateTask(id, updates) as Promise<Task | null>
+  updateTask: async (id: string, updates: UpdateTaskInput): Promise<Task | null> => {
+    const updatedTask =
+      (await window.api.database.updateTask(id, updates)) as Task | null
+
+    if (updates.status === 'done' && updatedTask?.status === 'done') {
+      const taskTitle = updatedTask.title || updatedTask.prompt || undefined
+      void notifyTaskCompleted(taskTitle)
+    }
+
+    return updatedTask
   },
 
   deleteTask: (id: string): Promise<boolean> => {
@@ -108,8 +117,11 @@ export const db = {
     return window.api.database.getWorkNodesByWorkflowId(workflowId) as Promise<unknown[]>
   },
 
-  updateWorkNodeStatus: (id: string, status: string): Promise<unknown> => {
-    return window.api.database.updateWorkNodeStatus(id, status) as Promise<unknown>
+  updateWorkNodeStatus: async (id: string, status: string): Promise<unknown> => {
+    const updatedNode =
+      (await window.api.database.updateWorkNodeStatus(id, status)) as unknown
+
+    return updatedNode
   },
 
   approveWorkNode: (id: string): Promise<void> => {
@@ -158,23 +170,16 @@ export const db = {
     cost?: number,
     duration?: number
   ): Promise<void> => {
-    const task = await db.getTask(taskId)
-    const isWorkflowTask = Boolean(task?.workflow_id)
-
     if (messageType === 'result') {
       if (subtype === 'success') {
-        if (isWorkflowTask) {
-          await db.updateTask(taskId, { status: 'in_review', cost, duration })
-        } else {
-          await db.updateTask(taskId, { status: 'done', cost, duration })
-        }
+        await db.updateTask(taskId, { status: 'in_review', cost, duration })
       } else if (subtype === 'error_max_turns') {
         await db.updateTask(taskId, { cost, duration })
       } else {
-        await db.updateTask(taskId, { status: 'todo', cost, duration })
+        await db.updateTask(taskId, { cost, duration })
       }
     } else if (messageType === 'error') {
-      await db.updateTask(taskId, { status: 'todo' })
+      await db.updateTask(taskId, { cost, duration })
     }
   }
 }

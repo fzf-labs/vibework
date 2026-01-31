@@ -130,6 +130,16 @@ app.whenReady().then(() => {
   settingsService = new SettingsService()
   taskService = new TaskService(databaseService, gitService)
 
+  databaseService.onWorkNodeStatusChange((node) => {
+    if (node.status === 'done' && mainWindow && !mainWindow.isDestroyed()) {
+      const template = databaseService.getWorkNodeTemplate(node.work_node_template_id)
+      mainWindow.webContents.send('workNode:completed', {
+        id: node.id,
+        name: template?.name || ''
+      })
+    }
+  })
+
   // Forward ClaudeCode events to renderer
   claudeCodeService.on('output', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {

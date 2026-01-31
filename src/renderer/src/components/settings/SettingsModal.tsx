@@ -20,6 +20,8 @@ import { EditorSettings } from './tabs/EditorSettings';
 import { GitSettings } from './tabs/GitSettings';
 import { GeneralSettings } from './tabs/GeneralSettings';
 import { MCPSettings } from './tabs/MCPSettings';
+import { NotificationSettings } from './tabs/NotificationSettings';
+import { SoundSettings } from './tabs/SoundSettings';
 import { WorkflowTemplatesSettings } from './tabs/WorkflowTemplatesSettings';
 import { SkillsSettings } from './tabs/SkillsSettings';
 import type { SettingsCategory } from './types';
@@ -52,6 +54,8 @@ export function SettingsModal({
   const categories: SettingsCategory[] = [
     'account',
     'general',
+    'sound',
+    'notification',
     'editor',
     'cli',
     'git',
@@ -144,6 +148,20 @@ export function SettingsModal({
 
               {activeCategory === 'general' && (
                 <GeneralSettings
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                />
+              )}
+
+              {activeCategory === 'sound' && (
+                <SoundSettings
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                />
+              )}
+
+              {activeCategory === 'notification' && (
+                <NotificationSettings
                   settings={settings}
                   onSettingsChange={handleSettingsChange}
                 />

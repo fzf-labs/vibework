@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import {
+  Bell,
   Code,
   Database,
   GitBranch,
@@ -11,6 +12,7 @@ import {
   Sparkles,
   Terminal,
   User,
+  Volume2,
 } from 'lucide-react';
 
 import type { SettingsCategory } from './types';
@@ -22,6 +24,8 @@ export const categoryIcons: Record<
 > = {
   account: User,
   general: Settings,
+  sound: Volume2,
+  notification: Bell,
   editor: Code,
   cli: Terminal,
   git: GitBranch,

@@ -185,6 +185,10 @@ interface NotificationAPI {
   }>
 }
 
+interface WorkNodeAPI {
+  onCompleted: (callback: (data: { id: string; name?: string }) => void) => () => void
+}
+
 interface DatabaseAPI {
   // Session
   createSession: (input: unknown) => Promise<unknown>
@@ -334,6 +338,7 @@ interface API {
   cli: CLIAPI
   claudeCode: ClaudeCodeAPI
   logStream: LogStreamAPI
+  workNode: WorkNodeAPI
   cliTools: CLIToolsAPI
   cliToolConfig: CLIToolConfigAPI
   editor: EditorAPI
