@@ -99,7 +99,29 @@ interface ClaudeCodeAPI {
   onOutput: (
     callback: (data: { sessionId: string; type: string; content: string }) => void
   ) => () => void
-  onClose: (callback: (data: { sessionId: string; code: number }) => void) => () => void
+  onClose: (
+    callback: (data: { sessionId: string; code: number; forcedStatus?: string }) => void
+  ) => () => void
+  onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void
+}
+
+interface CliSessionAPI {
+  startSession: (
+    sessionId: string,
+    toolId: string,
+    workdir: string,
+    options?: { model?: string; prompt?: string }
+  ) => Promise<unknown>
+  stopSession: (sessionId: string) => Promise<unknown>
+  sendInput: (sessionId: string, input: string) => Promise<unknown>
+  getSessions: () => Promise<unknown[]>
+  getSession: (sessionId: string) => Promise<unknown>
+  onOutput: (
+    callback: (data: { sessionId: string; type: string; content: string }) => void
+  ) => () => void
+  onClose: (
+    callback: (data: { sessionId: string; code: number; forcedStatus?: string }) => void
+  ) => () => void
   onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void
 }
 
@@ -340,6 +362,7 @@ interface API {
   git: GitAPI
   cli: CLIAPI
   claudeCode: ClaudeCodeAPI
+  cliSession: CliSessionAPI
   logStream: LogStreamAPI
   workNode: WorkNodeAPI
   cliTools: CLIToolsAPI

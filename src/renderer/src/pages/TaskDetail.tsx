@@ -35,7 +35,7 @@ import {
 } from '@/components/artifacts';
 import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
 import { ChatInput } from '@/components/shared/ChatInput';
-import { ClaudeCodeSession, type ClaudeCodeSessionHandle } from '@/components/cli';
+import { CLISession, type CLISessionHandle } from '@/components/cli';
 import {
   ToolSelectionContext,
   useToolSelection,
@@ -165,7 +165,7 @@ function TaskDetailContent() {
   const isInitializingRef = useRef(false);
   const [task, setTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const useClaudeCli = task?.cli_tool_id === 'claude-code';
+  const useCliSession = Boolean(task?.cli_tool_id);
   const [pipelineTemplate, setPipelineTemplate] =
     useState<PipelineTemplate | null>(null);
   const [cliTools, setCliTools] = useState<CLIToolInfo[]>([]);
@@ -183,7 +183,7 @@ function TaskDetailContent() {
     'idle' | 'running' | 'waiting_approval' | 'failed' | 'completed'
   >('idle');
   const [pipelineStageMessageStart, setPipelineStageMessageStart] = useState(0);
-  const claudeSessionRef = useRef<ClaudeCodeSessionHandle>(null);
+  const cliSessionRef = useRef<CLISessionHandle>(null);
   const [cliStatus, setCliStatus] = useState<
     'idle' | 'running' | 'stopped' | 'error'
   >('idle');
@@ -915,7 +915,7 @@ function TaskDetailContent() {
     }
   }, [resolveCurrentExecutionId]);
 
-  const handleClaudeStatusChange = useCallback((status: 'idle' | 'running' | 'stopped' | 'error') => {
+  const handleCliStatusChange = useCallback((status: 'idle' | 'running' | 'stopped' | 'error') => {
     setCliStatus(status);
     if (!taskId) return;
     if (status === 'running') {
@@ -935,8 +935,8 @@ function TaskDetailContent() {
     }
   }, [markExecutionCompleted, markExecutionRunning, taskId]);
 
-  const runClaudePrompt = useCallback(async (prompt?: string) => {
-    const session = claudeSessionRef.current;
+  const runCliPrompt = useCallback(async (prompt?: string) => {
+    const session = cliSessionRef.current;
     if (!session) return;
 
     if (cliStatus === 'running') {
@@ -996,12 +996,12 @@ function TaskDetailContent() {
         console.error('Failed to update task status:', error);
       }
 
-      // 如果使用 Claude Code CLI，使用 claudeCode API
-      if (useClaudeCli) {
+      // 如果使用 CLI 工具，使用 CLI session
+      if (useCliSession) {
         try {
-          await runClaudePrompt(prompt);
+          await runCliPrompt(prompt);
         } catch (error) {
-          console.error('Failed to execute Claude Code:', error);
+          console.error('Failed to execute CLI session:', error);
           setPipelineStatus('failed');
         }
         return;
@@ -1037,9 +1037,9 @@ function TaskDetailContent() {
       taskId,
       t.task.pipelineApprovalNotePrefix,
       t.task.pipelineCompleted,
-      runClaudePrompt,
+      runCliPrompt,
       workingDir,
-      useClaudeCli,
+      useCliSession,
     ]
   );
 
@@ -1107,10 +1107,10 @@ function TaskDetailContent() {
   const handleReply = useCallback(
     async (text: string, messageAttachments?: MessageAttachment[]) => {
       if ((text.trim() || (messageAttachments && messageAttachments.length > 0)) && taskId) {
-        if (!useClaudeCli && isRunning) {
+        if (!useCliSession && isRunning) {
           return;
         }
-        if (useClaudeCli) {
+        if (useCliSession) {
           const content = text.trim();
           if (content) {
             setLocalMessages((prev) => [
@@ -1119,23 +1119,16 @@ function TaskDetailContent() {
             ]);
           }
           try {
-            const payload = JSON.stringify({
-              type: 'user',
-              message: {
-                role: 'user',
-                content,
-              },
-            });
-            await window.api?.claudeCode?.sendInput?.(taskId, payload);
+            await window.api?.cliSession?.sendInput?.(taskId, content);
           } catch (error) {
-            console.error('Failed to send Claude Code input:', error);
+            console.error('Failed to send CLI input:', error);
             setLocalMessages((prev) => [
               ...prev,
               {
                 type: 'error',
                 message:
                   t.common.errors.serverNotRunning ||
-                  'Claude Code session is not running.',
+                  'CLI session is not running.',
               },
             ]);
           }
@@ -1178,7 +1171,7 @@ function TaskDetailContent() {
       activeTaskId,
       isRunning,
       taskId,
-      useClaudeCli,
+      useCliSession,
       loadMessages,
       continueConversation,
       pipelineTemplate,
@@ -1205,18 +1198,18 @@ function TaskDetailContent() {
       return;
     }
 
-    if (useClaudeCli) {
+    if (useCliSession) {
       try {
-        await runClaudePrompt(task?.prompt || initialPrompt);
+        await runCliPrompt(task?.prompt || initialPrompt);
       } catch (error) {
-        console.error('Failed to start Claude Code session:', error);
+        console.error('Failed to start CLI session:', error);
         setLocalMessages((prev) => [
           ...prev,
           {
             type: 'error',
             message:
               t.common.errors.serverNotRunning ||
-              'Claude Code session is not running.',
+              'CLI session is not running.',
           },
         ]);
       }
@@ -1240,7 +1233,7 @@ function TaskDetailContent() {
   }, [
     initialPrompt,
     isRunning,
-    runClaudePrompt,
+    runCliPrompt,
     pipelineStatus,
     pipelineTemplate,
     runAgent,
@@ -1251,7 +1244,7 @@ function TaskDetailContent() {
     task?.task_index,
     taskId,
     t.common.errors.serverNotRunning,
-    useClaudeCli,
+    useCliSession,
     workingDir,
   ]);
 
@@ -1270,11 +1263,11 @@ function TaskDetailContent() {
     if (!currentWorkNode) return;
     try {
       await db.rejectWorkNode(currentWorkNode.id);
-      await runClaudePrompt();
+      await runCliPrompt();
     } catch (error) {
       console.error('Failed to continue work node:', error);
     }
-  }, [currentWorkNode, runClaudePrompt]);
+  }, [currentWorkNode, runCliPrompt]);
 
   const displayTitle = task?.title || task?.prompt || initialPrompt;
   const pipelineBanner = useMemo(() => {
@@ -1323,10 +1316,10 @@ function TaskDetailContent() {
         !pipelineTemplate ||
         pipelineStatus !== 'idle' ||
         isRunning ||
-        (useClaudeCli && cliStatus === 'running')
+        (useCliSession && cliStatus === 'running')
       );
     }
-    if (useClaudeCli) {
+    if (useCliSession) {
       return cliStatus === 'running';
     }
     return isRunning;
@@ -1337,7 +1330,7 @@ function TaskDetailContent() {
     pipelineTemplate,
     task?.pipeline_template_id,
     taskId,
-    useClaudeCli,
+    useCliSession,
   ]);
 
   const hasExecuted = useMemo(() => {
@@ -1608,7 +1601,7 @@ function TaskDetailContent() {
                     </div>
                   )}
 
-                  {useClaudeCli ? (
+                  {useCliSession ? (
                     <>
                       {cliStatus === 'stopped' && (
                         <div className="border-emerald-500/30 bg-emerald-50/40 text-emerald-700 mb-3 rounded-lg border px-3 py-2 text-xs">
@@ -1656,15 +1649,16 @@ function TaskDetailContent() {
                         </div>
                       )}
                       <div className="flex min-h-0 flex-1">
-                        <ClaudeCodeSession
-                          ref={claudeSessionRef}
+                        <CLISession
+                          ref={cliSessionRef}
                           sessionId={taskId || ''}
+                          toolId={task?.cli_tool_id || ''}
                           workdir={workingDir}
                           prompt={task?.prompt || initialPrompt}
                           className="h-full w-full"
                           compact
                           allowStart={false}
-                          onStatusChange={handleClaudeStatusChange}
+                          onStatusChange={handleCliStatusChange}
                         />
                       </div>
                     </>

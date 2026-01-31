@@ -115,6 +115,35 @@ const api = {
       return () => ipcRenderer.removeListener('claudeCode:error', listener)
     }
   },
+  cliSession: {
+    startSession: (
+      sessionId: string,
+      toolId: string,
+      workdir: string,
+      options?: { model?: string; prompt?: string }
+    ) => ipcRenderer.invoke('cliSession:startSession', sessionId, toolId, workdir, options),
+    stopSession: (sessionId: string) => ipcRenderer.invoke('cliSession:stopSession', sessionId),
+    sendInput: (sessionId: string, input: string) =>
+      ipcRenderer.invoke('cliSession:sendInput', sessionId, input),
+    getSessions: () => ipcRenderer.invoke('cliSession:getSessions'),
+    getSession: (sessionId: string) => ipcRenderer.invoke('cliSession:getSession', sessionId),
+    onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
+        callback(data)
+      ipcRenderer.on('cliSession:output', listener)
+      return () => ipcRenderer.removeListener('cliSession:output', listener)
+    },
+    onClose: (callback: (data: { sessionId: string; code: number; forcedStatus?: string }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; code: number; forcedStatus?: string }) => callback(data)
+      ipcRenderer.on('cliSession:close', listener)
+      return () => ipcRenderer.removeListener('cliSession:close', listener)
+    },
+    onError: (callback: (data: { sessionId: string; error: string }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; error: string }) => callback(data)
+      ipcRenderer.on('cliSession:error', listener)
+      return () => ipcRenderer.removeListener('cliSession:error', listener)
+    }
+  },
   logStream: {
     subscribe: (sessionId: string) => ipcRenderer.invoke('logStream:subscribe', sessionId),
     unsubscribe: (sessionId: string) => ipcRenderer.invoke('logStream:unsubscribe', sessionId),

@@ -19,6 +19,7 @@ import { NotificationService } from './services/NotificationService'
 import { DatabaseService } from './services/DatabaseService'
 import { SettingsService } from './services/SettingsService'
 import { TaskService } from './services/TaskService'
+import { CliSessionService } from './services/cli/CliSessionService'
 
 let projectService: ProjectService
 let gitService: GitService
@@ -34,6 +35,7 @@ let notificationService: NotificationService
 let databaseService: DatabaseService
 let settingsService: SettingsService
 let taskService: TaskService
+let cliSessionService: CliSessionService
 
 const APP_NAME = 'VibeWork'
 const APP_IDENTIFIER = 'com.fzf-labs.vibework'
@@ -122,6 +124,7 @@ app.whenReady().then(() => {
   claudeCodeService = new ClaudeCodeService()
   cliToolDetectorService = new CLIToolDetectorService()
   cliToolConfigService = new CLIToolConfigService()
+  cliSessionService = new CliSessionService(claudeCodeService, cliToolConfigService)
   editorService = new EditorService()
   pipelineService = new PipelineService()
   previewConfigService = new PreviewConfigService()
@@ -156,6 +159,25 @@ app.whenReady().then(() => {
   claudeCodeService.on('error', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('claudeCode:error', data)
+    }
+  })
+
+  // Forward unified CLI session events to renderer
+  cliSessionService.on('output', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cliSession:output', data)
+    }
+  })
+
+  cliSessionService.on('close', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cliSession:close', data)
+    }
+  })
+
+  cliSessionService.on('error', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cliSession:error', data)
     }
   })
 
@@ -501,7 +523,7 @@ app.whenReady().then(() => {
     }
   })
 
-  // IPC handlers for CLI process management
+  // IPC handlers for CLI process management (legacy; prefer cliSession)
   ipcMain.handle(
     'cli:startSession',
     (_, sessionId: string, command: string, args: string[], cwd?: string) => {
@@ -548,13 +570,20 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     'claudeCode:startSession',
-    (_, sessionId: string, workdir: string, options?: ClaudeCodeSessionOptions) => {
+    async (_, sessionId: string, workdir: string, options?: ClaudeCodeSessionOptions) => {
       console.log('[IPC] claudeCode:startSession called:', sessionId, workdir)
       if (options?.prompt) {
         console.log('[IPC] claudeCode:startSession prompt:', options.prompt)
       }
       try {
-        claudeCodeService.startSession(sessionId, workdir, options)
+        await cliSessionService.startSession(
+          sessionId,
+          'claude-code',
+          workdir,
+          options?.prompt,
+          undefined,
+          options?.model
+        )
         console.log('[IPC] claudeCode:startSession success')
         return { success: true }
       } catch (error) {
@@ -566,7 +595,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('claudeCode:stopSession', (_, sessionId: string) => {
     try {
-      claudeCodeService.stopSession(sessionId)
+      cliSessionService.stopSession(sessionId)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -576,7 +605,7 @@ app.whenReady().then(() => {
   ipcMain.handle('claudeCode:sendInput', (_, sessionId: string, input: string) => {
     try {
       console.log('[IPC] claudeCode:sendInput prompt:', input)
-      claudeCodeService.sendInput(sessionId, input)
+      cliSessionService.sendInput(sessionId, input)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -593,11 +622,13 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('claudeCode:getSessions', () => {
-    return claudeCodeService.getAllSessions()
+    return cliSessionService
+      .getAllSessions()
+      .filter((session) => session.toolId === 'claude-code')
   })
 
   ipcMain.handle('claudeCode:getSession', (_, sessionId: string) => {
-    const session = claudeCodeService.getSession(sessionId)
+    const session = cliSessionService.getSession(sessionId)
     if (!session) return null
     return {
       id: session.id,
@@ -607,13 +638,67 @@ app.whenReady().then(() => {
     }
   })
 
+  // IPC handlers for unified CLI sessions
+  ipcMain.handle(
+    'cliSession:startSession',
+    async (
+      _,
+      sessionId: string,
+      toolId: string,
+      workdir: string,
+      options?: { prompt?: string; model?: string }
+    ) => {
+      try {
+        await cliSessionService.startSession(
+          sessionId,
+          toolId,
+          workdir,
+          options?.prompt,
+          undefined,
+          options?.model
+        )
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle('cliSession:stopSession', (_, sessionId: string) => {
+    try {
+      cliSessionService.stopSession(sessionId)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('cliSession:sendInput', (_, sessionId: string, input: string) => {
+    try {
+      cliSessionService.sendInput(sessionId, input)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('cliSession:getSessions', () => {
+    return cliSessionService.getAllSessions()
+  })
+
+  ipcMain.handle('cliSession:getSession', (_, sessionId: string) => {
+    const session = cliSessionService.getSession(sessionId)
+    if (!session) return null
+    return session
+  })
+
   // IPC handlers for log stream
   const logStreamSubscriptions = new Map<string, () => void>()
 
   ipcMain.handle('logStream:subscribe', (event, sessionId: string) => {
     console.log('[IPC] logStream:subscribe called:', sessionId)
     const webContents = event.sender
-    const unsubscribe = claudeCodeService.subscribeToSession(sessionId, (msg) => {
+    const unsubscribe = cliSessionService.subscribeToSession(sessionId, (msg) => {
       console.log('[IPC] logStream:message sending:', sessionId, msg.type)
       if (!webContents.isDestroyed()) {
         webContents.send('logStream:message', sessionId, msg)
@@ -642,7 +727,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('logStream:getHistory', (_, sessionId: string) => {
     console.log('[IPC] logStream:getHistory called:', sessionId)
-    const history = claudeCodeService.getSessionLogHistory(sessionId)
+    const history = cliSessionService.getSessionLogHistory(sessionId)
     console.log('[IPC] logStream:getHistory returning:', history.length, 'messages')
     return history
   })
