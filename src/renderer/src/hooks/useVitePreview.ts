@@ -65,19 +65,6 @@ export function useVitePreview(taskId: string | null): UseVitePreviewReturn {
     };
   }, []);
 
-  // Reset state when taskId changes
-  useEffect(() => {
-    if (taskId) {
-      // Check if there's an existing preview for this task
-      refreshStatus();
-    } else {
-      setPreviewUrl(null);
-      setStatus('idle');
-      setError(null);
-      setHostPort(null);
-    }
-  }, [taskId, refreshStatus]);
-
   /**
    * Update local state from API response
    */
@@ -115,6 +102,19 @@ export function useVitePreview(taskId: string | null): UseVitePreviewReturn {
       console.error('[useVitePreview] Error fetching status:', err);
     }
   }, [updateStateFromResponse]);
+
+  // Reset state when taskId changes
+  useEffect(() => {
+    if (taskId) {
+      // Check if there's an existing preview for this task
+      refreshStatus();
+    } else {
+      setPreviewUrl(null);
+      setStatus('idle');
+      setError(null);
+      setHostPort(null);
+    }
+  }, [taskId, refreshStatus]);
 
   /**
    * Start the Vite preview server
