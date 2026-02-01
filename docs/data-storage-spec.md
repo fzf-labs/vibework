@@ -18,7 +18,10 @@
 ├── config/           # 应用配置
 │   └── settings.json # 通用设置（主题、颜色等）
 ├── data/             # 持久化数据
-│   └── vibework.db   # SQLite 数据库（项目、会话、任务等）
+│   ├── vibework.db   # SQLite 数据库（项目、任务、工作流等）
+│   └── sessions/     # 会话数据（1 Task = 1 Session）
+│       └── <session_id>/
+│           └── messages.jsonl
 ├── logs/             # 日志文件
 │   └── app.log
 └── cache/            # 缓存数据（可清理）
@@ -34,15 +37,16 @@
 | 通用配置 | `settings.json` - 主题、语言、颜色 |
 | 需要人工编辑 | 用户可能手动修改的配置 |
 | 数据量小 | 总大小 < 100KB |
+| Agent/CLI 执行日志 | `messages.jsonl` - 每行一条日志 |
 
 ### SQLite 数据库适用场景
 
 | 场景 | 示例 |
 |------|------|
 | 项目数据 | projects 表 - 项目列表 |
-| 关系型数据 | sessions、tasks、messages 表 |
+| 关系型数据 | tasks、workflows、work_nodes 等 |
 | 需要查询 | 按时间、状态筛选任务 |
-| 数据量大 | 历史记录、日志等 |
+| 数据量大 | 历史任务、工作流记录等 |
 | 需要事务 | 多表关联操作 |
 | 高频读写 | 实时更新的数据 |
 
@@ -69,10 +73,20 @@ SQLite 数据库，包含以下表：
 | 表名 | 用途 |
 |------|------|
 | projects | 项目列表 |
-| sessions | 会话记录 |
 | tasks | 任务记录 |
-| messages | 消息记录 |
-| files | 文件库 |
+| workflows | 工作流实例 |
+| workflow_templates | 工作流模板 |
+| workflow_template_nodes | 工作流模板节点 |
+| work_nodes | 工作节点实例 |
+| agent_executions | Agent 执行记录 |
+
+### data/sessions/<session_id>/messages.jsonl
+仅保存 Agent/CLI 执行产生的数据（**1 Task = 1 Session**），不保存用户消息或对话内容。
+每行一条 JSON，建议包含：
+`id, task_id, session_id, type, content|entry|exit_code, created_at, meta, schema_version`
+
+其中 `type` 建议为：`stdout` / `stderr` / `normalized` / `finished`。
+`type=normalized` 时，`entry` 内可包含工具相关信息（如 tool_name、tool_input、tool_output 等）。
 
 #### projects 表结构
 ```sql
@@ -81,7 +95,6 @@ CREATE TABLE projects (
   name TEXT NOT NULL,
   path TEXT NOT NULL UNIQUE,
   description TEXT,
-  config TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 )
@@ -101,6 +114,9 @@ appPaths.getConfigDir()    // ~/.vibework/config/
 appPaths.getDataDir()      // ~/.vibework/data/
 appPaths.getLogsDir()      // ~/.vibework/logs/
 appPaths.getCacheDir()     // ~/.vibework/cache/
+appPaths.getSessionsDir()  // ~/.vibework/data/sessions/
+appPaths.getSessionDataDir(sessionId) // ~/.vibework/data/sessions/<session_id>/
+appPaths.getSessionMessagesFile(sessionId) // ~/.vibework/data/sessions/<session_id>/messages.jsonl
 
 // 获取具体文件路径
 appPaths.getProjectsFile() // ~/.vibework/data/projects.json
@@ -113,6 +129,10 @@ appPaths.getSettingsFile() // ~/.vibework/config/settings.json
 // 获取数据根目录
 const dataDir = await window.api.path.vibeworkDataDir()
 // 返回: /Users/xxx/.vibework
+
+// 获取 session 数据目录
+const sessionDir = `${dataDir}/data/sessions/${sessionId}`
+const messagesFile = `${sessionDir}/messages.jsonl`
 
 // 获取通用设置
 const settings = await window.api.settings.get()
@@ -129,21 +149,7 @@ await window.api.settings.reset()
 
 ## 5. 数据迁移
 
-### 自动迁移
-应用启动时自动检测并迁移旧数据：
-- 旧位置：`~/Library/Application Support/vibework/`
-- 新位置：`~/.vibework/`
-
-迁移逻辑：
-1. 检查旧位置是否存在数据
-2. 检查新位置是否已有数据
-3. 如果新位置为空，复制旧数据到新位置
-4. 保留旧数据（不删除，由用户决定）
-
-### 迁移文件
-- `vibework.db` → `~/.vibework/data/vibework.db`
-- `vibework.db-wal` → `~/.vibework/data/vibework.db-wal`
-- `vibework.db-shm` → `~/.vibework/data/vibework.db-shm`
+本版本不做历史迁移：旧数据直接忽略/丢弃，启动后使用新结构与新路径。
 
 ## 6. 最佳实践
 
@@ -155,6 +161,9 @@ const dbPath = appPaths.getDatabaseFile()
 
 // 错误：硬编码路径
 const dbPath = '/Users/xxx/.vibework/data/vibework.db'
+
+// 错误：硬编码 session 路径
+const messagesFile = `/Users/xxx/.vibework/data/sessions/${sessionId}/messages.jsonl`
 
 // 错误：使用 app.getPath('userData')
 const dbPath = join(app.getPath('userData'), 'vibework.db')
