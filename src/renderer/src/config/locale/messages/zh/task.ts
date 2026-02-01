@@ -34,6 +34,14 @@ export default {
   detailBranch: '分支',
   detailExpand: '展开详情',
   detailCollapse: '收起详情',
+  taskCardTitle: '任务',
+  workflowCardTitle: '工作流',
+  executionCardTitle: '执行',
+  replyCardTitle: '回复',
+  cliStatusIdle: '空闲',
+  cliStatusRunning: '运行中',
+  cliStatusStopped: '已停止',
+  cliStatusError: '错误',
   // Task Info
   taskInfo: '任务信息',
   // Plan

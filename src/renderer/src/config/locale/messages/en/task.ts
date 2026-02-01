@@ -34,6 +34,14 @@ export default {
   detailBranch: 'Branch',
   detailExpand: 'Show details',
   detailCollapse: 'Hide details',
+  taskCardTitle: 'Task',
+  workflowCardTitle: 'Workflow',
+  executionCardTitle: 'Execution',
+  replyCardTitle: 'Reply',
+  cliStatusIdle: 'Idle',
+  cliStatusRunning: 'Running',
+  cliStatusStopped: 'Stopped',
+  cliStatusError: 'Error',
   // Task Info
   taskInfo: 'Task Info',
   // Plan
