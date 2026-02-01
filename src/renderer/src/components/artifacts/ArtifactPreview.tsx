@@ -263,7 +263,7 @@ export function ArtifactPreview({
       setViewMode('preview');
     }
     setCurrentSlide(0);
-  }, [artifact?.id, artifact?.type]);
+  }, [artifact]);
 
   // Handle copy to clipboard
   const handleCopy = async () => {

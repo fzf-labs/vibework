@@ -238,20 +238,12 @@ const api = {
     getSoundSettings: () => ipcRenderer.invoke('notification:getSoundSettings')
   },
   database: {
-    // Session operations
-    createSession: (input: unknown) => ipcRenderer.invoke('db:createSession', input),
-    getSession: (id: string) => ipcRenderer.invoke('db:getSession', id),
-    getAllSessions: () => ipcRenderer.invoke('db:getAllSessions'),
-    updateSessionTaskCount: (sessionId: string, count: number) =>
-      ipcRenderer.invoke('db:updateSessionTaskCount', sessionId, count),
     // Task operations
     createTask: (input: unknown) => ipcRenderer.invoke('db:createTask', input),
     getTask: (id: string) => ipcRenderer.invoke('db:getTask', id),
     getAllTasks: () => ipcRenderer.invoke('db:getAllTasks'),
     updateTask: (id: string, updates: unknown) => ipcRenderer.invoke('db:updateTask', id, updates),
     deleteTask: (id: string) => ipcRenderer.invoke('db:deleteTask', id),
-    getTasksBySessionId: (sessionId: string) =>
-      ipcRenderer.invoke('db:getTasksBySessionId', sessionId),
     getTasksByProjectId: (projectId: string) =>
       ipcRenderer.invoke('db:getTasksByProjectId', projectId),
     // Workflow template operations
@@ -269,8 +261,8 @@ const api = {
     copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) =>
       ipcRenderer.invoke('db:copyGlobalWorkflowToProject', globalTemplateId, projectId),
     // Workflow instance operations
-    createWorkflow: (taskId: string, templateId: string, scope: string) =>
-      ipcRenderer.invoke('db:createWorkflow', taskId, templateId, scope),
+    createWorkflow: (taskId: string) =>
+      ipcRenderer.invoke('db:createWorkflow', taskId),
     getWorkflow: (id: string) => ipcRenderer.invoke('db:getWorkflow', id),
     getWorkflowByTaskId: (taskId: string) => ipcRenderer.invoke('db:getWorkflowByTaskId', taskId),
     updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) =>
@@ -293,12 +285,7 @@ const api = {
     getLatestAgentExecution: (workNodeId: string) =>
       ipcRenderer.invoke('db:getLatestAgentExecution', workNodeId),
     updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) =>
-      ipcRenderer.invoke('db:updateAgentExecutionStatus', id, status, cost, duration),
-    // Message operations
-    createMessage: (input: unknown) => ipcRenderer.invoke('db:createMessage', input),
-    getMessagesByTaskId: (taskId: string) => ipcRenderer.invoke('db:getMessagesByTaskId', taskId),
-    deleteMessagesByTaskId: (taskId: string) =>
-      ipcRenderer.invoke('db:deleteMessagesByTaskId', taskId)
+      ipcRenderer.invoke('db:updateAgentExecutionStatus', id, status, cost, duration)
   },
   fs: {
     readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
@@ -306,6 +293,8 @@ const api = {
     writeFile: (path: string, data: unknown) => ipcRenderer.invoke('fs:writeFile', path, data),
     writeTextFile: (path: string, content: string) =>
       ipcRenderer.invoke('fs:writeTextFile', path, content),
+    appendTextFile: (path: string, content: string) =>
+      ipcRenderer.invoke('fs:appendTextFile', path, content),
     stat: (path: string) => ipcRenderer.invoke('fs:stat', path),
     readDir: (path: string, options?: { maxDepth?: number }) =>
       ipcRenderer.invoke('fs:readDir', path, options),
@@ -342,8 +331,6 @@ const api = {
   },
   task: {
     create: (options: {
-      sessionId: string
-      taskIndex: number
       title: string
       prompt: string
       projectId?: string
@@ -353,11 +340,10 @@ const api = {
       worktreeBranchPrefix?: string
       worktreeRootPath?: string
       cliToolId?: string
-      pipelineTemplateId?: string
+      workflowTemplateId?: string
     }) => ipcRenderer.invoke('task:create', options),
     get: (id: string) => ipcRenderer.invoke('task:get', id),
     getAll: () => ipcRenderer.invoke('task:getAll'),
-    getBySession: (sessionId: string) => ipcRenderer.invoke('task:getBySession', sessionId),
     getByProject: (projectId: string) => ipcRenderer.invoke('task:getByProject', projectId),
     updateStatus: (id: string, status: string) => ipcRenderer.invoke('task:updateStatus', id, status),
     delete: (id: string, removeWorktree?: boolean) =>

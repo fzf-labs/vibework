@@ -130,13 +130,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [theme, accentColor, backgroundStyle]);
 
-  // Apply on initial load
-  useEffect(() => {
-    applyTheme(resolvedTheme);
-    applyAccentColor(accentColor, resolvedTheme);
-    applyBackgroundStyle(backgroundStyle);
-  }, []);
-
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     const settings = getSettings();

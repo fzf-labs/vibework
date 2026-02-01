@@ -116,8 +116,8 @@ export default {
   pipelineTemplateDeleteConfirm: 'Delete template "{name}"?',
   pipelineTemplateCreateTitle: 'Create template',
   pipelineTemplateEditTitle: 'Edit template',
-  pipelineStageCompleted: 'Stage \"{name}\" completed. Reply to continue.',
-  pipelineStageFailed: 'Stage \"{name}\" failed. Reply to continue.',
+  pipelineStageCompleted: 'Stage "{name}" completed. Reply to continue.',
+  pipelineStageFailed: 'Stage "{name}" failed. Reply to continue.',
   pipelineCompleted: 'Pipeline completed.',
   pipelineApprovalNotePrefix: 'Approval note',
 };

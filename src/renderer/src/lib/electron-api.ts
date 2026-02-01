@@ -51,6 +51,16 @@ export const fs = {
   },
 
   /**
+   * 追加写入文本文件
+   */
+  async appendTextFile(path: string, content: string): Promise<void> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.fs.appendTextFile(path, content)
+  },
+
+  /**
    * 获取文件信息
    */
   async stat(path: string): Promise<{ size: number; isFile: boolean; isDirectory: boolean }> {

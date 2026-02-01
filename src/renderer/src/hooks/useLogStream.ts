@@ -67,10 +67,16 @@ function normalizeLogEntry(entry: NormalizedEntry): NormalizedEntry {
  */
 export interface LogMsg {
   type: 'stdout' | 'stderr' | 'normalized' | 'finished'
+  id?: string
+  task_id?: string
+  session_id?: string
+  created_at?: string
+  schema_version?: string
+  meta?: Record<string, unknown>
   content?: string
-  timestamp: number
+  timestamp?: number
   entry?: NormalizedEntry
-  exitCode?: number
+  exit_code?: number
 }
 
 export interface UseLogStreamResult {

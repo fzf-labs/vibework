@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, GitBranch, Clock, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -12,7 +12,6 @@ import type { TaskStatus } from '@/data/types';
 interface TaskWithWorktree {
   id: string;
   sessionId: string;
-  taskIndex: number;
   title: string;
   prompt: string;
   status: string;
@@ -22,7 +21,7 @@ interface TaskWithWorktree {
   baseBranch?: string | null;
   workspacePath?: string | null;
   cliToolId?: string | null;
-  pipelineTemplateId?: string | null;
+  workflowTemplateId?: string | null;
   cost: number | null;
   duration: number | null;
   favorite: boolean;
@@ -53,12 +52,7 @@ export function BoardPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [draggedTask, setDraggedTask] = useState<TaskWithWorktree | null>(null);
 
-  // Load tasks
-  useEffect(() => {
-    loadTasks();
-  }, [currentProject?.id]);
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
       const data = currentProject?.id
@@ -70,7 +64,12 @@ export function BoardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentProject?.id]);
+
+  // Load tasks
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   // Group tasks by status
   const tasksByStatus = columns.reduce(
@@ -128,16 +127,6 @@ export function BoardPage() {
   // Handle task created
   const handleTaskCreated = (task: TaskWithWorktree) => {
     setTasks((prev) => [task, ...prev]);
-  };
-
-  // Generate session ID for new tasks
-  const generateSessionId = () => {
-    const now = new Date();
-    const timestamp = now
-      .toISOString()
-      .replace(/[-:T.Z]/g, '')
-      .slice(0, 14);
-    return `${timestamp}_board`;
   };
 
   // Open project in IDE
@@ -234,7 +223,6 @@ export function BoardPage() {
         projectId={currentProject?.id}
         projectPath={currentProject?.path}
         projectType={currentProject?.projectType}
-        sessionId={generateSessionId()}
         onTaskCreated={handleTaskCreated}
       />
     </div>

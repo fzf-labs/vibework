@@ -213,18 +213,12 @@ interface WorkNodeAPI {
 }
 
 interface DatabaseAPI {
-  // Session
-  createSession: (input: unknown) => Promise<unknown>
-  getSession: (id: string) => Promise<unknown>
-  getAllSessions: () => Promise<unknown[]>
-  updateSessionTaskCount: (sessionId: string, count: number) => Promise<void>
   // Task
   createTask: (input: unknown) => Promise<unknown>
   getTask: (id: string) => Promise<unknown>
   getAllTasks: () => Promise<unknown[]>
   updateTask: (id: string, updates: unknown) => Promise<unknown>
   deleteTask: (id: string) => Promise<boolean>
-  getTasksBySessionId: (sessionId: string) => Promise<unknown[]>
   getTasksByProjectId: (projectId: string) => Promise<unknown[]>
   // Workflow template
   getGlobalWorkflowTemplates: () => Promise<unknown[]>
@@ -235,7 +229,7 @@ interface DatabaseAPI {
   deleteWorkflowTemplate: (templateId: string, scope: string) => Promise<boolean>
   copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) => Promise<unknown>
   // Workflow instance
-  createWorkflow: (taskId: string, templateId: string, scope: string) => Promise<unknown>
+  createWorkflow: (taskId: string) => Promise<unknown>
   getWorkflow: (id: string) => Promise<unknown>
   getWorkflowByTaskId: (taskId: string) => Promise<unknown>
   updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) => Promise<unknown>
@@ -251,10 +245,6 @@ interface DatabaseAPI {
   getAgentExecutionsByWorkNodeId: (workNodeId: string) => Promise<unknown[]>
   getLatestAgentExecution: (workNodeId: string) => Promise<unknown>
   updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) => Promise<unknown>
-  // Message
-  createMessage: (input: unknown) => Promise<unknown>
-  getMessagesByTaskId: (taskId: string) => Promise<unknown[]>
-  deleteMessagesByTaskId: (taskId: string) => Promise<number>
 }
 
 interface FSAPI {
@@ -262,6 +252,7 @@ interface FSAPI {
   readTextFile: (path: string) => Promise<string>
   writeFile: (path: string, data: Uint8Array | string) => Promise<void>
   writeTextFile: (path: string, content: string) => Promise<void>
+  appendTextFile: (path: string, content: string) => Promise<void>
   stat: (path: string) => Promise<{ size: number; isFile: boolean; isDirectory: boolean }>
   readDir: (
     path: string,
@@ -317,7 +308,6 @@ interface SettingsAPI {
 interface TaskWithWorktree {
   id: string
   sessionId: string
-  taskIndex: number
   title: string
   prompt: string
   status: string
@@ -327,7 +317,7 @@ interface TaskWithWorktree {
   baseBranch?: string | null
   workspacePath?: string | null
   cliToolId?: string | null
-  pipelineTemplateId?: string | null
+  workflowTemplateId?: string | null
   cost: number | null
   duration: number | null
   favorite: boolean
@@ -337,8 +327,6 @@ interface TaskWithWorktree {
 
 interface TaskAPI {
   create: (options: {
-    sessionId: string
-    taskIndex: number
     title: string
     prompt: string
     projectId?: string
@@ -348,11 +336,10 @@ interface TaskAPI {
     worktreeBranchPrefix?: string
     worktreeRootPath?: string
     cliToolId?: string
-    pipelineTemplateId?: string
+    workflowTemplateId?: string
   }) => Promise<{ success: boolean; data?: TaskWithWorktree; error?: string }>
   get: (id: string) => Promise<TaskWithWorktree | null>
   getAll: () => Promise<TaskWithWorktree[]>
-  getBySession: (sessionId: string) => Promise<TaskWithWorktree[]>
   getByProject: (projectId: string) => Promise<TaskWithWorktree[]>
   updateStatus: (id: string, status: string) => Promise<TaskWithWorktree | null>
   delete: (id: string, removeWorktree?: boolean) => Promise<{ success: boolean; error?: string }>

@@ -4,7 +4,7 @@ import { DataBatcher } from '../DataBatcher'
 import { LogNormalizerService } from '../LogNormalizerService'
 import { MsgStoreService } from '../MsgStoreService'
 import { CliCompletionSignal, CliSessionHandle, CliSessionStatus } from './types'
-import { LogMsg, NormalizedEntry } from '../../types/log'
+import { LogMsgInput, NormalizedEntry } from '../../types/log'
 
 export interface ProcessCommandSpec {
   command: string
@@ -90,9 +90,9 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.status = code === 0 ? 'stopped' : 'error'
       }
 
-      const finishedMsg: LogMsg = {
+      const finishedMsg: LogMsgInput = {
         type: 'finished',
-        exitCode: code ?? undefined,
+        exit_code: code ?? undefined,
         timestamp: Date.now()
       }
       this.msgStore.push(finishedMsg)

@@ -1,16 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { db } from '@/data';
 import { getSettings } from '@/data/settings';
-import { useAgent, type MessageAttachment } from '@/hooks/useAgent';
+import type { MessageAttachment } from '@/hooks/useAgent';
 import { cn } from '@/lib/utils';
-import { newUlid } from '@/lib/ids';
-import { generateSessionId } from '@/lib/session';
 import { useLanguage } from '@/providers/language-provider';
 import { FileText, Globe, Palette, Smartphone } from 'lucide-react';
 
 import { ChatInput } from '@/components/shared/ChatInput';
-
-import { AgentMessages } from './AgentMessages';
 
 interface QuickAction {
   icon: React.ReactNode;
@@ -45,7 +40,8 @@ const quickActions: QuickAction[] = [
 export function TaskInput() {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const { messages, isRunning, stopAgent } = useAgent();
+  const isRunning = false;
+  const stopAgent = () => {};
 
   const handleSubmit = async (
     text: string,
@@ -53,51 +49,24 @@ export function TaskInput() {
   ) => {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
-    // Generate session info
     const prompt = text.trim();
-    const sessionId = generateSessionId(prompt);
-    const taskIndex = 1;
-    const taskId = newUlid();
 
     try {
-      const existingSession = await db.getSession(sessionId);
-      if (!existingSession) {
-        await db.createSession({ id: sessionId, prompt });
-      }
-
       const settings = getSettings();
-      await db.createTask({
-        id: taskId,
-        session_id: sessionId,
-        task_index: taskIndex,
+      const result = await window.api.task.create({
         title: prompt,
         prompt,
-        cli_tool_id: settings.defaultCliToolId || null,
+        cliToolId: settings.defaultCliToolId || undefined,
       });
+      if (result.success && result.data) {
+        navigate(`/task/${result.data.id}`, {
+          state: { prompt, attachments },
+        });
+        return;
+      }
     } catch (error) {
       console.error('[TaskInput] Failed to initialize task:', error);
     }
-
-    // Navigate to task detail page with attachments in state
-    console.log(
-      '[TaskInput] Navigating with attachments:',
-      attachments?.length || 0
-    );
-    if (attachments && attachments.length > 0) {
-      attachments.forEach((a, i) => {
-        console.log(
-          `[TaskInput] Attachment ${i}: type=${a.type}, hasData=${!!a.data}, dataLength=${a.data?.length || 0}`
-        );
-      });
-    }
-    navigate(`/task/${taskId}`, {
-      state: {
-        prompt,
-        sessionId,
-        taskIndex,
-        attachments,
-      },
-    });
   };
 
   const handleQuickAction = async (action: QuickAction) => {
@@ -144,8 +113,6 @@ export function TaskInput() {
         ))}
       </div>
 
-      {/* Agent Messages */}
-      <AgentMessages messages={messages} isRunning={isRunning} />
     </div>
   );
 }

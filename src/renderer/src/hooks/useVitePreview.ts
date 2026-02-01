@@ -76,7 +76,23 @@ export function useVitePreview(taskId: string | null): UseVitePreviewReturn {
       setError(null);
       setHostPort(null);
     }
-  }, [taskId]);
+  }, [taskId, refreshStatus]);
+
+  /**
+   * Update local state from API response
+   */
+  const updateStateFromResponse = useCallback((data: PreviewApiResponse) => {
+    setStatus(data.status === 'stopped' ? 'idle' : data.status);
+    setPreviewUrl(data.url || null);
+    setHostPort(data.hostPort || null);
+    setError(data.error || null);
+
+    // Stop polling if no longer starting
+    if (data.status !== 'starting' && pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
 
   /**
    * Fetch current status from the server
@@ -98,23 +114,7 @@ export function useVitePreview(taskId: string | null): UseVitePreviewReturn {
     } catch (err) {
       console.error('[useVitePreview] Error fetching status:', err);
     }
-  }, []);
-
-  /**
-   * Update local state from API response
-   */
-  const updateStateFromResponse = useCallback((data: PreviewApiResponse) => {
-    setStatus(data.status === 'stopped' ? 'idle' : data.status);
-    setPreviewUrl(data.url || null);
-    setHostPort(data.hostPort || null);
-    setError(data.error || null);
-
-    // Stop polling if no longer starting
-    if (data.status !== 'starting' && pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-  }, []);
+  }, [updateStateFromResponse]);
 
   /**
    * Start the Vite preview server

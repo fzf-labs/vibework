@@ -101,5 +101,4 @@ export type AgentPhase =
 
 export interface SessionInfo {
   sessionId: string;
-  taskIndex: number;
 }

@@ -1,14 +1,13 @@
 import * as path from 'path'
 import { mkdirSync } from 'fs'
+import { rm } from 'fs/promises'
 import { homedir } from 'os'
 import { DatabaseService } from './DatabaseService'
 import { GitService } from './GitService'
-import { newUlid } from '../utils/ids'
+import { newUlid, newUuid } from '../utils/ids'
 import { getAppPaths } from './AppPaths'
 
 interface CreateTaskOptions {
-  sessionId: string
-  taskIndex: number
   title: string
   prompt: string
   projectId?: string
@@ -18,13 +17,12 @@ interface CreateTaskOptions {
   worktreeBranchPrefix?: string
   worktreeRootPath?: string
   cliToolId?: string
-  pipelineTemplateId?: string
+  workflowTemplateId?: string
 }
 
 interface TaskWithWorktree {
   id: string
   sessionId: string
-  taskIndex: number
   title: string
   prompt: string
   status: string
@@ -34,7 +32,7 @@ interface TaskWithWorktree {
   baseBranch: string | null
   workspacePath: string | null
   cliToolId: string | null
-  pipelineTemplateId: string | null
+  workflowTemplateId: string | null
   cost: number | null
   duration: number | null
   favorite: boolean
@@ -64,6 +62,7 @@ export class TaskService {
 
   async createTask(options: CreateTaskOptions): Promise<TaskWithWorktree> {
     const taskId = newUlid()
+    const sessionId = newUuid()
     let worktreePath: string | null = null
     let branchName: string | null = null
     let baseBranch: string | null = null
@@ -106,8 +105,7 @@ export class TaskService {
 
     const task = this.db.createTask({
       id: taskId,
-      session_id: options.sessionId,
-      task_index: options.taskIndex,
+      session_id: sessionId,
       title: options.title.trim(),
       prompt: options.prompt,
       project_id: options.projectId,
@@ -116,8 +114,16 @@ export class TaskService {
       base_branch: baseBranch ?? undefined,
       workspace_path: workspacePath ?? undefined,
       cli_tool_id: options.cliToolId,
-      pipeline_template_id: options.pipelineTemplateId
+      workflow_template_id: options.workflowTemplateId
     })
+
+    if (options.workflowTemplateId) {
+      try {
+        this.db.seedWorkflowForTask(taskId, options.workflowTemplateId)
+      } catch (error) {
+        console.error('Failed to seed workflow for task:', error)
+      }
+    }
 
     return this.mapTask(task)
   }
@@ -129,10 +135,6 @@ export class TaskService {
 
   getAllTasks(): TaskWithWorktree[] {
     return this.db.getAllTasks().map((t) => this.mapTask(t))
-  }
-
-  getTasksBySessionId(sessionId: string): TaskWithWorktree[] {
-    return this.db.getTasksBySessionId(sessionId).map((t) => this.mapTask(t))
   }
 
   getTasksByProjectId(projectId: string): TaskWithWorktree[] {
@@ -179,6 +181,14 @@ export class TaskService {
       }
     }
 
+    const appPaths = getAppPaths()
+    const sessionDir = appPaths.getSessionDataDir(task.session_id)
+    try {
+      await rm(sessionDir, { recursive: true, force: true })
+    } catch (error) {
+      console.error('[TaskService] Failed to remove session directory:', error)
+    }
+
     return this.db.deleteTask(id)
   }
 
@@ -186,7 +196,6 @@ export class TaskService {
     return {
       id: task.id,
       sessionId: task.session_id,
-      taskIndex: task.task_index,
       title: task.title ?? task.prompt,
       prompt: task.prompt,
       status: task.status,
@@ -196,7 +205,7 @@ export class TaskService {
       baseBranch: task.base_branch ?? null,
       workspacePath: task.workspace_path ?? task.worktree_path ?? null,
       cliToolId: task.cli_tool_id ?? null,
-      pipelineTemplateId: task.pipeline_template_id ?? null,
+      workflowTemplateId: task.workflow_template_id ?? null,
       cost: task.cost,
       duration: task.duration,
       favorite: task.favorite,

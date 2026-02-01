@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
@@ -158,6 +158,14 @@ type CliSkillGroup = {
   skills: SkillInfo[];
 };
 
+const CLI_SKILL_DIRECTORIES: Record<string, string> = {
+  'claude-code': '.claude/skills',
+  codex: '.codex/skills',
+  'gemini-cli': '.gemini/skills',
+  opencode: '.opencode/skills',
+  'cursor-agent': '.cursor/skills',
+};
+
 export function SkillsSettings({
   settings,
 }: SettingsTabProps) {
@@ -191,7 +199,7 @@ export function SkillsSettings({
     (group) => group.skills.length > 0
   );
 
-  const formatCliLabel = (id: string) => {
+  const formatCliLabel = useCallback((id: string) => {
     const runtime = settings.agentRuntimes.find((item) => item.id === id);
     if (runtime) return runtime.name;
     return id
@@ -199,26 +207,18 @@ export function SkillsSettings({
       .filter(Boolean)
       .map((part) => part[0].toUpperCase() + part.slice(1))
       .join(' ');
-  };
+  }, [settings.agentRuntimes]);
 
-  const cliSkillDirectories: Record<string, string> = {
-    'claude-code': '.claude/skills',
-    codex: '.codex/skills',
-    'gemini-cli': '.gemini/skills',
-    opencode: '.opencode/skills',
-    'cursor-agent': '.cursor/skills',
-  };
-
-  const resolvePath = async (targetPath: string) => {
+  const resolvePath = useCallback(async (targetPath: string) => {
     if (!targetPath) return targetPath;
     if (targetPath.startsWith('~') && window.api?.path?.homeDir) {
       const homeDir = await window.api.path.homeDir();
       return targetPath.replace(/^~(?=\/|\\)/, homeDir);
     }
     return targetPath;
-  };
+  }, []);
 
-  const readDirectoryEntries = async (
+  const readDirectoryEntries = useCallback(async (
     directoryPath: string
   ): Promise<SkillFile[]> => {
     if (!directoryPath) return [];
@@ -254,9 +254,9 @@ export function SkillsSettings({
     }
 
     return [];
-  };
+  }, [resolvePath]);
 
-  const readSkillMarkdown = async (skillMdPath: string): Promise<string> => {
+  const readSkillMarkdown = useCallback(async (skillMdPath: string): Promise<string> => {
     try {
       const resolvedPath = await resolvePath(skillMdPath);
       if (window.api?.fs?.exists) {
@@ -287,9 +287,9 @@ export function SkillsSettings({
     }
 
     return '';
-  };
+  }, [resolvePath]);
 
-  const loadSkillsFromDirectory = async (
+  const loadSkillsFromDirectory = useCallback(async (
     directoryPath: string,
     source: string
   ): Promise<SkillInfo[]> => {
@@ -348,9 +348,9 @@ export function SkillsSettings({
       );
       return [];
     }
-  };
+  }, [readDirectoryEntries, readSkillMarkdown]);
 
-  const loadSkillsFromPath = async (skillsPath: string) => {
+  const loadSkillsFromPath = useCallback(async (skillsPath: string) => {
     setLoading(true);
     try {
       const appSkillsDir = skillsPath || defaultAppSkillsPath;
@@ -367,7 +367,7 @@ export function SkillsSettings({
           const groups: CliSkillGroup[] = [];
 
           for (const tool of tools as { id: string; displayName?: string }[]) {
-            const relativeDir = cliSkillDirectories[tool.id];
+            const relativeDir = CLI_SKILL_DIRECTORIES[tool.id];
             if (!relativeDir) continue;
             const dirPath = `${homeDir}/${relativeDir}`;
             const exists = await window.api.fs.exists(dirPath);
@@ -399,11 +399,11 @@ export function SkillsSettings({
     } finally {
       setLoading(false);
     }
-  };
+  }, [defaultAppSkillsPath, formatCliLabel, loadSkillsFromDirectory]);
 
   useEffect(() => {
     loadSkillsFromPath(appSkillsPath);
-  }, [appSkillsPath]);
+  }, [appSkillsPath, loadSkillsFromPath]);
 
   const handleRefreshCliGroup = async (group: CliSkillGroup) => {
     try {

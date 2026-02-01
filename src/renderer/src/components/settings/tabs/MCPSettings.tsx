@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getMcpConfigPath } from '@/lib/paths';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
@@ -166,20 +166,21 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     useState<ConfigDialogState>(initialConfigDialog);
 
   const { t } = useLanguage();
+  const mcpLoadError = t.settings.mcpLoadError;
 
-  const resolvePath = async (targetPath: string): Promise<string> => {
+  const resolvePath = useCallback(async (targetPath: string): Promise<string> => {
     if (!targetPath) return targetPath;
     if (targetPath.startsWith('~') && window.api?.path?.homeDir) {
       const homeDir = await window.api.path.homeDir();
       return targetPath.replace(/^~(?=\/|\\)/, homeDir);
     }
     return targetPath;
-  };
+  }, []);
 
-  const getSaveConfigPath = async (): Promise<string> => {
+  const getSaveConfigPath = useCallback(async (): Promise<string> => {
     if (settings?.mcpConfigPath) return settings.mcpConfigPath;
     return getMcpConfigPath();
-  };
+  }, [settings?.mcpConfigPath]);
 
   const ensureParentDir = async (filePath: string): Promise<void> => {
     const lastSeparator = Math.max(
@@ -210,7 +211,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     return filePath.slice(0, lastSeparator);
   };
 
-  const buildServersFromConfig = (
+  const buildServersFromConfig = useCallback((
     servers: Record<
       string,
       MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
@@ -245,16 +246,22 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       });
     }
     return serverList;
-  };
+  }, []);
 
-  const isAppConfigName = (name: string) => name.toLowerCase() === 'vibework';
+  const isAppConfigName = useCallback(
+    (name: string) => name.toLowerCase() === 'vibework',
+    []
+  );
 
-  const formatCliLabel = (id: string) =>
-    id
-      .split(/[-_]/)
-      .filter(Boolean)
-      .map((part) => part[0].toUpperCase() + part.slice(1))
-      .join(' ');
+  const formatCliLabel = useCallback(
+    (id: string) =>
+      id
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map((part) => part[0].toUpperCase() + part.slice(1))
+        .join(' '),
+    []
+  );
 
   // Filter and sort servers
   const filteredServers = appServers
@@ -275,7 +282,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       return 0;
     });
 
-  const readAppServersFromFile = async (): Promise<MCPServerUI[] | null> => {
+  const readAppServersFromFile = useCallback(async (): Promise<MCPServerUI[] | null> => {
     if (!window.api?.fs?.readTextFile || !window.api?.fs?.exists) return null;
     const localPath = await resolvePath(await getSaveConfigPath());
     if (!localPath) return null;
@@ -294,9 +301,9 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       >,
       'VibeWork'
     );
-  };
+  }, [buildServersFromConfig, getSaveConfigPath, resolvePath]);
 
-  const fetchAllConfigs = async (): Promise<{
+  const fetchAllConfigs = useCallback(async (): Promise<{
     name: string;
     path: string;
     exists: boolean;
@@ -319,9 +326,9 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
       >;
     }[];
-  };
+  }, []);
 
-  const buildCliGroups = async (
+  const buildCliGroups = useCallback(async (
     configs: {
       name: string;
       path: string;
@@ -348,7 +355,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         exists: config.exists,
         servers: buildServersFromConfig(config.servers, config.name),
       }));
-  };
+  }, [buildServersFromConfig, formatCliLabel, isAppConfigName]);
 
   // Load MCP config from all sources
   useEffect(() => {
@@ -380,11 +387,11 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         configs = await fetchAllConfigs();
       } catch (err) {
         console.error('[MCP] Failed to load MCP config:', err);
-        setCliError(t.settings.mcpLoadError);
-        if (appServersResult === null) {
-          setAppError(t.settings.mcpLoadError);
+          setCliError(mcpLoadError);
+          if (appServersResult === null) {
+            setAppError(mcpLoadError);
+          }
         }
-      }
 
       let appServersList = appServersResult ?? [];
       if (configs && appServersResult === null) {
@@ -400,7 +407,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
           cliGroupsList = await buildCliGroups(configs);
         } catch (err) {
           console.error('[MCP] Failed to build CLI MCP groups:', err);
-          setCliError(t.settings.mcpLoadError);
+          setCliError(mcpLoadError);
         }
       }
 
@@ -414,7 +421,15 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     return () => {
       cancelled = true;
     };
-  }, [settings?.mcpConfigPath]);
+  }, [
+    buildCliGroups,
+    buildServersFromConfig,
+    fetchAllConfigs,
+    isAppConfigName,
+    mcpLoadError,
+    readAppServersFromFile,
+    settings?.mcpConfigPath,
+  ]);
 
   // Save MCP config via API
   const saveMCPConfig = async (serverList: MCPServerUI[]) => {

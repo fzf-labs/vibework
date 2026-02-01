@@ -1,9 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { db } from '@/data';
 import type { MessageAttachment } from '@/hooks/useAgent';
-import { newUlid } from '@/lib/ids';
-import { generateSessionId } from '@/lib/session';
 import { useLanguage } from '@/providers/language-provider';
+import { getSettings } from '@/data/settings';
 
 import { ChatInput } from '@/components/shared/ChatInput';
 
@@ -18,18 +16,21 @@ export function HomePage() {
     if (!text.trim() && (!attachments || attachments.length === 0)) return;
 
     const prompt = text.trim();
-    const sessionId = generateSessionId(prompt);
-
     try {
-      await db.createSession({ id: sessionId, prompt });
+      const settings = getSettings();
+      const result = await window.api.task.create({
+        title: prompt,
+        prompt,
+        cliToolId: settings.defaultCliToolId || undefined,
+      });
+      if (result.success && result.data) {
+        navigate(`/task/${result.data.id}`, {
+          state: { prompt, attachments },
+        });
+      }
     } catch (error) {
-      console.error('[Home] Failed to create session:', error);
+      console.error('[Home] Failed to create task:', error);
     }
-
-    const taskId = newUlid();
-    navigate(`/task/${taskId}`, {
-      state: { prompt, sessionId, taskIndex: 1, attachments },
-    });
   };
 
   return (

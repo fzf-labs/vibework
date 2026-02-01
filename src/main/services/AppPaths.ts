@@ -1,7 +1,6 @@
 import { homedir } from 'os'
 import { join } from 'path'
-import { existsSync, mkdirSync, copyFileSync } from 'fs'
-import { app } from 'electron'
+import { existsSync, mkdirSync } from 'fs'
 
 /**
  * 应用数据路径管理服务
@@ -52,17 +51,24 @@ export class AppPaths {
   }
 
   /**
-   * 获取 session 日志目录路径 ~/.vibework/logs/sessions/
+   * 获取 session 数据目录路径 ~/.vibework/data/sessions/
    */
-  getSessionLogsDir(): string {
-    return join(this.getLogsDir(), 'sessions')
+  getSessionsDir(): string {
+    return join(this.getDataDir(), 'sessions')
   }
 
   /**
-   * 获取指定 session 的日志文件路径
+   * 获取指定 session 的数据目录路径
    */
-  getSessionLogFile(sessionId: string): string {
-    return join(this.getSessionLogsDir(), `${sessionId}.jsonl`)
+  getSessionDataDir(sessionId: string): string {
+    return join(this.getSessionsDir(), sessionId)
+  }
+
+  /**
+   * 获取指定 session 的 messages.jsonl 路径
+   */
+  getSessionMessagesFile(sessionId: string): string {
+    return join(this.getSessionDataDir(sessionId), 'messages.jsonl')
   }
 
   /**
@@ -109,7 +115,7 @@ export class AppPaths {
       this.getConfigDir(),
       this.getDataDir(),
       this.getLogsDir(),
-      this.getSessionLogsDir(),
+      this.getSessionsDir(),
       this.getCacheDir(),
       this.getWorktreesDir(),
     ]
@@ -122,66 +128,6 @@ export class AppPaths {
     }
   }
 
-  /**
-   * 从旧位置迁移数据到新位置
-   * 旧位置: ~/Library/Application Support/vibework/
-   * 新位置: ~/.vibework/
-   */
-  migrateFromOldLocation(): { migrated: boolean; details: string[] } {
-    const details: string[] = []
-    let migrated = false
-
-    try {
-      const oldUserDataPath = app.getPath('userData')
-      const oldDataDir = join(oldUserDataPath, 'data')
-
-      // 检查旧位置是否存在数据
-      if (!existsSync(oldDataDir)) {
-        details.push('No old data directory found, skipping migration')
-        return { migrated: false, details }
-      }
-
-      // 迁移 projects.json
-      const oldProjectsFile = join(oldDataDir, 'projects.json')
-      const newProjectsFile = this.getProjectsFile()
-      if (existsSync(oldProjectsFile) && !existsSync(newProjectsFile)) {
-        copyFileSync(oldProjectsFile, newProjectsFile)
-        details.push(`Migrated: projects.json`)
-        migrated = true
-      }
-
-      // 迁移数据库文件
-      const oldDbFile = join(oldUserDataPath, 'vibework.db')
-      const newDbFile = this.getDatabaseFile()
-      if (existsSync(oldDbFile) && !existsSync(newDbFile)) {
-        copyFileSync(oldDbFile, newDbFile)
-        details.push(`Migrated: vibework.db`)
-        migrated = true
-
-        // 同时迁移 WAL 文件（如果存在）
-        const oldWalFile = oldDbFile + '-wal'
-        const oldShmFile = oldDbFile + '-shm'
-        if (existsSync(oldWalFile)) {
-          copyFileSync(oldWalFile, newDbFile + '-wal')
-        }
-        if (existsSync(oldShmFile)) {
-          copyFileSync(oldShmFile, newDbFile + '-shm')
-        }
-      }
-
-      if (migrated) {
-        details.push('Migration completed successfully')
-        details.push(`Old location: ${oldUserDataPath}`)
-        details.push(`New location: ${this.rootDir}`)
-      } else {
-        details.push('No files needed migration (new location already has data)')
-      }
-    } catch (error) {
-      details.push(`Migration error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-
-    return { migrated, details }
-  }
 }
 
 // 导出单例获取函数

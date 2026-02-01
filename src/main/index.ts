@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile, stat, rm, access, readdir, realpath, mkdir } from 'fs/promises'
+import { readFile, writeFile, appendFile, stat, rm, access, readdir, realpath, mkdir } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import iconMac from '../../resources/icon-mac.png?asset'
@@ -108,13 +108,8 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Initialize app paths and migrate data from old location
+  // Initialize app paths
   const appPaths = getAppPaths()
-  const migration = appPaths.migrateFromOldLocation()
-  if (migration.migrated) {
-    console.log('[App] Data migration completed:')
-    migration.details.forEach((detail) => console.log(`  - ${detail}`))
-  }
 
   // Initialize services
   databaseService = new DatabaseService()
@@ -137,19 +132,17 @@ app.whenReady().then(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return
 
     if (node.status === 'in_review') {
-      const template = databaseService.getWorkNodeTemplate(node.work_node_template_id)
       mainWindow.webContents.send('workNode:review', {
         id: node.id,
-        name: template?.name || ''
+        name: node.name || ''
       })
       return
     }
 
     if (node.status === 'done') {
-      const template = databaseService.getWorkNodeTemplate(node.work_node_template_id)
       mainWindow.webContents.send('workNode:completed', {
         id: node.id,
-        name: template?.name || ''
+        name: node.name || ''
       })
     }
   })
@@ -956,44 +949,6 @@ app.whenReady().then(() => {
   })
 
   // IPC handlers for database operations
-  // Session operations
-  ipcMain.handle('db:createSession', (_, input) => {
-    try {
-      return databaseService.createSession(input)
-    } catch (error) {
-      console.error('Failed to create session:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:getSession', (_, id: string) => {
-    try {
-      return databaseService.getSession(id)
-    } catch (error) {
-      console.error('Failed to get session:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:getAllSessions', () => {
-    try {
-      return databaseService.getAllSessions()
-    } catch (error) {
-      console.error('Failed to get all sessions:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:updateSessionTaskCount', (_, sessionId: string, count: number) => {
-    try {
-      databaseService.updateSessionTaskCount(sessionId, count)
-      return { success: true }
-    } catch (error) {
-      console.error('Failed to update session task count:', error)
-      throw error
-    }
-  })
-
   // Task operations
   ipcMain.handle('db:createTask', (_, input) => {
     try {
@@ -1040,14 +995,6 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('db:getTasksBySessionId', (_, sessionId: string) => {
-    try {
-      return databaseService.getTasksBySessionId(sessionId)
-    } catch (error) {
-      console.error('Failed to get tasks by session:', error)
-      throw error
-    }
-  })
 
   ipcMain.handle('db:getTasksByProjectId', (_, projectId: string) => {
     try {
@@ -1088,8 +1035,8 @@ app.whenReady().then(() => {
   })
 
   // Workflow instance operations
-  ipcMain.handle('db:createWorkflow', (_, taskId: string, templateId: string, scope: string) => {
-    return databaseService.createWorkflow(taskId, templateId, scope === 'global' ? 'global' : 'project')
+  ipcMain.handle('db:createWorkflow', (_, taskId: string) => {
+    return databaseService.createWorkflow(taskId)
   })
 
   ipcMain.handle('db:getWorkflow', (_, id: string) => {
@@ -1144,34 +1091,6 @@ app.whenReady().then(() => {
 
   ipcMain.handle('db:updateAgentExecutionStatus', (_, id: string, status: string, cost?: number, duration?: number) => {
     return databaseService.updateAgentExecutionStatus(id, status as 'idle' | 'running' | 'completed', cost, duration)
-  })
-
-  // Message operations
-  ipcMain.handle('db:createMessage', (_, input) => {
-    try {
-      return databaseService.createMessage(input)
-    } catch (error) {
-      console.error('Failed to create message:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:getMessagesByTaskId', (_, taskId: string) => {
-    try {
-      return databaseService.getMessagesByTaskId(taskId)
-    } catch (error) {
-      console.error('Failed to get messages:', error)
-      throw error
-    }
-  })
-
-  ipcMain.handle('db:deleteMessagesByTaskId', (_, taskId: string) => {
-    try {
-      return databaseService.deleteMessagesByTaskId(taskId)
-    } catch (error) {
-      console.error('Failed to delete messages:', error)
-      throw error
-    }
   })
 
   // IPC handlers for file system operations
@@ -1272,6 +1191,15 @@ app.whenReady().then(() => {
       await writeFile(path, content, 'utf-8')
     } catch (error) {
       console.error('Failed to write text file:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('fs:appendTextFile', async (_, path: string, content: string) => {
+    try {
+      await appendFile(path, content, 'utf-8')
+    } catch (error) {
+      console.error('Failed to append text file:', error)
       throw error
     }
   })
@@ -1430,9 +1358,6 @@ app.whenReady().then(() => {
     return taskService.getAllTasks()
   })
 
-  ipcMain.handle('task:getBySession', (_, sessionId: string) => {
-    return taskService.getTasksBySessionId(sessionId)
-  })
 
   ipcMain.handle('task:getByProject', (_, projectId: string) => {
     return taskService.getTasksByProjectId(projectId)

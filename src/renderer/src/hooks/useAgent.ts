@@ -10,8 +10,8 @@ import {
   updateBackgroundTaskStatus,
   type BackgroundTask,
 } from '@/lib/background-tasks';
-import { newUlid } from '@/lib/ids';
-import { getAppDataDir } from '@/lib/paths';
+import { newUlid, newUuid } from '@/lib/ids';
+import { getSessionsDir, getVibeworkDataDir } from '@/lib/paths';
 
 // Import from agent modules
 import {
@@ -117,9 +117,8 @@ export interface UseAgentReturn {
   isRunning: boolean;
   taskId: string | null;
   sessionId: string | null;
-  taskIndex: number;
   sessionFolder: string | null;
-  taskFolder: string | null; // Full path to current task folder (sessionFolder/task-XX)
+  taskFolder: string | null; // Same as sessionFolder in the new model
   pendingPermission: PermissionRequest | null;
   pendingQuestion: PendingQuestion | null;
   // Two-phase planning
@@ -151,7 +150,7 @@ export interface UseAgentReturn {
     questionId: string,
     answers: Record<string, string>
   ) => Promise<void>;
-  setSessionInfo: (sessionId: string, taskIndex: number) => void;
+  setSessionInfo: (sessionId: string) => void;
   // Background tasks
   backgroundTasks: BackgroundTask[];
   runningBackgroundTaskCount: number;
@@ -170,7 +169,6 @@ export function useAgent(): UseAgentReturn {
   const [plan, setPlan] = useState<TaskPlan | null>(null);
   // Session management
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [currentTaskIndex, setCurrentTaskIndex] = useState<number>(1);
   const [sessionFolder, setSessionFolder] = useState<string | null>(null);
   const sessionIdRef = useRef<string | null>(null); // Backend session ID for API calls
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -195,9 +193,8 @@ export function useAgent(): UseAgentReturn {
   }, [initialPrompt]);
 
   // Helper to set session info
-  const setSessionInfo = useCallback((sessionId: string, taskIndex: number) => {
+  const setSessionInfo = useCallback((sessionId: string) => {
     setCurrentSessionId(sessionId);
-    setCurrentTaskIndex(taskIndex);
   }, []);
 
   // Load existing task from database
@@ -255,12 +252,12 @@ export function useAgent(): UseAgentReturn {
         // Set session info if available from the task
         if (task.session_id) {
           setCurrentSessionId(task.session_id);
-          setCurrentTaskIndex(task.task_index || 1);
+          sessionIdRef.current = task.session_id;
 
           // Compute and set session folder
           try {
-            const appDir = await getAppDataDir();
-            const computedSessionFolder = `${appDir}/sessions/${task.session_id}`;
+            const sessionsDir = await getSessionsDir();
+            const computedSessionFolder = `${sessionsDir}/${task.session_id}`;
             setSessionFolder(computedSessionFolder);
             console.log(
               '[useAgent] Loaded sessionFolder from task:',
@@ -278,250 +275,38 @@ export function useAgent(): UseAgentReturn {
     }
   }, []);
 
-  // Load existing messages from database
+  // Load existing messages (message persistence removed)
   const loadMessages = useCallback(async (id: string): Promise<void> => {
-    // Note: Task switching logic is handled by loadTask, not here
-    // This function just loads messages for the specified task
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
 
-    // Check if the task we're loading is running in background
+    activeTaskIdRef.current = id;
+    setMessages([]);
+    setPendingPermission(null);
+    setPendingQuestion(null);
+    setPlan(null);
+    setTaskId(id);
+
     const backgroundTask = getBackgroundTask(id);
-    const isRestoringFromBackground =
-      backgroundTask && backgroundTask.isRunning;
-
-    if (isRestoringFromBackground) {
-      console.log(
-        '[useAgent] Task is running in background (loadMessages), restoring:',
-        id
-      );
+    if (
+      backgroundTask &&
+      backgroundTask.isRunning &&
+      !backgroundTask.abortController.signal.aborted
+    ) {
+      console.log('[useAgent] Restoring background task without message history:', id);
       abortControllerRef.current = backgroundTask.abortController;
       sessionIdRef.current = backgroundTask.sessionId;
-
-      // Check if the abort controller is still valid (stream still running)
-      if (abortControllerRef.current.signal.aborted) {
-        console.log('[useAgent] Background task was already completed/aborted');
-        setIsRunning(false);
-        setPhase('idle');
-        abortControllerRef.current = null;
-        removeBackgroundTask(id);
-      } else {
-        setIsRunning(true);
-        setPhase('executing'); // Note: might not be accurate if task was in planning phase
-        removeBackgroundTask(id);
-
-        // Start polling for new messages (messages will be loaded immediately below)
-        if (refreshIntervalRef.current) {
-          clearInterval(refreshIntervalRef.current);
-        }
-        const pollingTaskId = id;
-        let lastMessageCount = 0;
-        let stuckCount = 0; // Count how many polls without new messages
-        // Long timeout for stuck detection - tools like Bash can take minutes
-        const MAX_STUCK_COUNT = 300; // Stop after 5 minutes of no progress
-
-        refreshIntervalRef.current = setInterval(async () => {
-          const isStillActive = activeTaskIdRef.current === pollingTaskId;
-
-          // Check abort signal
-          if (
-            !abortControllerRef.current ||
-            abortControllerRef.current.signal.aborted
-          ) {
-            if (refreshIntervalRef.current) {
-              clearInterval(refreshIntervalRef.current);
-              refreshIntervalRef.current = null;
-            }
-            if (isStillActive) {
-              setIsRunning(false);
-              setPhase('idle');
-            }
-            return;
-          }
-
-          // Also check task status in database - it might have completed
-          try {
-            const taskStatus = await db.getTask(pollingTaskId);
-            if (
-              taskStatus &&
-              ['done', 'in_review'].includes(taskStatus.status)
-            ) {
-              console.log(
-                '[useAgent] Task completed in database, stopping poll:',
-                taskStatus.status
-              );
-              if (refreshIntervalRef.current) {
-                clearInterval(refreshIntervalRef.current);
-                refreshIntervalRef.current = null;
-              }
-              if (isStillActive) {
-                setIsRunning(false);
-                setPhase('idle');
-              }
-              return;
-            }
-          } catch (error) {
-            console.error('[useAgent] Failed to check task status:', error);
-          }
-
-          if (isStillActive) {
-            // Refresh messages from database
-            try {
-              const dbMessages = await db.getMessagesByTaskId(pollingTaskId);
-              const agentMessages: AgentMessage[] = dbMessages.map((msg) => ({
-                type: msg.type as AgentMessage['type'],
-                content: normalizeMessageContent(msg.content) || undefined,
-                name: msg.tool_name || undefined,
-                input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-                output: normalizeMessageContent(msg.tool_output) || undefined,
-                toolUseId: msg.tool_use_id || undefined,
-                subtype: msg.subtype as AgentMessage['subtype'],
-                message:
-                  normalizeMessageContent(msg.error_message) || undefined,
-              }));
-              setMessages(agentMessages);
-
-              // Check if there are pending tools (tool_use without matching tool_result)
-              const toolUseIds = new Set<string>();
-              const toolResultIds = new Set<string>();
-              for (const msg of dbMessages) {
-                if (msg.type === 'tool_use' && msg.tool_use_id) {
-                  toolUseIds.add(msg.tool_use_id);
-                } else if (msg.type === 'tool_result' && msg.tool_use_id) {
-                  toolResultIds.add(msg.tool_use_id);
-                }
-              }
-              const hasPendingTools = [...toolUseIds].some(
-                (id) => !toolResultIds.has(id)
-              );
-
-              // Check if we're stuck (no new messages for too long AND no pending tools)
-              if (dbMessages.length === lastMessageCount) {
-                // Only count as stuck if there are no pending tools
-                if (!hasPendingTools) {
-                  stuckCount++;
-                  if (stuckCount >= MAX_STUCK_COUNT) {
-                    console.log(
-                      '[useAgent] Task appears stuck, stopping poll after',
-                      MAX_STUCK_COUNT,
-                      'seconds'
-                    );
-                    if (refreshIntervalRef.current) {
-                      clearInterval(refreshIntervalRef.current);
-                      refreshIntervalRef.current = null;
-                    }
-                    setIsRunning(false);
-                    setPhase('idle');
-                    return;
-                  }
-                } else {
-                  // Tools are pending, reset stuck counter
-                  stuckCount = 0;
-                }
-              } else {
-                // Got new messages, reset stuck counter
-                stuckCount = 0;
-                lastMessageCount = dbMessages.length;
-              }
-            } catch (error) {
-              console.error('[useAgent] Failed to refresh messages:', error);
-            }
-          }
-        }, 1000);
-      }
-    } else {
-      // Task is NOT running in background - it's a completed/stopped task
-      // Reset running state to ensure we don't show running indicators
-      console.log('[useAgent] Loading messages for completed task:', id);
-      setIsRunning(false);
-      setPhase('idle');
-      abortControllerRef.current = null;
-
-      // Stop any existing polling
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
+      setIsRunning(true);
+      setPhase('executing');
+      removeBackgroundTask(id);
+      return;
     }
 
-    // Set this as the active task
-    activeTaskIdRef.current = id;
-
-    try {
-      const dbMessages = await db.getMessagesByTaskId(id);
-
-      // Build agent messages
-      const agentMessages: AgentMessage[] = [];
-      for (let i = 0; i < dbMessages.length; i++) {
-        const msg = dbMessages[i];
-        if (msg.type === 'user') {
-          agentMessages.push({
-            type: 'user' as const,
-            content: normalizeMessageContent(msg.content) || undefined,
-          });
-        } else if (msg.type === 'text') {
-          agentMessages.push({
-            type: 'text' as const,
-            content: normalizeMessageContent(msg.content) || undefined,
-          });
-        } else if (msg.type === 'tool_use') {
-          agentMessages.push({
-            type: 'tool_use' as const,
-            name: msg.tool_name || undefined,
-            input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-          });
-        } else if (msg.type === 'tool_result') {
-          agentMessages.push({
-            type: 'tool_result' as const,
-            toolUseId: msg.tool_use_id || undefined,
-            output: normalizeMessageContent(msg.tool_output) || undefined,
-          });
-        } else if (msg.type === 'result') {
-          agentMessages.push({
-            type: 'result' as const,
-            subtype: msg.subtype || undefined,
-          });
-        } else if (msg.type === 'error') {
-          agentMessages.push({
-            type: 'error' as const,
-            message: normalizeMessageContent(msg.error_message) || undefined,
-          });
-        } else if (msg.type === 'plan') {
-          // Restore plan message with parsed plan data
-          try {
-            const planData =
-              typeof msg.content === 'string'
-                ? (JSON.parse(msg.content) as TaskPlan)
-                : (msg.content as TaskPlan | null | undefined) ?? undefined;
-            if (planData) {
-              // Only mark steps as completed if task is NOT running
-              // For running tasks (restored from background), keep original status
-              const restoredPlan: TaskPlan = isRestoringFromBackground
-                ? planData
-                : {
-                    ...planData,
-                    steps: planData.steps.map((s) => ({
-                      ...s,
-                      status: 'completed' as const,
-                    })),
-                  };
-              agentMessages.push({
-                type: 'plan' as const,
-                plan: restoredPlan,
-              });
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        } else {
-          agentMessages.push({ type: msg.type as AgentMessage['type'] });
-        }
-      }
-
-      // Set messages immediately
-      setMessages(agentMessages);
-      setTaskId(id);
-    } catch (error) {
-      console.error('Failed to load messages:', error);
-    }
+    setIsRunning(false);
+    setPhase('idle');
+    abortControllerRef.current = null;
   }, []);
 
   const getCurrentWorkNodeExecutionId = useCallback(async (currentTaskId: string): Promise<string | null> => {
@@ -751,39 +536,6 @@ export function useAgent(): UseAgentReturn {
                   });
                 }
 
-                // Save message to database
-                try {
-                  await db.createMessage({
-                    task_id: currentTaskId,
-                    type: normalizedData.type as
-                      | 'text'
-                      | 'tool_use'
-                      | 'tool_result'
-                      | 'result'
-                      | 'error'
-                      | 'user',
-                    content: normalizedData.content,
-                    tool_name: normalizedData.name,
-                    tool_input: normalizedData.input
-                      ? JSON.stringify(normalizedData.input)
-                      : undefined,
-                    tool_output: normalizedData.output,
-                    tool_use_id: normalizedData.toolUseId,
-                    subtype: normalizedData.subtype,
-                    error_message: normalizedData.message,
-                  });
-
-                  // Update task status based on message
-                  await db.updateTaskFromMessage(
-                    currentTaskId,
-                    normalizedData.type,
-                    normalizedData.subtype,
-                    normalizedData.cost,
-                    normalizedData.duration
-                  );
-                } catch (dbError) {
-                  console.error('Failed to save message:', dbError);
-                }
               }
             } catch {
               // Ignore parse errors
@@ -814,7 +566,7 @@ export function useAgent(): UseAgentReturn {
       }
       if (sessionFolderValue) return sessionFolderValue;
       const settings = getSettings();
-      return settings.workDir || (await getAppDataDir());
+      return settings.workDir || (await getVibeworkDataDir());
     },
     []
   );
@@ -824,7 +576,7 @@ export function useAgent(): UseAgentReturn {
     async (
       prompt: string,
       existingTaskId?: string,
-      sessionInfo?: SessionInfo,
+      _sessionInfo?: SessionInfo,
       attachments?: MessageAttachment[],
       workDirOverride?: string
     ): Promise<string> => {
@@ -851,41 +603,42 @@ export function useAgent(): UseAgentReturn {
       setPhase('planning');
       setPlan(null);
 
-      // Handle session info
-      const sessId = sessionInfo?.sessionId || currentSessionId || '';
-      const taskIdx = sessionInfo?.taskIndex || currentTaskIndex;
-
-      if (sessionInfo) {
-        setCurrentSessionId(sessionInfo.sessionId);
-        setCurrentTaskIndex(sessionInfo.taskIndex);
+      // Create or use existing task
+      const currentTaskId = existingTaskId || newUlid();
+      let sessId = newUuid();
+      let existingTask: Task | null = null;
+      try {
+        existingTask = await db.getTask(currentTaskId);
+        if (existingTask?.session_id) {
+          sessId = existingTask.session_id;
+        }
+      } catch (error) {
+        console.error('Failed to load existing task:', error);
       }
+      setCurrentSessionId(sessId);
+      sessionIdRef.current = sessId;
 
       // Compute session folder path
       let computedSessionFolder: string | null = null;
       if (sessId) {
         try {
-          const appDir = await getAppDataDir();
-          computedSessionFolder = `${appDir}/sessions/${sessId}`;
+          const sessionsDir = await getSessionsDir();
+          computedSessionFolder = `${sessionsDir}/${sessId}`;
           setSessionFolder(computedSessionFolder);
         } catch (error) {
           console.error('Failed to compute session folder:', error);
         }
       }
-
-      // Create or use existing task
-      const currentTaskId = existingTaskId || newUlid();
       setTaskId(currentTaskId);
       activeTaskIdRef.current = currentTaskId; // Set as active task for stream isolation
 
       // Save task to database - check if task exists first
       try {
-        const existingTask = await db.getTask(currentTaskId);
         if (!existingTask) {
           const settings = getSettings();
           await db.createTask({
             id: currentTaskId,
             session_id: sessId,
-            task_index: taskIdx,
             title: prompt,
             prompt,
             cli_tool_id: settings.defaultCliToolId || null,
@@ -944,17 +697,6 @@ export function useAgent(): UseAgentReturn {
             attachments: attachments,
           };
           setMessages([userMessage]);
-
-          // Save user message to database (attachments are not persisted)
-          try {
-            await db.createMessage({
-              task_id: currentTaskId,
-              type: 'user',
-              content: prompt,
-            });
-          } catch (error) {
-            console.error('Failed to save user message:', error);
-          }
 
           // Use session folder as workDir
           const taskWorkDir = await resolveTaskWorkDir(
@@ -1068,23 +810,12 @@ export function useAgent(): UseAgentReturn {
                     setPhase('idle');
                   }
 
-                  // Save to database (always)
-                  try {
-                    await db.createMessage({
-                      task_id: currentTaskId,
-                      type: 'text',
-                      content: normalizedContent,
-                    });
-                    await db.updateTask(currentTaskId, { status: 'in_review' });
-                    const executionId = await startAgentExecutionForTask(currentTaskId);
-                    await completeAgentExecution(
-                      executionId,
-                      normalizedData.cost,
-                      normalizedData.duration
-                    );
-                  } catch (dbError) {
-                    console.error('Failed to save direct answer:', dbError);
-                  }
+                  const executionId = await startAgentExecutionForTask(currentTaskId);
+                  await completeAgentExecution(
+                    executionId,
+                    normalizedData.cost,
+                    normalizedData.duration
+                  );
                 } else if (normalizedData.type === 'plan' && normalizedData.plan) {
                   // Complex task - received the plan, wait for approval
                   // UI updates only for active task
@@ -1125,17 +856,6 @@ export function useAgent(): UseAgentReturn {
             setPhase('idle');
           }
 
-          // Save to database (always)
-          try {
-            await db.createMessage({
-              task_id: currentTaskId,
-              type: 'error',
-              error_message: errorMessage,
-            });
-            // Keep in_progress status on error - user can retry
-          } catch (dbError) {
-            console.error('Failed to save error:', dbError);
-          }
           await completeAgentExecution(executionId);
         }
       } finally {
@@ -1148,7 +868,15 @@ export function useAgent(): UseAgentReturn {
 
       return currentTaskId;
     },
-    [completeAgentExecution, isRunning, processStream, resolveTaskWorkDir, startAgentExecutionForTask]
+    [
+      completeAgentExecution,
+      initialPrompt,
+      isRunning,
+      processStream,
+      resolveTaskWorkDir,
+      startAgentExecutionForTask,
+      taskId,
+    ]
   );
 
   // Phase 2: Execute the approved plan
@@ -1167,18 +895,6 @@ export function useAgent(): UseAgentReturn {
       steps: plan.steps.map((s) => ({ ...s, status: 'pending' as const })),
     };
     setPlan(updatedPlan);
-
-    // Save the plan as a message to the database for persistence
-    try {
-      await db.createMessage({
-        task_id: taskId,
-        type: 'plan',
-        content: JSON.stringify(plan),
-      });
-      console.log('[useAgent] Saved plan to database:', plan.id);
-    } catch (error) {
-      console.error('Failed to save plan to database:', error);
-    }
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -1231,17 +947,6 @@ export function useAgent(): UseAgentReturn {
           ]);
         }
 
-        // Save to database (always)
-        try {
-          await db.createMessage({
-            task_id: taskId,
-            type: 'error',
-            error_message: errorMessage,
-          });
-          // Keep in_progress status on error - user can retry
-        } catch (dbError) {
-          console.error('Failed to save error:', dbError);
-        }
         await completeAgentExecution(executionId);
       }
     } finally {
@@ -1251,78 +956,7 @@ export function useAgent(): UseAgentReturn {
         setPhase('idle');
         abortControllerRef.current = null;
 
-        // Reload messages from database to ensure all are displayed
-        // (in case some were missed during streaming)
-        try {
-          const dbMessages = await db.getMessagesByTaskId(taskId);
-          const agentMessages: AgentMessage[] = [];
-              for (const msg of dbMessages) {
-                if (msg.type === 'user') {
-                  agentMessages.push({
-                    type: 'user' as const,
-                    content: normalizeMessageContent(msg.content) || undefined,
-                  });
-                } else if (msg.type === 'text') {
-                  agentMessages.push({
-                    type: 'text' as const,
-                    content: normalizeMessageContent(msg.content) || undefined,
-                  });
-                } else if (msg.type === 'tool_use') {
-                  agentMessages.push({
-                    type: 'tool_use' as const,
-                    name: msg.tool_name || undefined,
-                    input: msg.tool_input ? JSON.parse(msg.tool_input) : undefined,
-                  });
-                } else if (msg.type === 'tool_result') {
-                  agentMessages.push({
-                    type: 'tool_result' as const,
-                    toolUseId: msg.tool_use_id || undefined,
-                    output: normalizeMessageContent(msg.tool_output) || undefined,
-                  });
-                } else if (msg.type === 'result') {
-                  agentMessages.push({
-                    type: 'result' as const,
-                    subtype: msg.subtype || undefined,
-                  });
-                } else if (msg.type === 'error') {
-                  agentMessages.push({
-                    type: 'error' as const,
-                    message:
-                      normalizeMessageContent(msg.error_message) || undefined,
-                  });
-                } else if (msg.type === 'plan') {
-              try {
-                const planData =
-                  typeof msg.content === 'string'
-                    ? (JSON.parse(msg.content) as TaskPlan)
-                    : (msg.content as TaskPlan | null | undefined) ?? undefined;
-                if (planData) {
-                  const completedPlan: TaskPlan = {
-                    ...planData,
-                    steps: planData.steps.map((s) => ({
-                      ...s,
-                      status: 'completed' as const,
-                    })),
-                  };
-                  agentMessages.push({
-                    type: 'plan' as const,
-                    plan: completedPlan,
-                  });
-                }
-              } catch {
-                // Ignore parse errors
-              }
-            } else {
-              agentMessages.push({ type: msg.type as AgentMessage['type'] });
-            }
-          }
-          setMessages(agentMessages);
-        } catch (reloadError) {
-          console.error(
-            '[useAgent] Failed to reload messages after execution:',
-            reloadError
-          );
-        }
+        // Message history is no longer reloaded from database.
       }
     }
   }, [
@@ -1361,17 +995,6 @@ export function useAgent(): UseAgentReturn {
           attachments && attachments.length > 0 ? attachments : undefined,
       };
       setMessages((prev) => [...prev, userMessage]);
-
-      // Save user message to database (attachments are not persisted)
-      try {
-        await db.createMessage({
-          task_id: taskId,
-          type: 'user',
-          content: reply,
-        });
-      } catch (error) {
-        console.error('Failed to save user message:', error);
-      }
 
       setIsRunning(true);
 
@@ -1461,17 +1084,6 @@ export function useAgent(): UseAgentReturn {
             ]);
           }
 
-          // Save error to database (always)
-          try {
-            await db.createMessage({
-              task_id: taskId,
-              type: 'error',
-              error_message: errorMessage,
-            });
-            // Keep in_progress status on error - user can retry
-          } catch (dbError) {
-            console.error('Failed to save error:', dbError);
-          }
           await completeAgentExecution(executionId);
         }
       } finally {
@@ -1685,7 +1297,6 @@ export function useAgent(): UseAgentReturn {
     isRunning,
     taskId,
     sessionId: currentSessionId,
-    taskIndex: currentTaskIndex,
     sessionFolder,
     taskFolder,
     pendingPermission,

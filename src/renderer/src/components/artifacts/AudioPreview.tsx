@@ -17,6 +17,7 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
 
   useEffect(() => {
     let blobUrl: string | null = null;
+    const audioEl = audioRef.current;
 
     async function loadAudio() {
       setIsPlaying(false);
@@ -76,10 +77,10 @@ export function AudioPreview({ artifact }: PreviewComponentProps) {
 
     // Cleanup blob URL on unmount
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.src = '';
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+        audioEl.src = '';
       }
       if (blobUrl) {
         URL.revokeObjectURL(blobUrl);

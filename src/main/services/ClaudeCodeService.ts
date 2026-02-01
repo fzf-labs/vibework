@@ -6,7 +6,7 @@ import * as os from 'os'
 import { MsgStoreService } from './MsgStoreService'
 import { LogNormalizerService } from './LogNormalizerService'
 import { ClaudeCodeNormalizer } from './normalizers/ClaudeCodeNormalizer'
-import { LogMsg } from '../types/log'
+import { LogMsg, LogMsgInput } from '../types/log'
 import { DataBatcher } from './DataBatcher'
 
 interface MCPServer {
@@ -160,7 +160,7 @@ export class ClaudeCodeService extends EventEmitter {
       session.output.push(data)
 
       // 推送到 MsgStore
-      const stdoutMsg: LogMsg = {
+      const stdoutMsg: LogMsgInput = {
         type: 'stdout',
         content: data,
         timestamp: Date.now()
@@ -241,7 +241,7 @@ export class ClaudeCodeService extends EventEmitter {
       // 推送完成消息
       msgStore.push({
         type: 'finished',
-        exitCode: code ?? undefined,
+        exit_code: code ?? undefined,
         timestamp: Date.now()
       })
 

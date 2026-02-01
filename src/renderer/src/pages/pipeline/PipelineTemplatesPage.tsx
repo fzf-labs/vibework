@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -62,7 +62,7 @@ export function PipelineTemplatesPage() {
 
   const projectId = currentProject?.id;
 
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     if (!projectId) {
       setTemplates([]);
       return;
@@ -71,16 +71,16 @@ export function PipelineTemplatesPage() {
       projectId
     )) as PipelineTemplate[];
     setTemplates(list);
-  };
+  }, [projectId]);
 
-  const loadGlobalTemplates = async () => {
+  const loadGlobalTemplates = useCallback(async () => {
     const list = (await db.getGlobalWorkflowTemplates()) as PipelineTemplate[];
     setGlobalTemplates(list);
-  };
+  }, []);
 
   useEffect(() => {
     void loadTemplates();
-  }, [projectId]);
+  }, [loadTemplates]);
 
   useEffect(() => {
     setCopyTemplateId('');
@@ -88,7 +88,7 @@ export function PipelineTemplatesPage() {
 
   useEffect(() => {
     void loadGlobalTemplates();
-  }, []);
+  }, [loadGlobalTemplates]);
 
   const handleCreate = () => {
     setEditingTemplate(null);

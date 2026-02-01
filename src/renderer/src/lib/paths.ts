@@ -1,7 +1,7 @@
 /**
  * Path utilities for VibeWork
  *
- * Uses ~/.VibeWork/ as the standard data directory across all platforms.
+ * Uses ~/.vibework/ as the standard data directory across all platforms.
  * This follows the Unix dotfile convention used by developer tools like:
  * - ~/.claude/ (Claude Code)
  * - ~/.npm/ (npm)
@@ -22,7 +22,7 @@ function isElectron(): boolean {
 
 /**
  * Get the application data directory
- * Returns ~/.VibeWork on all platforms
+ * Returns ~/.vibework on all platforms
  */
 export async function getAppDataDir(): Promise<string> {
   if (cachedAppDataDir) {
@@ -33,7 +33,7 @@ export async function getAppDataDir(): Promise<string> {
     try {
       const { path } = await import('./electron-api');
       const appData = await path.appDataDir();
-      // Use appData/VibeWork as the data directory
+      // Use appData/VibeWork as the data directory (legacy)
       cachedAppDataDir = `${appData}/VibeWork`;
       return cachedAppDataDir;
     } catch (error) {
@@ -42,7 +42,7 @@ export async function getAppDataDir(): Promise<string> {
   }
 
   // Fallback for browser mode
-  cachedAppDataDir = '~/.VibeWork';
+  cachedAppDataDir = '~/.vibework';
   return cachedAppDataDir;
 }
 
@@ -73,7 +73,7 @@ export async function getVibeworkDataDir(): Promise<string> {
  * Get the default working directory for sessions
  */
 export async function getDefaultWorkDir(): Promise<string> {
-  const appDir = await getAppDataDir();
+  const appDir = await getVibeworkDataDir();
   return appDir;
 }
 
@@ -81,8 +81,8 @@ export async function getDefaultWorkDir(): Promise<string> {
  * Get the default sessions directory
  */
 export async function getSessionsDir(): Promise<string> {
-  const appDir = await getAppDataDir();
-  return `${appDir}/sessions`;
+  const appDir = await getVibeworkDataDir();
+  return `${appDir}/data/sessions`;
 }
 
 /**

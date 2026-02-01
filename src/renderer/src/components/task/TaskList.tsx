@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { Play, CheckCircle, Clock, GitBranch, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 interface Task {
   id: string
   sessionId: string
-  taskIndex: number
   title: string
   prompt: string
   status: string
@@ -48,11 +47,7 @@ export function TaskList({ projectId, onTaskSelect, className }: TaskListProps) 
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadTasks()
-  }, [projectId])
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     setLoading(true)
     try {
       const data = projectId
@@ -64,7 +59,11 @@ export function TaskList({ projectId, onTaskSelect, className }: TaskListProps) 
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
 
   const handleDelete = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation()

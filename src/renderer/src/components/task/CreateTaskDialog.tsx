@@ -18,7 +18,6 @@ interface CreateTaskDialogProps {
   projectId?: string
   projectPath?: string
   projectType?: 'normal' | 'git'
-  sessionId: string
   onTaskCreated?: (task: any) => void
 }
 
@@ -40,7 +39,6 @@ export function CreateTaskDialog({
   projectId,
   projectPath,
   projectType = 'normal',
-  sessionId,
   onTaskCreated
 }: CreateTaskDialogProps) {
   const { t } = useLanguage()
@@ -166,16 +164,9 @@ export function CreateTaskDialog({
       const settings = getSettings()
       const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'vw-'
       const worktreeRootPath = settings.gitWorktreeDir || '~/.vibework/worktrees'
-      const existingSession = await db.getSession(sessionId)
-      if (!existingSession) {
-        await db.createSession({ id: sessionId, prompt: trimmedPrompt })
-      }
-
-      const pipelineTemplateId = selectedTemplateId || undefined
+      const workflowTemplateId = selectedTemplateId || undefined
 
       const result = await window.api.task.create({
-        sessionId,
-        taskIndex: Date.now(),
         title: trimmedTitle,
         prompt: trimmedPrompt,
         projectId,
@@ -185,7 +176,7 @@ export function CreateTaskDialog({
         worktreeBranchPrefix,
         worktreeRootPath,
         cliToolId: selectedCliToolId,
-        pipelineTemplateId
+        workflowTemplateId
       })
 
       if (result.success && result.data) {

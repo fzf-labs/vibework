@@ -156,7 +156,7 @@ export function markdownToHtml(markdown: string): string {
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
 
   // Blockquotes
-  html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+  html = html.replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>');
 
   // Unordered lists
   html = html.replace(/^\s*[-*+] (.*$)/gim, '<li>$1</li>');

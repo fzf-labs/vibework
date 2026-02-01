@@ -5,31 +5,42 @@
 // 日志消息类型
 export type LogMsgType = 'stdout' | 'stderr' | 'normalized' | 'finished'
 
-export interface LogMsgStdout {
+export interface LogMsgBase {
+  id: string
+  task_id: string
+  session_id: string
+  created_at: string
+  schema_version: string
+  meta?: Record<string, unknown>
+}
+
+export interface LogMsgStdout extends LogMsgBase {
   type: 'stdout'
   content: string
-  timestamp: number
+  timestamp?: number
 }
 
-export interface LogMsgStderr {
+export interface LogMsgStderr extends LogMsgBase {
   type: 'stderr'
   content: string
-  timestamp: number
+  timestamp?: number
 }
 
-export interface LogMsgNormalized {
+export interface LogMsgNormalized extends LogMsgBase {
   type: 'normalized'
   entry: NormalizedEntry
-  timestamp: number
+  timestamp?: number
 }
 
-export interface LogMsgFinished {
+export interface LogMsgFinished extends LogMsgBase {
   type: 'finished'
-  exitCode?: number
-  timestamp: number
+  exit_code?: number
+  timestamp?: number
 }
 
 export type LogMsg = LogMsgStdout | LogMsgStderr | LogMsgNormalized | LogMsgFinished
+
+export type LogMsgInput = Omit<LogMsg, keyof LogMsgBase> & Partial<LogMsgBase>
 
 // 标准化日志条目类型
 export type NormalizedEntryType =

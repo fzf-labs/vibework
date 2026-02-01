@@ -12,7 +12,6 @@ export interface Project {
   name: string
   path: string
   description?: string
-  config: Record<string, unknown>
   projectType: 'normal' | 'git'
   createdAt: string
   updatedAt: string
@@ -22,7 +21,6 @@ export interface CreateProjectOptions {
   name: string
   path: string
   description?: string
-  config?: Record<string, unknown>
   projectType?: 'normal' | 'git'
 }
 
@@ -39,7 +37,6 @@ export class ProjectService {
       name: dbProject.name,
       path: dbProject.path,
       description: dbProject.description || undefined,
-      config: dbProject.config ? JSON.parse(dbProject.config) : {},
       projectType: dbProject.project_type || 'normal',
       createdAt: dbProject.created_at,
       updatedAt: dbProject.updated_at
@@ -75,7 +72,6 @@ export class ProjectService {
       name: options.name,
       path: options.path,
       description: options.description,
-      config: options.config,
       project_type: projectType
     }
 
@@ -87,7 +83,6 @@ export class ProjectService {
     const input: UpdateProjectInput = {}
     if (updates.name !== undefined) input.name = updates.name
     if (updates.description !== undefined) input.description = updates.description
-    if (updates.config !== undefined) input.config = updates.config
     if (updates.projectType !== undefined) input.project_type = updates.projectType
 
     const updated = this.db.updateProject(id, input)

@@ -1,7 +1,8 @@
 import { EventEmitter } from 'events'
-import { appendFileSync, existsSync, readFileSync } from 'fs'
-import { LogMsg, MsgStoreConfig, StoredMsg } from '../types/log'
+import { appendFileSync, existsSync, readFileSync, mkdirSync } from 'fs'
+import { LogMsg, LogMsgInput, MsgStoreConfig, StoredMsg } from '../types/log'
 import { getAppPaths } from './AppPaths'
+import { newUlid } from '../utils/ids'
 
 const DEFAULT_CONFIG: MsgStoreConfig = {
   maxBytes: 50 * 1024 * 1024, // 50MB
@@ -20,7 +21,12 @@ export class MsgStoreService extends EventEmitter {
     this.config = { ...DEFAULT_CONFIG, ...config }
     if (sessionId) {
       this._sessionId = sessionId
-      this.logFilePath = getAppPaths().getSessionLogFile(sessionId)
+      const appPaths = getAppPaths()
+      const sessionDir = appPaths.getSessionDataDir(sessionId)
+      if (!existsSync(sessionDir)) {
+        mkdirSync(sessionDir, { recursive: true })
+      }
+      this.logFilePath = appPaths.getSessionMessagesFile(sessionId)
     }
   }
 
@@ -41,8 +47,9 @@ export class MsgStoreService extends EventEmitter {
   /**
    * 推送消息到存储和广播
    */
-  push(msg: LogMsg): void {
-    const bytes = this.getMessageBytes(msg)
+  push(msg: LogMsgInput): void {
+    const normalized = this.normalizeMessage(msg)
+    const bytes = this.getMessageBytes(normalized)
 
     // 自动淘汰旧数据以保持在限制内
     while (
@@ -57,20 +64,49 @@ export class MsgStoreService extends EventEmitter {
     }
 
     // 存储新消息
-    this.history.push({ msg, bytes })
+    this.history.push({ msg: normalized, bytes })
     this.totalBytes += bytes
 
     // 持久化到文件
     if (this.logFilePath) {
       try {
-        appendFileSync(this.logFilePath, JSON.stringify(msg) + '\n')
+        appendFileSync(this.logFilePath, JSON.stringify(normalized) + '\n')
       } catch (error) {
         console.error('[MsgStore] Failed to persist log:', error)
       }
     }
 
     // 广播给所有监听者
-    this.emit('message', msg)
+    this.emit('message', normalized)
+  }
+
+  private normalizeMessage(msg: LogMsgInput): LogMsg {
+    const legacyExitCode = (msg as { exitCode?: number }).exitCode
+    const normalizedInput = legacyExitCode !== undefined && (msg as any).exit_code === undefined
+      ? ({ ...msg, exit_code: legacyExitCode } as LogMsgInput)
+      : msg
+
+    const sessionId = normalizedInput.session_id ?? this._sessionId ?? 'unknown'
+    const taskId = normalizedInput.task_id ?? sessionId
+    const createdAt = normalizedInput.created_at
+      ? normalizedInput.created_at
+      : normalizedInput.timestamp
+        ? new Date(normalizedInput.timestamp).toISOString()
+        : new Date().toISOString()
+
+    const base = {
+      id: normalizedInput.id ?? newUlid(),
+      task_id: taskId,
+      session_id: sessionId,
+      created_at: createdAt,
+      schema_version: normalizedInput.schema_version ?? 'v1',
+      meta: normalizedInput.meta
+    }
+
+    return {
+      ...normalizedInput,
+      ...base
+    } as LogMsg
   }
 
   /**
@@ -154,7 +190,7 @@ export class MsgStoreService extends EventEmitter {
    * 从文件加载历史日志（静态方法）
    */
   static loadFromFile(sessionId: string): LogMsg[] {
-    const logFilePath = getAppPaths().getSessionLogFile(sessionId)
+    const logFilePath = getAppPaths().getSessionMessagesFile(sessionId)
     if (!existsSync(logFilePath)) {
       return []
     }
