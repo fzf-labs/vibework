@@ -133,6 +133,11 @@ export class TaskService {
     return task ? this.mapTask(task) : null
   }
 
+  getTaskBySessionId(sessionId: string): TaskWithWorktree | null {
+    const task = this.db.getTaskBySessionId(sessionId)
+    return task ? this.mapTask(task) : null
+  }
+
   getAllTasks(): TaskWithWorktree[] {
     return this.db.getAllTasks().map((t) => this.mapTask(t))
   }
@@ -182,9 +187,11 @@ export class TaskService {
     }
 
     const appPaths = getAppPaths()
-    const sessionDir = appPaths.getSessionDataDir(task.session_id)
     try {
+      const sessionDir = appPaths.getSessionDataDir(task.session_id, task.project_id)
+      const sessionLog = appPaths.getSessionMessagesFile(task.session_id, task.project_id)
       await rm(sessionDir, { recursive: true, force: true })
+      await rm(sessionLog, { force: true })
     } catch (error) {
       console.error('[TaskService] Failed to remove session directory:', error)
     }

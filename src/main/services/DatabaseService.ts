@@ -396,6 +396,15 @@ export class DatabaseService {
     return task
   }
 
+  getTaskBySessionId(sessionId: string): Task | null {
+    const stmt = this.db.prepare('SELECT * FROM tasks WHERE session_id = ?')
+    const task = stmt.get(sessionId) as any
+    if (task) {
+      task.favorite = Boolean(task.favorite)
+    }
+    return task
+  }
+
   getAllTasks(): Task[] {
     const stmt = this.db.prepare('SELECT * FROM tasks ORDER BY created_at DESC')
     const tasks = stmt.all() as any[]

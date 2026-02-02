@@ -51,6 +51,14 @@ type PreviewConfigUpdates = Parameters<PreviewConfigService['updateConfig']>[1]
 
 let mainWindow: BrowserWindow | null = null
 
+function resolveProjectIdForSession(sessionId: string): string | null {
+  try {
+    return taskService.getTaskBySessionId(sessionId)?.projectId ?? null
+  } catch {
+    return null
+  }
+}
+
 function createWindow(): BrowserWindow {
   // Create the browser window.
   mainWindow = new BrowserWindow({
@@ -170,6 +178,12 @@ app.whenReady().then(() => {
   cliSessionService.on('output', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('cliSession:output', data)
+    }
+  })
+
+  cliSessionService.on('status', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cliSession:status', data)
     }
   })
 
@@ -580,13 +594,15 @@ app.whenReady().then(() => {
         console.log('[IPC] claudeCode:startSession prompt:', options.prompt)
       }
       try {
+        const projectId = options?.projectId ?? resolveProjectIdForSession(sessionId)
         await cliSessionService.startSession(
           sessionId,
           'claude-code',
           workdir,
           options?.prompt,
           undefined,
-          options?.model
+          options?.model,
+          projectId
         )
         console.log('[IPC] claudeCode:startSession success')
         return { success: true }
@@ -650,16 +666,18 @@ app.whenReady().then(() => {
       sessionId: string,
       toolId: string,
       workdir: string,
-      options?: { prompt?: string; model?: string }
+      options?: { prompt?: string; model?: string; projectId?: string }
     ) => {
       try {
+        const projectId = options?.projectId ?? resolveProjectIdForSession(sessionId)
         await cliSessionService.startSession(
           sessionId,
           toolId,
           workdir,
           options?.prompt,
           undefined,
-          options?.model
+          options?.model,
+          projectId
         )
         return { success: true }
       } catch (error) {
@@ -694,6 +712,15 @@ app.whenReady().then(() => {
     const session = cliSessionService.getSession(sessionId)
     if (!session) return null
     return session
+  })
+
+  ipcMain.handle('cliSession:appendLog', (_, sessionId: string, msg, projectId?: string | null) => {
+    try {
+      cliSessionService.appendSessionLog(sessionId, msg, projectId ?? null)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   })
 
   // IPC handlers for log stream

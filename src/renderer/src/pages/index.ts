@@ -1,5 +1,5 @@
 export { HomePage } from './Home';
-export { TaskDetailPage } from './TaskDetail';
+export { TaskDetailPage } from './task-detail/TaskDetailPage';
 export { SetupPage } from './Setup';
 export { DashboardPage } from './dashboard/DashboardPage';
 export { BoardPage } from './board/BoardPage';

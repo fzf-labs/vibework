@@ -112,11 +112,7 @@ function LogEntry({ entry }: { entry: NormalizedEntry }) {
 
 export function NormalizedLogView({ entries, className }: NormalizedLogViewProps) {
   if (entries.length === 0) {
-    return (
-      <div className={cn('flex items-center justify-center text-muted-foreground italic py-8', className)}>
-        No structured logs available
-      </div>
-    )
+    return null
   }
 
   return (

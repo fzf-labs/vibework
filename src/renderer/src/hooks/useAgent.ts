@@ -257,7 +257,8 @@ export function useAgent(): UseAgentReturn {
           // Compute and set session folder
           try {
             const sessionsDir = await getSessionsDir();
-            const computedSessionFolder = `${sessionsDir}/${task.session_id}`;
+            const projectKey = task.project_id || 'project';
+            const computedSessionFolder = `${sessionsDir}/${projectKey}/${task.session_id}`;
             setSessionFolder(computedSessionFolder);
             console.log(
               '[useAgent] Loaded sessionFolder from task:',
@@ -623,7 +624,8 @@ export function useAgent(): UseAgentReturn {
       if (sessId) {
         try {
           const sessionsDir = await getSessionsDir();
-          computedSessionFolder = `${sessionsDir}/${sessId}`;
+          const projectKey = existingTask?.project_id || 'project';
+          computedSessionFolder = `${sessionsDir}/${projectKey}/${sessId}`;
           setSessionFolder(computedSessionFolder);
         } catch (error) {
           console.error('Failed to compute session folder:', error);

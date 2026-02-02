@@ -42,7 +42,8 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     detectCompletion: CompletionDetector,
     normalizer?: LogNormalizerService,
     detectStderrCompletion?: CompletionDetector,
-    stderrNormalizer?: StderrNormalizer
+    stderrNormalizer?: StderrNormalizer,
+    projectId?: string | null
   ) {
     super()
     this.sessionId = sessionId
@@ -51,7 +52,7 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     this.normalizer = normalizer
     this.detectStderrCompletion = detectStderrCompletion
     this.stderrNormalizer = stderrNormalizer
-    this.msgStore = new MsgStoreService(undefined, sessionId)
+    this.msgStore = new MsgStoreService(undefined, sessionId, projectId)
 
     this.process = spawn(commandSpec.command, commandSpec.args, {
       cwd: commandSpec.cwd,
@@ -123,6 +124,11 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
   sendInput(input: string): void {
     if (!input.trim()) return
     try {
+      this.completionOverride = null
+      if (this.status !== 'running') {
+        this.status = 'running'
+        this.emit('status', { sessionId: this.sessionId, status: this.status })
+      }
       this.process.stdin?.write(input + '\n')
     } catch {
       // ignore
@@ -145,7 +151,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.completionOverride = completion
         this.status = completion.status === 'success' ? 'stopped' : 'error'
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
-        this.stop()
       }
 
       if (this.normalizer) {
@@ -176,7 +181,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.completionOverride = completion
         this.status = completion.status === 'success' ? 'stopped' : 'error'
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
-        this.stop()
       }
 
       if (this.stderrNormalizer) {

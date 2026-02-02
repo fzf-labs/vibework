@@ -151,6 +151,7 @@ export const ClaudeCodeSession = forwardRef<ClaudeCodeSessionHandle, ClaudeCodeS
 
   const showStartButton = allowStart && status !== 'running'
   const showStopButton = status === 'running'
+  const hasLogs = normalizedLogs.length > 0
 
   return (
     <div className={cn('flex flex-col', !compact && 'gap-3', className)}>
@@ -195,8 +196,9 @@ export const ClaudeCodeSession = forwardRef<ClaudeCodeSessionHandle, ClaudeCodeS
         ref={logContainerRef}
         onScroll={checkScrollPosition}
         className={cn(
-        'bg-muted/50 rounded-lg overflow-auto p-2 relative',
-        compact ? 'flex-1 min-h-0' : 'h-80'
+        'rounded-lg overflow-auto relative',
+        compact ? 'flex-1 min-h-0' : 'h-80',
+        hasLogs ? 'bg-muted/50 p-2' : 'bg-transparent p-0'
       )}>
         {/* compact 模式下的浮动控制按钮 */}
         {compact && (showStartButton || showStopButton) && (

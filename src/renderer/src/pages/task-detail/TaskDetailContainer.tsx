@@ -14,53 +14,31 @@ import {
   type MessageAttachment,
 } from '@/hooks/useAgent';
 import { useVitePreview } from '@/hooks/useVitePreview';
-import { newUuid } from '@/lib/ids';
+import { newUlid, newUuid } from '@/lib/ids';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
   CheckCircle,
   Clock,
-  ListChecks,
-  MoreHorizontal,
-  PanelLeft,
   Play,
-  Terminal,
   GitBranch,
 } from 'lucide-react';
 
-import {
-  ArtifactPreview,
-  hasValidSearchResults,
-  type Artifact,
-} from '@/components/artifacts';
-import { LeftSidebar, SidebarProvider, useSidebar } from '@/components/layout';
-import { ChatInput } from '@/components/shared/ChatInput';
-import { CLISession, type CLISessionHandle } from '@/components/cli';
+import { hasValidSearchResults, type Artifact } from '@/components/artifacts';
+import { LeftSidebar, useSidebar } from '@/components/layout';
+import { type CLISessionHandle } from '@/components/cli';
 import {
   ToolSelectionContext,
-  useToolSelection,
   getArtifactTypeFromExt,
-  RightPanel,
-  MessageList,
-  RunningIndicator,
 } from '@/components/task';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 
-// Re-export useToolSelection for external use
-export { useToolSelection };
+import { ExecutionPanel } from './components/ExecutionPanel';
+import { ReplyCard } from './components/ReplyCard';
+import { RightPanelSection } from './components/RightPanelSection';
+import { TaskCard } from './components/TaskCard';
+import { TaskDialogs } from './components/TaskDialogs';
+import { WorkflowCard, type WorkflowDisplayNode } from './components/WorkflowCard';
+import { filterVisibleMetaRows, type PipelineDisplayStatus, type TaskMetaRow } from './types';
 
 interface LocationState {
   prompt?: string;
@@ -97,8 +75,6 @@ interface CLIToolInfo {
   displayName?: string;
 }
 
-type PipelineDisplayStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
-
 const statusConfig: Record<
   PipelineDisplayStatus,
   { icon: typeof Clock; label: string; color: string }
@@ -125,15 +101,7 @@ const statusConfig: Record<
   },
 };
 
-export function TaskDetailPage() {
-  return (
-    <SidebarProvider>
-      <TaskDetailContent />
-    </SidebarProvider>
-  );
-}
-
-function TaskDetailContent() {
+export function TaskDetailContainer() {
   const { t } = useLanguage();
   const { taskId } = useParams();
   const location = useLocation();
@@ -148,6 +116,7 @@ function TaskDetailContent() {
     messages,
     setMessages,
     isRunning,
+    stopAgent,
     runAgent,
     continueConversation,
     loadTask,
@@ -166,7 +135,6 @@ function TaskDetailContent() {
   const [pipelineTemplate, setPipelineTemplate] =
     useState<PipelineTemplate | null>(null);
   const [cliTools, setCliTools] = useState<CLIToolInfo[]>([]);
-  const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
   const [hasStartedOnce, setHasStartedOnce] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -203,6 +171,7 @@ function TaskDetailContent() {
   const [workflowNodes, setWorkflowNodes] = useState<Array<{
     id: string;
     work_node_template_id: string;
+    template_node_id?: string | null;
     node_order: number;
     status: 'todo' | 'in_progress' | 'in_review' | 'done';
     name?: string;
@@ -236,6 +205,92 @@ function TaskDetailContent() {
   const isCliTaskReviewPending = useMemo(
     () => Boolean(useCliSession && !task?.pipeline_template_id && task?.status === 'in_review'),
     [task?.pipeline_template_id, task?.status, useCliSession]
+  );
+
+  const baseTaskPrompt = useMemo(
+    () => task?.prompt || initialPrompt || '',
+    [initialPrompt, task?.prompt]
+  );
+
+  const buildCliPrompt = useCallback(
+    (nodePrompt?: string) => {
+      const trimmedNode = nodePrompt?.trim();
+      if (trimmedNode) {
+        return baseTaskPrompt
+          ? `${baseTaskPrompt}\n\n${trimmedNode}`
+          : trimmedNode;
+      }
+      return baseTaskPrompt;
+    },
+    [baseTaskPrompt]
+  );
+
+  const resolveWorkNodePrompt = useCallback(
+    async (
+      workNodeId?: string | null,
+      nodeIndex?: number | null,
+      templateId?: string | null
+    ) => {
+      const sortedNodes = [...workflowNodes].sort(
+        (a, b) => a.node_order - b.node_order
+      );
+      const fromState =
+        (workNodeId
+          ? sortedNodes.find((node) => node.id === workNodeId)
+          : null) ||
+        (typeof nodeIndex === 'number'
+          ? sortedNodes[nodeIndex]
+          : null) ||
+        sortedNodes.find((node) => node.node_order === nodeIndex) ||
+        (templateId
+          ? sortedNodes.find(
+              (node) =>
+                node.work_node_template_id === templateId ||
+                node.template_node_id === templateId
+            )
+          : null);
+      if (fromState?.prompt && fromState.prompt.trim()) {
+        return fromState.prompt.trim();
+      }
+
+      if (!taskId) return '';
+      try {
+        const workflow = await db.getWorkflowByTaskId(taskId) as {
+          id: string;
+        } | null;
+        if (!workflow) return '';
+
+        const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
+          id: string;
+          node_order: number;
+          template_node_id?: string | null;
+          work_node_template_id?: string | null;
+          prompt?: string;
+        }>;
+        const byId = workNodeId
+          ? nodes.find((node) => node.id === workNodeId)
+          : null;
+        const byIndex =
+          typeof nodeIndex === 'number'
+            ? [...nodes]
+                .sort((a, b) => a.node_order - b.node_order)[nodeIndex]
+            : null;
+        const byTemplate =
+          templateId
+            ? nodes.find(
+                (node) =>
+                  node.work_node_template_id === templateId ||
+                  node.template_node_id === templateId
+              )
+            : null;
+        const prompt = byId?.prompt || byIndex?.prompt || byTemplate?.prompt || '';
+        return prompt.trim();
+      } catch (error) {
+        console.error('[TaskDetail] Failed to resolve work node prompt:', error);
+        return '';
+      }
+    },
+    [taskId, workflowNodes]
   );
 
   // Artifact state
@@ -579,7 +634,6 @@ function TaskDetailContent() {
         setSelectedArtifact(null);
         setArtifacts([]);
         setSelectedToolIndex(null);
-        setLocalMessages([]);
         setCurrentWorkNode(null);
         setWorkflowNodes([]);
         setWorkflowCurrentNode(null);
@@ -728,28 +782,36 @@ function TaskDetailContent() {
 
       const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
         id: string;
-        work_node_template_id: string;
+        template_node_id?: string | null;
+        work_node_template_id?: string | null;
         node_order: number;
         status: 'todo' | 'in_progress' | 'in_review' | 'done';
         name?: string;
         prompt?: string;
       }>;
+      const normalizedNodes = nodes.map((node) => ({
+        ...node,
+        work_node_template_id:
+          node.work_node_template_id || node.template_node_id || '',
+        template_node_id:
+          node.template_node_id || node.work_node_template_id || null,
+      }));
 
-      const currentNode = nodes[workflow.current_node_index];
+      const currentNode = normalizedNodes[workflow.current_node_index];
       if (!currentNode) {
         if (isMountedRef.current) {
           setCurrentWorkNode(null);
           setWorkflowCurrentNode(null);
-          setWorkflowNodes(nodes);
+          setWorkflowNodes(normalizedNodes);
         }
         return;
       }
 
       if (isMountedRef.current) {
-        setWorkflowNodes(nodes);
+        setWorkflowNodes(normalizedNodes);
         setWorkflowCurrentNode({
           id: currentNode.id,
-          templateId: currentNode.work_node_template_id,
+          templateId: currentNode.work_node_template_id || currentNode.template_node_id || '',
           status: currentNode.status,
           index: workflow.current_node_index,
         });
@@ -760,7 +822,7 @@ function TaskDetailContent() {
 
       if (currentNode.status === 'in_review') {
         const nodeTemplate = pipelineTemplate?.nodes.find(
-          n => n.id === currentNode.work_node_template_id
+          n => n.id === (currentNode.work_node_template_id || currentNode.template_node_id)
         );
         const fallbackName = `${t.task.stageLabel} ${workflow.current_node_index + 1}`;
         if (isMountedRef.current) {
@@ -948,45 +1010,132 @@ function TaskDetailContent() {
   const runCliPrompt = useCallback(async (prompt?: string) => {
     const session = cliSessionRef.current;
     if (!session) return;
+    const content = prompt && prompt.trim() ? prompt.trim() : '';
+
+    const sessionId = task?.session_id;
+    if (sessionId && window.api?.cliSession?.getSession) {
+      try {
+        const existingSession = await window.api.cliSession.getSession(sessionId);
+        if (existingSession) {
+          if (content) {
+            await session.sendInput(content);
+          }
+          return;
+        }
+      } catch (error) {
+        console.error('[TaskDetail] Failed to check existing CLI session:', error);
+      }
+    }
 
     if (cliStatus === 'running') {
-      if (prompt && prompt.trim()) {
-        await session.sendInput(prompt);
+      if (content) {
+        await session.sendInput(content);
       }
       return;
     }
 
-    await session.start(prompt && prompt.trim() ? prompt : undefined);
-  }, [cliStatus]);
+    await session.start(content ? content : undefined);
+  }, [cliStatus, task?.session_id]);
+
+  const appendCliLog = useCallback((content: string, type: 'user_message' | 'system_message') => {
+    const sessionId = task?.session_id;
+    if (!sessionId) return;
+    const trimmed = content.trim();
+    if (!trimmed || !window.api?.cliSession?.appendLog) return;
+    const timestamp = Date.now();
+    const entry = {
+      id: newUlid(),
+      type,
+      timestamp,
+      content: trimmed,
+    };
+    window.api.cliSession.appendLog(
+      sessionId,
+      {
+        type: 'normalized',
+        entry,
+        timestamp,
+        task_id: taskId ?? sessionId,
+        session_id: sessionId,
+      },
+      task?.project_id ?? null
+    ).catch((error: unknown) => {
+      console.error('[TaskDetail] Failed to append CLI log:', error);
+    });
+  }, [task?.project_id, task?.session_id, taskId]);
+
+  const appendCliUserLog = useCallback((content: string) => {
+    appendCliLog(content, 'user_message');
+  }, [appendCliLog]);
+
+  const appendCliSystemLog = useCallback((content: string) => {
+    appendCliLog(content, 'system_message');
+  }, [appendCliLog]);
 
   useEffect(() => {
     if (!useCliSession) return;
     if (!workflowCurrentNode) return;
     if (workflowCurrentNode.status !== 'in_progress') return;
     if (cliStatus === 'running') return;
-    if (!pipelineTemplate?.nodes || pipelineTemplate.nodes.length === 0) return;
     if (lastAutoRunWorkNodeIdRef.current === workflowCurrentNode.id) return;
+    let active = true;
+    const run = async () => {
+      const sessionId = task?.session_id;
+      if (sessionId && window.api?.cliSession?.getSession) {
+        try {
+          const existingSession = await window.api.cliSession.getSession(sessionId);
+          if (!active) return;
+          if (existingSession) {
+            if (existingSession.status && existingSession.status !== cliStatus) {
+              setCliStatus(existingSession.status);
+            }
+            return;
+          }
+        } catch (error) {
+          console.error('[TaskDetail] Failed to check existing CLI session:', error);
+        }
+      }
 
-    const templateNode = pipelineTemplate.nodes.find(
-      (node) => node.id === workflowCurrentNode.templateId
-    );
-    if (!templateNode) return;
+      try {
+        const latestExecution = await db.getLatestAgentExecution(workflowCurrentNode.id) as {
+          status: 'idle' | 'running' | 'completed';
+        } | null;
+        if (!active) return;
+        if (latestExecution && latestExecution.status !== 'idle') {
+          return;
+        }
+      } catch (error) {
+        console.error('[TaskDetail] Failed to check execution before auto-run:', error);
+        if (!active) return;
+      }
 
-    lastAutoRunWorkNodeIdRef.current = workflowCurrentNode.id;
+      const templateNode = pipelineTemplate?.nodes?.find(
+        (node) => node.id === workflowCurrentNode.templateId
+      );
+      const resolvedPrompt = await resolveWorkNodePrompt(
+        workflowCurrentNode.id,
+        workflowCurrentNode.index,
+        workflowCurrentNode.templateId
+      );
+      const nodePrompt = resolvedPrompt || templateNode?.prompt || '';
+      const prompt = buildCliPrompt(nodePrompt);
+      if (!prompt.trim() || !active) return;
 
-    const taskPrompt = task?.prompt || initialPrompt || '';
-    const nodePrompt = templateNode.prompt || '';
-    const prompt = nodePrompt
-      ? (taskPrompt ? `${taskPrompt}\n\n${nodePrompt}` : nodePrompt)
-      : taskPrompt;
+      lastAutoRunWorkNodeIdRef.current = workflowCurrentNode.id;
+      void runCliPrompt(prompt);
+    };
 
-    void runCliPrompt(prompt);
+    void run();
+    return () => {
+      active = false;
+    };
   }, [
+    buildCliPrompt,
     cliStatus,
-    initialPrompt,
     pipelineTemplate,
+    resolveWorkNodePrompt,
     runCliPrompt,
-    task?.prompt,
+    task?.session_id,
     useCliSession,
     workflowCurrentNode,
   ]);
@@ -1014,11 +1163,12 @@ function TaskDetailContent() {
         return;
       }
 
+      const resolvedPrompt = await resolveWorkNodePrompt(null, index, stage.id);
+      const baseNodePrompt = resolvedPrompt || stage.prompt || '';
       const nodePrompt = approvalNote
-        ? `${stage.prompt}\n\n${t.task.pipelineApprovalNotePrefix}: ${approvalNote}`
-        : stage.prompt;
-      const taskPrompt = task?.prompt || initialPrompt || '';
-      const prompt = taskPrompt ? `${taskPrompt}\n\n${nodePrompt}` : nodePrompt;
+        ? `${baseNodePrompt}\n\n${t.task.pipelineApprovalNotePrefix}: ${approvalNote}`
+        : baseNodePrompt;
+      const prompt = buildCliPrompt(nodePrompt);
 
       setPipelineStageIndex(index);
       setPipelineStatus('running');
@@ -1059,11 +1209,11 @@ function TaskDetailContent() {
     [
       appendPipelineNotice,
       continueConversation,
-      initialPrompt,
+      buildCliPrompt,
       messages.length,
       pipelineTemplate,
+      resolveWorkNodePrompt,
       runAgent,
-      task?.prompt,
       task?.session_id,
       taskId,
       t.task.pipelineApprovalNotePrefix,
@@ -1188,28 +1338,34 @@ function TaskDetailContent() {
         if (useCliSession) {
           const content = text.trim();
           if (content) {
-            setLocalMessages((prev) => [
-              ...prev,
-              { type: 'user', content },
-            ]);
+            appendCliUserLog(content);
+          }
+          if (task?.status === 'in_review') {
+            try {
+              const updatedTask = await db.updateTask(taskId, { status: 'in_progress' });
+              if (updatedTask) {
+                setTask(updatedTask);
+              }
+            } catch (error) {
+              console.error('[TaskDetail] Failed to update task status for CLI reply:', error);
+            }
           }
           try {
             const session = cliSessionRef.current;
             if (!session) {
               throw new Error('CLI session not initialized');
             }
-            await session.sendInput(content);
+            if (cliStatus === 'running') {
+              await session.sendInput(content);
+            } else if (content) {
+              await runCliPrompt(content);
+            }
           } catch (error) {
             console.error('Failed to send CLI input:', error);
-            setLocalMessages((prev) => [
-              ...prev,
-              {
-                type: 'error',
-                message:
-                  t.common.errors.serverNotRunning ||
-                  'CLI session is not running.',
-              },
-            ]);
+            appendCliSystemLog(
+              t.common.errors.serverNotRunning ||
+              'CLI session is not running.'
+            );
           }
           return;
         }
@@ -1244,9 +1400,14 @@ function TaskDetailContent() {
       useCliSession,
       loadMessages,
       continueConversation,
+      appendCliSystemLog,
+      appendCliUserLog,
+      cliStatus,
+      runCliPrompt,
       pipelineTemplate,
       pipelineStatus,
       startNextPipelineStage,
+      task?.status,
       t.common.errors.serverNotRunning,
       workingDir,
     ]
@@ -1270,18 +1431,17 @@ function TaskDetailContent() {
 
     if (useCliSession) {
       try {
-        await runCliPrompt(task?.prompt || initialPrompt);
+        const prompt = task?.prompt || initialPrompt;
+        if (prompt) {
+          appendCliUserLog(prompt);
+        }
+        await runCliPrompt(prompt);
       } catch (error) {
         console.error('Failed to start CLI session:', error);
-        setLocalMessages((prev) => [
-          ...prev,
-          {
-            type: 'error',
-            message:
-              t.common.errors.serverNotRunning ||
-              'CLI session is not running.',
-          },
-        ]);
+        appendCliSystemLog(
+          t.common.errors.serverNotRunning ||
+          'CLI session is not running.'
+        );
       }
       return;
     }
@@ -1314,6 +1474,8 @@ function TaskDetailContent() {
     t.common.errors.serverNotRunning,
     useCliSession,
     workingDir,
+    appendCliUserLog,
+    appendCliSystemLog,
   ]);
 
   const handleApproveWorkNode = useCallback(async () => {
@@ -1356,6 +1518,30 @@ function TaskDetailContent() {
     }
   }, [runCliPrompt, taskId]);
 
+  const handleStopExecution = useCallback(async () => {
+    if (useCliSession) {
+      try {
+        const session = cliSessionRef.current;
+        if (session) {
+          await session.stop();
+        } else if (task?.session_id && window.api?.cliSession?.stopSession) {
+          await window.api.cliSession.stopSession(task.session_id);
+        }
+      } catch (error) {
+        console.error('[TaskDetail] Failed to stop CLI session:', error);
+      }
+      return;
+    }
+    await stopAgent();
+  }, [stopAgent, task?.session_id, useCliSession]);
+
+  const replyIsRunning = useMemo(() => {
+    if (useCliSession) {
+      return cliStatus === 'running';
+    }
+    return isRunning;
+  }, [cliStatus, isRunning, useCliSession]);
+
   const displayTitle = task?.title || task?.prompt || initialPrompt;
   const pipelineBanner = useMemo(() => {
     if (!pipelineTemplate) return null;
@@ -1389,6 +1575,10 @@ function TaskDetailContent() {
       task.cli_tool_id
     );
   }, [cliTools, task?.cli_tool_id]);
+  const cliToolLabel = cliToolName || t.task.detailCli || 'CLI';
+  const cliSessionId = task?.session_id || '';
+  const cliToolId = task?.cli_tool_id || '';
+  const taskPrompt = task?.prompt || initialPrompt;
 
   const startDisabled = useMemo(() => {
     if (!taskId) return true;
@@ -1476,7 +1666,7 @@ function TaskDetailContent() {
     });
     return map;
   }, [pipelineTemplate?.nodes]);
-  const workflowNodesForDisplay = useMemo(() => {
+  const workflowNodesForDisplay = useMemo<WorkflowDisplayNode[]>(() => {
     if (workflowNodes.length > 0) {
       return [...workflowNodes].sort((a, b) => a.node_order - b.node_order);
     }
@@ -1493,7 +1683,7 @@ function TaskDetailContent() {
     return [];
   }, [pipelineTemplate?.nodes, workflowNodes]);
 
-  const metaRows = useMemo(
+  const metaRows = useMemo<TaskMetaRow[]>(
     () => [
       {
         key: 'branch',
@@ -1519,7 +1709,7 @@ function TaskDetailContent() {
     [statusInfo, StatusIcon, task?.branch_name]
   );
 
-  const visibleMetaRows = metaRows.filter((row) => row.visible);
+  const visibleMetaRows = filterVisibleMetaRows(metaRows);
 
   return (
     <ToolSelectionContext.Provider value={toolSelectionValue}>
@@ -1548,305 +1738,64 @@ function TaskDetailContent() {
           >
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
               {/* Task Card */}
-              <section className="border-border/50 bg-background/95 rounded-xl border shadow-sm">
-                <div className="border-border/50 flex items-center justify-between border-b px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={toggleLeft}
-                      className="text-muted-foreground hover:bg-accent hover:text-foreground flex cursor-pointer items-center justify-center rounded-lg p-2 transition-colors duration-200 md:hidden"
-                    >
-                      <PanelLeft className="size-4" />
-                    </button>
-                    <span className="text-muted-foreground text-xs font-semibold">
-                      {t.task.taskCardTitle || 'Task'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {showStartButton && (
-                      <Button
-                        size="sm"
-                        onClick={handleStartTask}
-                        disabled={startDisabled}
-                      >
-                        {t.task.startExecution || 'Start'}
-                      </Button>
-                    )}
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 items-center justify-center rounded-lg transition-colors"
-                          type="button"
-                          aria-label="Task actions"
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {task?.status === 'todo' && (
-                          <DropdownMenuItem
-                            onClick={handleOpenEdit}
-                            className="cursor-pointer"
-                          >
-                            {t.common.edit}
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          onClick={() => setIsDeleteOpen(true)}
-                          className="cursor-pointer text-destructive focus:text-destructive"
-                        >
-                          {t.common.delete}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                <div className="space-y-2 px-3 py-2">
-                  <div className="text-foreground text-sm font-medium break-words">
-                    {displayTitle || `Task ${taskId}`}
-                  </div>
-
-                  {visibleMetaRows.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {visibleMetaRows.map((row) => {
-                        const Icon = row.icon;
-                        return (
-                          <div
-                            key={row.key}
-                            className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-xs"
-                          >
-                            <Icon className="text-muted-foreground size-3.5 shrink-0" />
-                            <div className="min-w-0 truncate">{row.value}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </section>
+              <TaskCard
+                t={t}
+                title={displayTitle || `Task ${taskId}`}
+                metaRows={visibleMetaRows}
+                showStartButton={showStartButton}
+                startDisabled={startDisabled}
+                onStartTask={handleStartTask}
+                onToggleSidebar={toggleLeft}
+                onEdit={handleOpenEdit}
+                onDelete={() => setIsDeleteOpen(true)}
+                canEdit={task?.status === 'todo'}
+              />
 
               {/* Workflow Card */}
               {showWorkflowCard && (
-                <section className="border-border/50 bg-background/95 rounded-xl border shadow-sm">
-                  <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
-                    <ListChecks className="text-muted-foreground size-3.5" />
-                    <span className="text-muted-foreground text-xs font-semibold">
-                      {t.task.workflowCardTitle || 'Workflow'}
-                    </span>
-                  </div>
-                  <div className="space-y-2 px-3 py-2">
-                    {workflowNodesForDisplay.length > 0 && (
-                      <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
-                        <div className="flex min-w-max items-center gap-1 pr-2">
-                          {workflowNodesForDisplay.map((node, index) => {
-                            const nodeStatus = node.status;
-                            const isCompleted = nodeStatus === 'done';
-                            const isRunningNode = nodeStatus === 'in_progress';
-                            const isWaiting = nodeStatus === 'in_review';
-                            const isTodo = nodeStatus === 'todo';
-                            const templateNode = workflowTemplateNodeMap.get(node.work_node_template_id);
-                            const nodeName = node.name || templateNode?.name || `${t.task.stageLabel} ${index + 1}`;
-                            const nodePrompt = node.prompt || templateNode?.prompt;
-
-                            return (
-                              <div key={node.id} className="flex items-center">
-                                <div
-                                  className={cn(
-                                    'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
-                                    isCompleted && 'bg-green-500/10 text-green-600',
-                                    isWaiting && 'bg-amber-500/10 text-amber-600',
-                                    isRunningNode && 'bg-blue-500/10 text-blue-600',
-                                    isTodo && 'bg-muted/40 text-muted-foreground'
-                                  )}
-                                  title={nodePrompt}
-                                >
-                                  {isCompleted && <CheckCircle className="size-3" />}
-                                  {isRunningNode && (
-                                    <span className="size-2 animate-pulse rounded-full bg-blue-500" />
-                                  )}
-                                  {isWaiting && <Clock className="size-3" />}
-                                  {isTodo && (
-                                    <span className="size-2 rounded-full bg-muted-foreground/30" />
-                                  )}
-                                  <span className="max-w-[80px] truncate">
-                                    {nodeName}
-                                  </span>
-                                </div>
-                                {index < workflowNodesForDisplay.length - 1 && (
-                                  <div
-                                    className={cn(
-                                      'mx-0.5 h-px w-3',
-                                      isCompleted ? 'bg-green-500/50' : 'bg-muted-foreground/20'
-                                    )}
-                                  />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    {currentWorkNode?.status === 'in_review' && (
-                      <div className="border-amber-500/30 bg-amber-50/30 rounded-md border px-2 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-foreground flex items-center gap-2 text-xs font-medium">
-                            <Clock className="size-3 text-amber-500" />
-                            <span className="max-w-[140px] truncate">
-                              {currentWorkNode.name}
-                            </span>
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={handleApproveWorkNode}
-                            autoFocus
-                          >
-                            {t.task.confirmComplete || 'Confirm complete'}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
+                <WorkflowCard
+                  t={t}
+                  nodes={workflowNodesForDisplay}
+                  templateNodeMap={workflowTemplateNodeMap}
+                  currentWorkNode={currentWorkNode}
+                  onApproveCurrent={handleApproveWorkNode}
+                />
               )}
 
               {/* Agent CLI Execution Card */}
-              <section className="border-border/50 bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border shadow-sm">
-                <div className="border-border/50 bg-background/95 sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-2 backdrop-blur">
-                <div className="text-muted-foreground flex items-center gap-2 text-xs font-semibold">
-                  <Terminal className="size-3.5" />
-                  <span className="text-foreground text-xs font-medium">
-                    {cliToolName || t.task.detailCli || 'CLI'}
-                  </span>
-                </div>
-                {cliStatusInfo && (
-                  <span
-                    className={cn(
-                      'rounded-full px-2 py-0.5 text-xs font-medium',
-                      cliStatusInfo.color
-                    )}
-                  >
-                    {cliStatusInfo.label}
-                  </span>
-                )}
-                </div>
-
-                <div
-                  ref={messagesContainerRef}
-                  className="relative min-h-0 flex-1 overflow-y-auto"
-                >
-                  {isLoading ? (
-                    <div className="flex h-full items-center justify-center">
-                      <div className="text-muted-foreground flex items-center gap-3">
-                        <div className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        <span>{t.common.loading}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex min-h-full flex-col px-3 py-3">
-                      {pipelineBanner && (
-                        <div className="border-border/50 bg-muted/30 mb-3 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
-                          {pipelineBanner}
-                        </div>
-                      )}
-
-                      {useCliSession ? (
-                        <>
-                          {cliStatus === 'stopped' && !isCliTaskReviewPending && (
-                            <div className="border-emerald-500/30 bg-emerald-50/40 text-emerald-700 mb-3 rounded-lg border px-3 py-2 text-xs">
-                              {t.task.executionCompleted || 'Execution completed'}
-                            </div>
-                          )}
-
-                          {isCliTaskReviewPending && (
-                            <div className="border-amber-500/30 bg-amber-50/30 mb-3 rounded-xl border p-4">
-                              <div className="flex items-center justify-between">
-                                <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-                                  <Clock className="size-4 text-amber-500" />
-                                  <span>{t.task.executionCompleted || 'Execution completed'}</span>
-                                </div>
-                                <span className="bg-amber-500/20 text-amber-700 rounded-full px-2 py-0.5 text-xs">
-                                  {t.task.pendingApproval || 'Pending'}
-                                </span>
-                              </div>
-                              <div className="mt-3 flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={handleContinueCliTask}
-                                  className="flex-1"
-                                >
-                                  {t.task.continueConversation || 'Continue'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={handleApproveCliTask}
-                                  className="flex-1"
-                                >
-                                  {t.task.confirmComplete || 'Confirm complete'}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-
-                          {localMessages.length > 0 && (
-                            <div className="mb-3">
-                              <MessageList messages={localMessages} />
-                            </div>
-                          )}
-                          <div className="flex min-h-0 flex-1">
-                            <CLISession
-                              ref={cliSessionRef}
-                              sessionId={task?.session_id || ''}
-                              toolId={task?.cli_tool_id || ''}
-                              workdir={workingDir}
-                              prompt={task?.prompt || initialPrompt}
-                              className="h-full w-full"
-                              compact
-                              allowStart={false}
-                              onStatusChange={handleCliStatusChange}
-                            />
-                          </div>
-                        </>
-                      ) : messages.length === 0 && !isRunning ? (
-                        <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">
-                          {t.task.waitingForTask}
-                        </div>
-                      ) : (
-                        <>
-                          <MessageList
-                            messages={messages}
-                            phase={phase}
-                            onApprovePlan={approvePlan}
-                            onRejectPlan={rejectPlan}
-                          />
-                          {isRunning && <RunningIndicator messages={messages} />}
-                        </>
-                      )}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )}
-                </div>
-              </section>
+              <ExecutionPanel
+                t={t}
+                isLoading={isLoading}
+                pipelineBanner={pipelineBanner}
+                useCliSession={useCliSession}
+                cliStatus={cliStatus}
+                cliStatusInfo={cliStatusInfo}
+                cliToolLabel={cliToolLabel}
+                isCliTaskReviewPending={isCliTaskReviewPending}
+                onContinueCliTask={handleContinueCliTask}
+                onApproveCliTask={handleApproveCliTask}
+                messages={messages}
+                phase={phase}
+                onApprovePlan={approvePlan}
+                onRejectPlan={rejectPlan}
+                isRunning={isRunning}
+                sessionId={cliSessionId}
+                toolId={cliToolId}
+                workingDir={workingDir}
+                prompt={taskPrompt}
+                cliSessionRef={cliSessionRef}
+                onCliStatusChange={handleCliStatusChange}
+                messagesContainerRef={messagesContainerRef}
+                messagesEndRef={messagesEndRef}
+              />
 
               {/* Reply Card */}
-              <section className="border-border/50 bg-background rounded-xl border shadow-sm">
-                <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
-                  <span className="text-muted-foreground text-xs font-semibold">
-                    {t.task.replyCardTitle || 'Reply'}
-                  </span>
-                </div>
-                <div className="px-3 py-2">
-                  <ChatInput
-                    variant="reply"
-                    placeholder={t.home.reply}
-                    isRunning={isRunning}
-                    onSubmit={handleReply}
-                    className="rounded-none border-0 bg-transparent p-0 shadow-none"
-                  />
-                </div>
-              </section>
+              <ReplyCard
+                t={t}
+                isRunning={replyIsRunning}
+                onStop={handleStopExecution}
+                onSubmit={handleReply}
+              />
             </div>
           </div>
 
@@ -1854,144 +1803,46 @@ function TaskDetailContent() {
           {isPreviewVisible && <div className="bg-border/50 w-px shrink-0" />}
 
           {/* Right Panel - Multi-function area */}
-          {isPreviewVisible && (
-            <div className="bg-muted/10 flex min-w-0 flex-1 flex-col overflow-hidden">
-              <RightPanel
-                workingDir={workingDir}
-                branchName={task?.branch_name || null}
-                baseBranch={task?.base_branch || null}
-                selectedArtifact={selectedArtifact}
-                onSelectArtifact={handleSelectArtifact}
-                livePreviewUrl={livePreviewUrl}
-                livePreviewStatus={livePreviewStatus}
-                livePreviewError={livePreviewError}
-                onStartLivePreview={workingDir ? handleStartLivePreview : undefined}
-                onStopLivePreview={handleStopLivePreview}
-                renderFilePreview={() => (
-                  <ArtifactPreview
-                    artifact={selectedArtifact}
-                    onClose={handleClosePreview}
-                    allArtifacts={artifacts}
-                    livePreviewUrl={livePreviewUrl}
-                    livePreviewStatus={livePreviewStatus}
-                    livePreviewError={livePreviewError}
-                    onStartLivePreview={workingDir ? handleStartLivePreview : undefined}
-                    onStopLivePreview={handleStopLivePreview}
-                  />
-                )}
-              />
-            </div>
-          )}
+          <RightPanelSection
+            isVisible={isPreviewVisible}
+            workingDir={workingDir}
+            branchName={task?.branch_name || null}
+            baseBranch={task?.base_branch || null}
+            selectedArtifact={selectedArtifact}
+            artifacts={artifacts}
+            onSelectArtifact={handleSelectArtifact}
+            livePreviewUrl={livePreviewUrl}
+            livePreviewStatus={livePreviewStatus}
+            livePreviewError={livePreviewError}
+            onStartLivePreview={workingDir ? handleStartLivePreview : undefined}
+            onStopLivePreview={handleStopLivePreview}
+            onClosePreview={handleClosePreview}
+          />
         </div>
       </div>
 
-      <Dialog open={isCliReviewOpen && isCliTaskReviewPending} onOpenChange={setIsCliReviewOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {t.task.executionCompleted || 'Execution completed'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="text-muted-foreground text-sm">
-            {t.task.pendingApproval || 'Pending approval'}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleContinueCliTask}>
-              {t.task.continueConversation || 'Continue'}
-            </Button>
-            <Button onClick={handleApproveCliTask}>
-              {t.task.confirmComplete || 'Confirm complete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {`${t.common.edit} ${t.task.taskInfo || 'Task'}`}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {t.task.createPromptLabel}
-              </label>
-              <textarea
-                value={editPrompt}
-                onChange={(e) => setEditPrompt(e.target.value)}
-                className="border-input bg-background text-foreground w-full resize-none rounded-md border px-3 py-2 text-sm"
-                rows={4}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {t.task.createCliLabel}
-              </label>
-              <select
-                value={editCliToolId}
-                onChange={(e) => setEditCliToolId(e.target.value)}
-                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
-              >
-                <option value="">{t.task.createCliPlaceholder}</option>
-                {cliTools.map((tool) => (
-                  <option key={tool.id} value={tool.id}>
-                    {tool.displayName || tool.name || tool.id}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {t.task.createPipelineLabel}
-              </label>
-              <select
-                value={editPipelineTemplateId}
-                onChange={(e) => setEditPipelineTemplateId(e.target.value)}
-                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
-              >
-                <option value="">{t.task.createPipelineNone}</option>
-                {pipelineTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              {t.common.cancel}
-            </Button>
-            <Button onClick={handleSaveEdit}>{t.common.save}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t.common.deleteTask}</DialogTitle>
-          </DialogHeader>
-          <div className="text-muted-foreground text-sm">
-            <p>{t.common.deleteTaskConfirm}</p>
-            <p className="mt-2">{t.common.deleteTaskDescription}</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
-              {t.common.cancel}
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteTask}>
-              {t.common.delete}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TaskDialogs
+        t={t}
+        isCliReviewOpen={isCliReviewOpen}
+        setIsCliReviewOpen={setIsCliReviewOpen}
+        isCliTaskReviewPending={isCliTaskReviewPending}
+        onContinueCliTask={handleContinueCliTask}
+        onApproveCliTask={handleApproveCliTask}
+        isEditOpen={isEditOpen}
+        setIsEditOpen={setIsEditOpen}
+        editPrompt={editPrompt}
+        setEditPrompt={setEditPrompt}
+        editCliToolId={editCliToolId}
+        setEditCliToolId={setEditCliToolId}
+        editPipelineTemplateId={editPipelineTemplateId}
+        setEditPipelineTemplateId={setEditPipelineTemplateId}
+        cliTools={cliTools}
+        pipelineTemplates={pipelineTemplates}
+        onSaveEdit={handleSaveEdit}
+        isDeleteOpen={isDeleteOpen}
+        setIsDeleteOpen={setIsDeleteOpen}
+        onDelete={handleDeleteTask}
+      />
     </ToolSelectionContext.Provider>
   );
 }

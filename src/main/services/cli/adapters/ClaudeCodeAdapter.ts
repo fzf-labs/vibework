@@ -22,7 +22,9 @@ class ClaudeSessionHandle extends EventEmitter implements CliSessionHandle {
     this.service = service
     this.sessionId = options.sessionId
     this.toolId = options.toolId
-    this.msgStore = service.getSessionMsgStore(options.sessionId) || new MsgStoreService(undefined, options.sessionId)
+    this.msgStore =
+      service.getSessionMsgStore(options.sessionId) ||
+      new MsgStoreService(undefined, options.sessionId, options.projectId)
 
     this.onOutputBound = (data) => {
       if (data.sessionId !== this.sessionId) return
@@ -66,6 +68,11 @@ class ClaudeSessionHandle extends EventEmitter implements CliSessionHandle {
   sendInput(input: string): void {
     const trimmed = input.trim()
     if (!trimmed) return
+    this.completionOverride = null
+    if (this.status !== 'running') {
+      this.status = 'running'
+      this.emit('status', { sessionId: this.sessionId, status: this.status })
+    }
     const parsed = parseJsonLine(trimmed)
     const payload = parsed && typeof parsed.type === 'string'
       ? trimmed
@@ -93,7 +100,6 @@ class ClaudeSessionHandle extends EventEmitter implements CliSessionHandle {
         this.completionOverride = completion
         this.status = completion.status === 'success' ? 'stopped' : 'error'
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
-        this.stop()
       }
     }
   }
@@ -131,7 +137,8 @@ export class ClaudeCodeAdapter implements CliAdapter {
       options.model || (options.toolConfig?.model as string | undefined)
     this.service.startSession(options.sessionId, options.workdir, {
       prompt: options.prompt,
-      model
+      model,
+      projectId: options.projectId
     })
     return new ClaudeSessionHandle(this.service, options)
   }

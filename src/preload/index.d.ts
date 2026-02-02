@@ -89,13 +89,16 @@ interface ClaudeCodeAPI {
   startSession: (
     sessionId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string }
+    options?: { model?: string; prompt?: string; projectId?: string }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getOutput: (sessionId: string) => Promise<string[]>
   getSessions: () => Promise<unknown[]>
   getSession: (sessionId: string) => Promise<unknown>
+  onStatus: (
+    callback: (data: { sessionId: string; status: string; forced?: boolean }) => void
+  ) => () => void
   onOutput: (
     callback: (data: { sessionId: string; type: string; content: string }) => void
   ) => () => void
@@ -110,12 +113,16 @@ interface CliSessionAPI {
     sessionId: string,
     toolId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string }
+    options?: { model?: string; prompt?: string; projectId?: string }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getSessions: () => Promise<unknown[]>
   getSession: (sessionId: string) => Promise<unknown>
+  appendLog: (sessionId: string, msg: unknown, projectId?: string | null) => Promise<unknown>
+  onStatus: (
+    callback: (data: { sessionId: string; status: string; forced?: boolean }) => void
+  ) => () => void
   onOutput: (
     callback: (data: { sessionId: string; type: string; content: string }) => void
   ) => () => void

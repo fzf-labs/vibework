@@ -13,6 +13,7 @@ import { MsgStoreService } from '../MsgStoreService'
 import { CLIToolConfigService } from '../CLIToolConfigService'
 import { ClaudeCodeService } from '../ClaudeCodeService'
 import { LogMsg } from '../../types/log'
+import type { LogMsgInput } from '../../types/log'
 
 interface SessionRecord {
   handle: CliSessionHandle
@@ -53,7 +54,8 @@ export class CliSessionService extends EventEmitter {
     workdir: string,
     prompt?: string,
     env?: NodeJS.ProcessEnv,
-    model?: string
+    model?: string,
+    projectId?: string | null
   ): Promise<void> {
     if (this.sessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} already exists`)
@@ -71,6 +73,7 @@ export class CliSessionService extends EventEmitter {
       sessionId,
       toolId,
       workdir,
+      projectId,
       prompt,
       env,
       executablePath,
@@ -163,5 +166,15 @@ export class CliSessionService extends EventEmitter {
       return msgStore.getHistory()
     }
     return MsgStoreService.loadFromFile(sessionId)
+  }
+
+  appendSessionLog(sessionId: string, msg: LogMsgInput, projectId?: string | null): void {
+    const msgStore = this.getSessionMsgStore(sessionId)
+    if (msgStore) {
+      msgStore.push(msg)
+      return
+    }
+    const fallbackStore = new MsgStoreService(undefined, sessionId, projectId)
+    fallbackStore.push(msg)
   }
 }

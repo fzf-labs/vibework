@@ -57,7 +57,7 @@ export function RightPanel({
             return (
               <Button
                 key={tab.id}
-                variant={activeTab === tab.id ? 'secondary' : 'ghost'}
+                variant={activeTab === tab.id ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setActiveTab(tab.id)}
                 className="gap-2"

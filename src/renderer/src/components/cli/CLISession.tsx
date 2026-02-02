@@ -55,6 +55,15 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
     [sessionId]
   )
 
+  const handleStatus = useCallback(
+    (data: { sessionId: string; status: CLISessionStatus }) => {
+      if (data.sessionId === sessionId) {
+        setStatus(data.status)
+      }
+    },
+    [sessionId]
+  )
+
   const handleError = useCallback(
     (data: { sessionId: string; error: string }) => {
       if (data.sessionId === sessionId) {
@@ -66,14 +75,37 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
   )
 
   useEffect(() => {
+    let active = true
+    const loadExistingStatus = async () => {
+      if (!sessionId || !window.api?.cliSession?.getSession) return
+      try {
+        const existing = await window.api.cliSession.getSession(sessionId)
+        if (!active) return
+        if (existing?.status) {
+          setStatus(existing.status as CLISessionStatus)
+        }
+      } catch (error) {
+        console.error('[CLISession] Failed to get session status:', error)
+      }
+    }
+
+    loadExistingStatus()
+    return () => {
+      active = false
+    }
+  }, [sessionId])
+
+  useEffect(() => {
+    const unsubStatus = window.api.cliSession.onStatus(handleStatus)
     const unsubClose = window.api.cliSession.onClose(handleClose)
     const unsubError = window.api.cliSession.onError(handleError)
 
     return () => {
+      unsubStatus()
       unsubClose()
       unsubError()
     }
-  }, [handleClose, handleError])
+  }, [handleClose, handleError, handleStatus])
 
   const startSession = useCallback(async (promptOverride?: string) => {
     try {
@@ -100,6 +132,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
   const sendInput = useCallback(async (input: string) => {
     if (!input.trim()) return
     try {
+      setStatus('running')
       await window.api.cliSession.sendInput(sessionId, input)
     } catch (error) {
       console.error('Failed to send CLI input:', error)
@@ -151,6 +184,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
 
   const showStartButton = allowStart && status !== 'running'
   const showStopButton = status === 'running'
+  const hasLogs = normalizedLogs.length > 0
 
   return (
     <div className={cn('flex flex-col', !compact && 'gap-3', className)}>
@@ -193,8 +227,9 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
         ref={logContainerRef}
         onScroll={checkScrollPosition}
         className={cn(
-          'bg-muted/50 rounded-lg overflow-auto p-2 relative',
-          compact ? 'flex-1 min-h-0' : 'h-80'
+          'rounded-lg overflow-auto relative',
+          compact ? 'flex-1 min-h-0' : 'h-80',
+          hasLogs ? 'bg-muted/50 p-2' : 'bg-transparent p-0'
         )}
       >
         {compact && (showStartButton || showStopButton) && (

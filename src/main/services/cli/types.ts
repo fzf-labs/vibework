@@ -7,6 +7,7 @@ export interface CliStartOptions {
   sessionId: string
   toolId: string
   workdir: string
+  projectId?: string | null
   prompt?: string
   env?: NodeJS.ProcessEnv
   executablePath?: string

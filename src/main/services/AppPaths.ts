@@ -58,17 +58,39 @@ export class AppPaths {
   }
 
   /**
+   * 获取项目级 session 目录路径 ~/.vibework/data/sessions/<projectId>/
+   */
+  getProjectSessionsDir(projectId?: string | null): string {
+    const normalizedProjectId = projectId?.trim() || 'project'
+    return join(this.getSessionsDir(), normalizedProjectId)
+  }
+
+  /**
    * 获取指定 session 的数据目录路径
    */
-  getSessionDataDir(sessionId: string): string {
+  getSessionDataDir(sessionId: string, projectId?: string | null): string {
+    return join(this.getProjectSessionsDir(projectId), sessionId)
+  }
+
+  /**
+   * 获取指定 session 的日志文件路径 ~/.vibework/data/sessions/<projectId>/<sessionId>.jsonl
+   */
+  getSessionMessagesFile(sessionId: string, projectId?: string | null): string {
+    return join(this.getProjectSessionsDir(projectId), `${sessionId}.jsonl`)
+  }
+
+  /**
+   * 获取 legacy session 目录路径 ~/.vibework/data/sessions/<sessionId>/
+   */
+  getLegacySessionDataDir(sessionId: string): string {
     return join(this.getSessionsDir(), sessionId)
   }
 
   /**
-   * 获取指定 session 的 messages.jsonl 路径
+   * 获取 legacy messages.jsonl 路径 ~/.vibework/data/sessions/<sessionId>/messages.jsonl
    */
-  getSessionMessagesFile(sessionId: string): string {
-    return join(this.getSessionDataDir(sessionId), 'messages.jsonl')
+  getLegacySessionMessagesFile(sessionId: string): string {
+    return join(this.getLegacySessionDataDir(sessionId), 'messages.jsonl')
   }
 
   /**

@@ -127,6 +127,14 @@ const api = {
       ipcRenderer.invoke('cliSession:sendInput', sessionId, input),
     getSessions: () => ipcRenderer.invoke('cliSession:getSessions'),
     getSession: (sessionId: string) => ipcRenderer.invoke('cliSession:getSession', sessionId),
+    appendLog: (sessionId: string, msg: unknown, projectId?: string | null) =>
+      ipcRenderer.invoke('cliSession:appendLog', sessionId, msg, projectId),
+    onStatus: (callback: (data: { sessionId: string; status: string; forced?: boolean }) => void) => {
+      const listener = (_: unknown, data: { sessionId: string; status: string; forced?: boolean }) =>
+        callback(data)
+      ipcRenderer.on('cliSession:status', listener)
+      return () => ipcRenderer.removeListener('cliSession:status', listener)
+    },
     onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
         callback(data)

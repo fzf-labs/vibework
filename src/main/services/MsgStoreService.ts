@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import { appendFileSync, existsSync, readFileSync, mkdirSync } from 'fs'
+import { appendFileSync, existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
 import { LogMsg, LogMsgInput, MsgStoreConfig, StoredMsg } from '../types/log'
 import { getAppPaths } from './AppPaths'
 import { newUlid } from '../utils/ids'
@@ -14,19 +14,22 @@ export class MsgStoreService extends EventEmitter {
   private totalBytes = 0
   private config: MsgStoreConfig
   private _sessionId: string | null = null
+  private _projectId: string | null = null
   private logFilePath: string | null = null
 
-  constructor(config?: Partial<MsgStoreConfig>, sessionId?: string) {
+  constructor(config?: Partial<MsgStoreConfig>, sessionId?: string, projectId?: string | null) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
     if (sessionId) {
       this._sessionId = sessionId
+      this._projectId = projectId ?? null
       const appPaths = getAppPaths()
-      const sessionDir = appPaths.getSessionDataDir(sessionId)
-      if (!existsSync(sessionDir)) {
-        mkdirSync(sessionDir, { recursive: true })
+      const projectDir = appPaths.getProjectSessionsDir(projectId)
+      if (!existsSync(projectDir)) {
+        mkdirSync(projectDir, { recursive: true })
       }
-      this.logFilePath = appPaths.getSessionMessagesFile(sessionId)
+      this.logFilePath = appPaths.getSessionMessagesFile(sessionId, projectId)
+      this.loadExistingHistory()
     }
   }
 
@@ -44,14 +47,8 @@ export class MsgStoreService extends EventEmitter {
     return JSON.stringify(msg).length * 2 // UTF-16 估算
   }
 
-  /**
-   * 推送消息到存储和广播
-   */
-  push(msg: LogMsgInput): void {
-    const normalized = this.normalizeMessage(msg)
-    const bytes = this.getMessageBytes(normalized)
-
-    // 自动淘汰旧数据以保持在限制内
+  private addToHistory(msg: LogMsg): void {
+    const bytes = this.getMessageBytes(msg)
     while (
       (this.totalBytes + bytes > this.config.maxBytes ||
         this.history.length >= this.config.maxMessages) &&
@@ -62,10 +59,35 @@ export class MsgStoreService extends EventEmitter {
         this.totalBytes -= removed.bytes
       }
     }
-
-    // 存储新消息
-    this.history.push({ msg: normalized, bytes })
+    this.history.push({ msg, bytes })
     this.totalBytes += bytes
+  }
+
+  private loadExistingHistory(): void {
+    if (!this.logFilePath || !existsSync(this.logFilePath)) return
+    try {
+      const content = readFileSync(this.logFilePath, 'utf-8').trim()
+      if (!content) return
+      const lines = content.split('\n').filter(Boolean)
+      for (const line of lines) {
+        try {
+          const msg = JSON.parse(line) as LogMsg
+          this.addToHistory(msg)
+        } catch {
+          // Ignore malformed line
+        }
+      }
+    } catch (error) {
+      console.error('[MsgStore] Failed to load existing log history:', error)
+    }
+  }
+
+  /**
+   * 推送消息到存储和广播
+   */
+  push(msg: LogMsgInput): void {
+    const normalized = this.normalizeMessage(msg)
+    this.addToHistory(normalized)
 
     // 持久化到文件
     if (this.logFilePath) {
@@ -189,9 +211,33 @@ export class MsgStoreService extends EventEmitter {
   /**
    * 从文件加载历史日志（静态方法）
    */
-  static loadFromFile(sessionId: string): LogMsg[] {
-    const logFilePath = getAppPaths().getSessionMessagesFile(sessionId)
-    if (!existsSync(logFilePath)) {
+  static loadFromFile(sessionId: string, projectId?: string | null): LogMsg[] {
+    const appPaths = getAppPaths()
+    const candidatePaths: string[] = []
+
+    if (projectId !== undefined) {
+      candidatePaths.push(appPaths.getSessionMessagesFile(sessionId, projectId))
+    }
+
+    if (!projectId) {
+      try {
+        const sessionsDir = appPaths.getSessionsDir()
+        const entries = readdirSync(sessionsDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue
+          candidatePaths.push(
+            appPaths.getSessionMessagesFile(sessionId, entry.name)
+          )
+        }
+      } catch {
+        // ignore directory scan errors
+      }
+    }
+
+    candidatePaths.push(appPaths.getLegacySessionMessagesFile(sessionId))
+
+    const logFilePath = candidatePaths.find((path) => existsSync(path))
+    if (!logFilePath) {
       return []
     }
 

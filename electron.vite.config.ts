@@ -10,7 +10,7 @@ export default defineConfig({
       __BUILD_DATE__: JSON.stringify(new Date().toISOString().split('T')[0])
     },
     server: {
-      port: 3000
+      port: 3333
     },
     resolve: {
       alias: {

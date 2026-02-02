@@ -41,7 +41,8 @@ export class ProcessCliAdapter implements CliAdapter {
       this.detectCompletion,
       this.normalizer,
       this.detectStderrCompletion,
-      this.normalizeStderr
+      this.normalizeStderr,
+      options.projectId
     )
   }
 }

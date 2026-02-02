@@ -87,7 +87,7 @@ export function WorkNodeReviewPanel({
           variant="outline"
           size="sm"
           onClick={onReject}
-          className="flex-1 border-amber-500/30 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+          className="flex-1"
         >
           <Play className="mr-1 size-4" />
           {t.task.continueConversation || 'Continue'}
@@ -95,7 +95,7 @@ export function WorkNodeReviewPanel({
         <Button
           size="sm"
           onClick={onApprove}
-          className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+          className="flex-1"
         >
           <Check className="mr-1 size-4" />
           {t.task.confirmComplete || 'Confirm complete'}
