@@ -57,6 +57,7 @@ export default {
   executionCompleted: '执行完成',
   continueConversation: '继续对话',
   confirmComplete: '确认完成',
+  completeTask: '完成任务',
   workNodeReviewTitle: '节点审核',
   workNodeNameLabel: '节点名称',
   workNodePromptLabel: '执行提示词',

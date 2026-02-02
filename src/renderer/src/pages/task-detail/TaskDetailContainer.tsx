@@ -151,14 +151,12 @@ export function TaskDetailContainer() {
   const [cliStatus, setCliStatus] = useState<
     'idle' | 'running' | 'stopped' | 'error'
   >('idle');
-  const [isCliReviewOpen, setIsCliReviewOpen] = useState(false);
   const initialAttachmentsRef = useRef<MessageAttachment[] | undefined>(
     initialAttachments
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const prevTaskIdRef = useRef<string | undefined>(undefined);
-  const cliReviewAutoOpenedRef = useRef(false);
   const isMountedRef = useRef(true);
   const lastAutoRunWorkNodeIdRef = useRef<string | null>(null);
 
@@ -665,19 +663,6 @@ export function TaskDetailContainer() {
     };
   }, [taskId]);
 
-  useEffect(() => {
-    if (!taskId) return;
-    if (isCliTaskReviewPending) {
-      if (!cliReviewAutoOpenedRef.current) {
-        setIsCliReviewOpen(true);
-        cliReviewAutoOpenedRef.current = true;
-      }
-      return;
-    }
-    cliReviewAutoOpenedRef.current = false;
-    setIsCliReviewOpen(false);
-  }, [isCliTaskReviewPending, taskId]);
-
   // Load existing task or start new one
   useEffect(() => {
     async function initialize() {
@@ -1089,7 +1074,9 @@ export function TaskDetailContainer() {
             if (existingSession.status && existingSession.status !== cliStatus) {
               setCliStatus(existingSession.status);
             }
-            return;
+            if (existingSession.status === 'running') {
+              return;
+            }
           }
         } catch (error) {
           console.error('[TaskDetail] Failed to check existing CLI session:', error);
@@ -1122,6 +1109,7 @@ export function TaskDetailContainer() {
       if (!prompt.trim() || !active) return;
 
       lastAutoRunWorkNodeIdRef.current = workflowCurrentNode.id;
+      appendCliUserLog(prompt);
       void runCliPrompt(prompt);
     };
 
@@ -1132,6 +1120,7 @@ export function TaskDetailContainer() {
   }, [
     buildCliPrompt,
     cliStatus,
+    appendCliUserLog,
     pipelineTemplate,
     resolveWorkNodePrompt,
     runCliPrompt,
@@ -1182,6 +1171,7 @@ export function TaskDetailContainer() {
       // 如果使用 CLI 工具，使用 CLI session
       if (useCliSession) {
         try {
+          appendCliUserLog(prompt);
           await runCliPrompt(prompt);
         } catch (error) {
           console.error('Failed to execute CLI session:', error);
@@ -1221,6 +1211,7 @@ export function TaskDetailContainer() {
       runCliPrompt,
       workingDir,
       useCliSession,
+      appendCliUserLog,
     ]
   );
 
@@ -1418,9 +1409,14 @@ export function TaskDetailContainer() {
 
     setHasStartedOnce(true);
     if (!task?.pipeline_template_id) {
-      db.updateTask(taskId, { status: 'in_progress' }).catch((error) => {
+      try {
+        const updatedTask = await db.updateTask(taskId, { status: 'in_progress' });
+        if (updatedTask) {
+          setTask(updatedTask);
+        }
+      } catch (error) {
         console.error('Failed to update task status:', error);
-      });
+      }
     }
     if (task?.pipeline_template_id) {
       if (!pipelineTemplate) return;
@@ -1431,7 +1427,18 @@ export function TaskDetailContainer() {
 
     if (useCliSession) {
       try {
-        const prompt = task?.prompt || initialPrompt;
+        let prompt = task?.prompt || initialPrompt;
+        if (task?.workflow_template_id || workflowCurrentNode) {
+          const nodePrompt = await resolveWorkNodePrompt(
+            workflowCurrentNode?.id,
+            workflowCurrentNode?.index ?? 0,
+            workflowCurrentNode?.templateId
+          );
+          const composed = buildCliPrompt(nodePrompt);
+          if (composed.trim()) {
+            prompt = composed;
+          }
+        }
         if (prompt) {
           appendCliUserLog(prompt);
         }
@@ -1476,6 +1483,10 @@ export function TaskDetailContainer() {
     workingDir,
     appendCliUserLog,
     appendCliSystemLog,
+    buildCliPrompt,
+    resolveWorkNodePrompt,
+    task?.workflow_template_id,
+    workflowCurrentNode,
   ]);
 
   const handleApproveWorkNode = useCallback(async () => {
@@ -1483,8 +1494,18 @@ export function TaskDetailContainer() {
     await db.approveWorkNode(currentWorkNode.id);
     setCurrentWorkNode(null);
     lastAutoRunWorkNodeIdRef.current = null;
-    void loadWorkflowStatus();
-  }, [currentWorkNode, loadWorkflowStatus]);
+    await loadWorkflowStatus();
+    if (taskId) {
+      try {
+        const updatedTask = await db.getTask(taskId);
+        if (updatedTask) {
+          setTask(updatedTask as Task);
+        }
+      } catch (error) {
+        console.error('[TaskDetail] Failed to refresh task after work node approval:', error);
+      }
+    }
+  }, [currentWorkNode, loadWorkflowStatus, taskId]);
 
   const handleApproveCliTask = useCallback(async () => {
     if (!taskId) return;
@@ -1495,28 +1516,8 @@ export function TaskDetailContainer() {
       }
     } catch (error) {
       console.error('[TaskDetail] Failed to approve task:', error);
-    } finally {
-      setIsCliReviewOpen(false);
     }
   }, [taskId]);
-
-  const handleContinueCliTask = useCallback(async () => {
-    if (!taskId) return;
-    setIsCliReviewOpen(false);
-    try {
-      const updatedTask = await db.updateTask(taskId, { status: 'in_progress' });
-      if (updatedTask) {
-        setTask(updatedTask);
-      }
-    } catch (error) {
-      console.error('[TaskDetail] Failed to update task status for CLI continue:', error);
-    }
-    try {
-      await runCliPrompt();
-    } catch (error) {
-      console.error('[TaskDetail] Failed to continue CLI task:', error);
-    }
-  }, [runCliPrompt, taskId]);
 
   const handleStopExecution = useCallback(async () => {
     if (useCliSession) {
@@ -1614,6 +1615,12 @@ export function TaskDetailContainer() {
   }, [hasStartedOnce, isRunning, messages.length, normalizedTaskStatus, task, task?.status]);
 
   const showStartButton = !hasExecuted;
+  const showActionButton = showStartButton || isCliTaskReviewPending;
+  const actionLabel = isCliTaskReviewPending
+    ? (t.task.completeTask || 'Complete task')
+    : (t.task.startExecution || 'Start');
+  const actionDisabled = isCliTaskReviewPending ? false : startDisabled;
+  const handleAction = isCliTaskReviewPending ? handleApproveCliTask : handleStartTask;
 
   const displayStatus = useMemo<PipelineDisplayStatus | null>(() => {
     if (!task?.status) return null;
@@ -1742,9 +1749,10 @@ export function TaskDetailContainer() {
                 t={t}
                 title={displayTitle || `Task ${taskId}`}
                 metaRows={visibleMetaRows}
-                showStartButton={showStartButton}
-                startDisabled={startDisabled}
-                onStartTask={handleStartTask}
+                showActionButton={showActionButton}
+                actionDisabled={actionDisabled}
+                actionLabel={actionLabel}
+                onAction={handleAction}
                 onToggleSidebar={toggleLeft}
                 onEdit={handleOpenEdit}
                 onDelete={() => setIsDeleteOpen(true)}
@@ -1771,9 +1779,6 @@ export function TaskDetailContainer() {
                 cliStatus={cliStatus}
                 cliStatusInfo={cliStatusInfo}
                 cliToolLabel={cliToolLabel}
-                isCliTaskReviewPending={isCliTaskReviewPending}
-                onContinueCliTask={handleContinueCliTask}
-                onApproveCliTask={handleApproveCliTask}
                 messages={messages}
                 phase={phase}
                 onApprovePlan={approvePlan}
@@ -1823,11 +1828,6 @@ export function TaskDetailContainer() {
 
       <TaskDialogs
         t={t}
-        isCliReviewOpen={isCliReviewOpen}
-        setIsCliReviewOpen={setIsCliReviewOpen}
-        isCliTaskReviewPending={isCliTaskReviewPending}
-        onContinueCliTask={handleContinueCliTask}
-        onApproveCliTask={handleApproveCliTask}
         isEditOpen={isEditOpen}
         setIsEditOpen={setIsEditOpen}
         editPrompt={editPrompt}

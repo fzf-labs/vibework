@@ -85,7 +85,7 @@ export interface UseLogStreamResult {
   isConnected: boolean
   error: string | null
   clearLogs: () => void
-  resubscribe: () => Promise<void>
+  resubscribe: (options?: { clear?: boolean; includeHistory?: boolean }) => Promise<void>
 }
 
 /**
@@ -98,6 +98,7 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
   const [error, setError] = useState<string | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const sessionIdRef = useRef<string | null>(sessionId)
+  const seenIdsRef = useRef<Set<string>>(new Set())
 
   // 保持 sessionId ref 同步
   useEffect(() => {
@@ -107,6 +108,7 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
   const clearLogs = useCallback(() => {
     setRawLogs([])
     setNormalizedLogs([])
+    seenIdsRef.current = new Set()
   }, [])
 
   const processMessages = useCallback((messages: LogMsg[]) => {
@@ -114,6 +116,12 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
     const normalized: NormalizedEntry[] = []
 
     for (const msg of messages) {
+      if (msg.id) {
+        if (seenIdsRef.current.has(msg.id)) {
+          continue
+        }
+        seenIdsRef.current.add(msg.id)
+      }
       if (msg.type === 'stdout' || msg.type === 'stderr') {
         raw.push(msg)
       } else if (msg.type === 'normalized' && msg.entry) {
@@ -125,7 +133,7 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
     setNormalizedLogs((prev) => [...prev, ...normalized])
   }, [])
 
-  const subscribe = useCallback(async () => {
+  const subscribe = useCallback(async (options?: { includeHistory?: boolean }) => {
     const currentSessionId = sessionIdRef.current
     if (!currentSessionId) {
       console.log('[useLogStream] No sessionId, skipping subscribe')
@@ -134,11 +142,14 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
 
     try {
       // 获取历史日志
-      console.log('[useLogStream] Getting history for:', currentSessionId)
-      const history = await window.api.logStream.getHistory(currentSessionId)
-      console.log('[useLogStream] History received:', history?.length || 0, 'messages')
-      if (Array.isArray(history) && history.length > 0) {
-        processMessages(history as LogMsg[])
+      const includeHistory = options?.includeHistory ?? true
+      if (includeHistory) {
+        console.log('[useLogStream] Getting history for:', currentSessionId)
+        const history = await window.api.logStream.getHistory(currentSessionId)
+        console.log('[useLogStream] History received:', history?.length || 0, 'messages')
+        if (Array.isArray(history) && history.length > 0) {
+          processMessages(history as LogMsg[])
+        }
       }
 
       // 订阅实时日志
@@ -157,10 +168,23 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
     }
   }, [processMessages])
 
-  const resubscribe = useCallback(async () => {
-    clearLogs()
-    await subscribe()
-  }, [clearLogs, subscribe])
+  const resubscribe = useCallback(
+    async (options?: { clear?: boolean; includeHistory?: boolean }) => {
+      const currentSessionId = sessionIdRef.current
+      if (!currentSessionId) return
+      const clear = options?.clear ?? true
+      if (clear) {
+        clearLogs()
+      }
+      try {
+        await window.api.logStream.unsubscribe(currentSessionId)
+      } catch {
+        // ignore unsubscribe errors
+      }
+      await subscribe({ includeHistory: options?.includeHistory })
+    },
+    [clearLogs, subscribe]
+  )
 
   useEffect(() => {
     if (!sessionId) {

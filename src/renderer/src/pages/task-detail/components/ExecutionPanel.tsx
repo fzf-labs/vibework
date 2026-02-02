@@ -1,8 +1,7 @@
-import { Clock, Terminal } from 'lucide-react';
+import { Terminal } from 'lucide-react';
 import type { RefObject } from 'react';
 
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { CLISession, type CLISessionHandle } from '@/components/cli';
 import { MessageList, RunningIndicator } from '@/components/task';
 import type { AgentMessage, AgentPhase } from '@/hooks/useAgent';
@@ -17,9 +16,6 @@ interface ExecutionPanelProps {
   cliStatus: 'idle' | 'running' | 'stopped' | 'error';
   cliStatusInfo: { label: string; color: string };
   cliToolLabel: string;
-  isCliTaskReviewPending: boolean;
-  onContinueCliTask: () => void;
-  onApproveCliTask: () => void;
   messages: AgentMessage[];
   phase: AgentPhase;
   onApprovePlan: () => void;
@@ -43,9 +39,6 @@ export function ExecutionPanel({
   cliStatus,
   cliStatusInfo,
   cliToolLabel,
-  isCliTaskReviewPending,
-  onContinueCliTask,
-  onApproveCliTask,
   messages,
   phase,
   onApprovePlan,
@@ -102,40 +95,9 @@ export function ExecutionPanel({
 
             {useCliSession ? (
               <>
-                {cliStatus === 'stopped' && !isCliTaskReviewPending && (
+                {cliStatus === 'stopped' && (
                   <div className="border-emerald-500/30 bg-emerald-50/40 text-emerald-700 mb-3 rounded-lg border px-3 py-2 text-xs">
                     {t.task.executionCompleted || 'Execution completed'}
-                  </div>
-                )}
-
-                {isCliTaskReviewPending && (
-                  <div className="border-amber-500/30 bg-amber-50/30 mb-3 rounded-xl border p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-foreground flex items-center gap-2 text-sm font-medium">
-                        <Clock className="size-4 text-amber-500" />
-                        <span>{t.task.executionCompleted || 'Execution completed'}</span>
-                      </div>
-                      <span className="bg-amber-500/20 text-amber-700 rounded-full px-2 py-0.5 text-xs">
-                        {t.task.pendingApproval || 'Pending'}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onContinueCliTask}
-                        className="flex-1"
-                      >
-                        {t.task.continueConversation || 'Continue'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={onApproveCliTask}
-                        className="flex-1"
-                      >
-                        {t.task.confirmComplete || 'Confirm complete'}
-                      </Button>
-                    </div>
                   </div>
                 )}
 

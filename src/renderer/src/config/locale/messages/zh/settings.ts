@@ -114,7 +114,7 @@ export default {
   gitInstalled: '已安装',
   gitNotInstalled: '未安装',
   gitWorktreePrefixLabel: 'Worktree 分支前缀',
-  gitWorktreePrefixPlaceholder: '例如: vw-',
+  gitWorktreePrefixPlaceholder: '例如: VW-',
   gitWorktreePrefixDesc: '创建新的 Git worktree 分支时使用的前缀。',
   gitWorktreePrefixError: '前缀不能为空。',
   gitWorktreeDirLabel: 'Worktree 目录',

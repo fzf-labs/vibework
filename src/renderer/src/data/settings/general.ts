@@ -159,7 +159,7 @@ export const defaultSettings: Settings = {
     customCommand: '',
   },
   defaultCliToolId: '',
-  gitWorktreeBranchPrefix: 'vw-',
+  gitWorktreeBranchPrefix: 'VW-',
   gitWorktreeDir: '~/.vibework/worktrees',
   claudeCodePath: '',
   codexCliPath: '',

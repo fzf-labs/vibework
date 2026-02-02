@@ -36,7 +36,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
 }: CLISessionProps, ref) {
   const [status, setStatus] = useState<CLISessionStatus>('idle')
 
-  const { normalizedLogs, clearLogs, resubscribe } = useLogStream(sessionId)
+  const { normalizedLogs, resubscribe } = useLogStream(sessionId)
   const logContainerRef = useRef<HTMLDivElement>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
@@ -110,15 +110,14 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
   const startSession = useCallback(async (promptOverride?: string) => {
     try {
       const nextPrompt = promptOverride ?? prompt
-      clearLogs()
       setStatus('running')
       await window.api.cliSession.startSession(sessionId, toolId, workdir, { prompt: nextPrompt })
-      await resubscribe()
+      await resubscribe({ clear: false })
     } catch (error) {
       setStatus('error')
       console.error('[CLISession] Failed to start session:', error)
     }
-  }, [clearLogs, prompt, resubscribe, sessionId, toolId, workdir])
+  }, [prompt, resubscribe, sessionId, toolId, workdir])
 
   const stopSession = useCallback(async () => {
     try {

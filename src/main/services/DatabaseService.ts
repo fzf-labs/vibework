@@ -571,6 +571,10 @@ export class DatabaseService {
     const hasReviewNode = nodes.some(n => n.status === 'in_review')
     if (hasReviewNode) return 'in_progress'
 
+    // All nodes completed → Task in_review (await final approval)
+    const allDone = nodes.every(n => n.status === 'done')
+    if (allDone || workflow.status === 'done') return 'in_review'
+
     return null
   }
 
@@ -1071,14 +1075,15 @@ export class DatabaseService {
    * - completed → in_review
    */
   private syncWorkNodeFromAgentStatus(workNodeId: string, agentStatus: 'running' | 'completed'): void {
+    const workNode = this.getWorkNode(workNodeId)
+    if (!workNode) return
+    if (workNode.status === 'done') return
+
     const workNodeStatus = agentStatus === 'running' ? 'in_progress' : 'in_review'
     this.updateWorkNodeStatus(workNodeId, workNodeStatus)
 
     // 同步更新 Task 状态
-    const workNode = this.getWorkNode(workNodeId)
-    if (workNode) {
-      this.syncTaskStatusFromWorkflow(workNode.workflow_id)
-    }
+    this.syncTaskStatusFromWorkflow(workNode.workflow_id)
   }
 
   // ============ 清理和关闭 ============

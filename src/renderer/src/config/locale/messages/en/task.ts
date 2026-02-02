@@ -57,6 +57,7 @@ export default {
   executionCompleted: 'Execution completed',
   continueConversation: 'Continue conversation',
   confirmComplete: 'Confirm complete',
+  completeTask: 'Complete task',
   workNodeReviewTitle: 'Work node review',
   workNodeNameLabel: 'Node name',
   workNodePromptLabel: 'Node prompt',

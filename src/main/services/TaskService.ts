@@ -41,7 +41,7 @@ interface TaskWithWorktree {
 }
 
 export class TaskService {
-  private static readonly DEFAULT_WORKTREE_PREFIX = 'vw-'
+  private static readonly DEFAULT_WORKTREE_PREFIX = 'VW-'
 
   private db: DatabaseService
   private git: GitService

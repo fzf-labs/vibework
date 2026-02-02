@@ -35,7 +35,7 @@ export const ClaudeCodeSession = forwardRef<ClaudeCodeSessionHandle, ClaudeCodeS
   const [status, setStatus] = useState<ClaudeCodeSessionStatus>('idle')
 
   // 使用日志流 hook
-  const { normalizedLogs, clearLogs, resubscribe } = useLogStream(sessionId)
+  const { normalizedLogs, resubscribe } = useLogStream(sessionId)
   const logContainerRef = useRef<HTMLDivElement>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
@@ -74,19 +74,18 @@ export const ClaudeCodeSession = forwardRef<ClaudeCodeSessionHandle, ClaudeCodeS
     try {
       const nextPrompt = promptOverride ?? prompt
       console.log('[ClaudeCodeSession] Starting session:', sessionId, 'workdir:', workdir, 'prompt:', nextPrompt)
-      clearLogs()
       setStatus('running')
       const result = await window.api.claudeCode.startSession(sessionId, workdir, { prompt: nextPrompt })
       console.log('[ClaudeCodeSession] startSession result:', result)
       // session 启动后重新订阅日志流
       console.log('[ClaudeCodeSession] Resubscribing to log stream...')
-      await resubscribe()
+      await resubscribe({ clear: false })
       console.log('[ClaudeCodeSession] Resubscribe complete')
     } catch (error) {
       setStatus('error')
       console.error('[ClaudeCodeSession] Failed to start session:', error)
     }
-  }, [clearLogs, prompt, resubscribe, sessionId, workdir])
+  }, [prompt, resubscribe, sessionId, workdir])
 
   const stopSession = useCallback(async () => {
     try {

@@ -22,11 +22,6 @@ type PipelineTemplateOption = {
 
 interface TaskDialogsProps {
   t: LanguageStrings;
-  isCliReviewOpen: boolean;
-  setIsCliReviewOpen: (open: boolean) => void;
-  isCliTaskReviewPending: boolean;
-  onContinueCliTask: () => void;
-  onApproveCliTask: () => void;
   isEditOpen: boolean;
   setIsEditOpen: (open: boolean) => void;
   editPrompt: string;
@@ -45,11 +40,6 @@ interface TaskDialogsProps {
 
 export function TaskDialogs({
   t,
-  isCliReviewOpen,
-  setIsCliReviewOpen,
-  isCliTaskReviewPending,
-  onContinueCliTask,
-  onApproveCliTask,
   isEditOpen,
   setIsEditOpen,
   editPrompt,
@@ -67,30 +57,6 @@ export function TaskDialogs({
 }: TaskDialogsProps) {
   return (
     <>
-      <Dialog
-        open={isCliReviewOpen && isCliTaskReviewPending}
-        onOpenChange={setIsCliReviewOpen}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {t.task.executionCompleted || 'Execution completed'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="text-muted-foreground text-sm">
-            {t.task.pendingApproval || 'Pending approval'}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={onContinueCliTask}>
-              {t.task.continueConversation || 'Continue'}
-            </Button>
-            <Button onClick={onApproveCliTask}>
-              {t.task.confirmComplete || 'Confirm complete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>

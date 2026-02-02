@@ -14,9 +14,10 @@ interface TaskCardProps {
   t: LanguageStrings;
   title: string;
   metaRows: TaskMetaRow[];
-  showStartButton: boolean;
-  startDisabled: boolean;
-  onStartTask: () => void;
+  showActionButton: boolean;
+  actionDisabled: boolean;
+  actionLabel: string;
+  onAction: () => void;
   onToggleSidebar: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -27,9 +28,10 @@ export function TaskCard({
   t,
   title,
   metaRows,
-  showStartButton,
-  startDisabled,
-  onStartTask,
+  showActionButton,
+  actionDisabled,
+  actionLabel,
+  onAction,
   onToggleSidebar,
   onEdit,
   onDelete,
@@ -51,9 +53,9 @@ export function TaskCard({
         </div>
 
         <div className="flex items-center gap-2">
-          {showStartButton && (
-            <Button size="sm" onClick={onStartTask} disabled={startDisabled}>
-              {t.task.startExecution || 'Start'}
+          {showActionButton && (
+            <Button size="sm" onClick={onAction} disabled={actionDisabled}>
+              {actionLabel}
             </Button>
           )}
 

@@ -121,7 +121,7 @@ export default {
   gitInstalled: 'Installed',
   gitNotInstalled: 'Not installed',
   gitWorktreePrefixLabel: 'Worktree Branch Prefix',
-  gitWorktreePrefixPlaceholder: 'e.g., vw-',
+  gitWorktreePrefixPlaceholder: 'e.g., VW-',
   gitWorktreePrefixDesc: 'Prefix used when creating new Git worktree branches.',
   gitWorktreePrefixError: 'Prefix cannot be empty.',
   gitWorktreeDirLabel: 'Worktree Directory',
