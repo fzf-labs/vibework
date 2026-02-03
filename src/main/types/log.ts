@@ -40,7 +40,11 @@ export interface LogMsgFinished extends LogMsgBase {
 
 export type LogMsg = LogMsgStdout | LogMsgStderr | LogMsgNormalized | LogMsgFinished
 
-export type LogMsgInput = Omit<LogMsg, keyof LogMsgBase> & Partial<LogMsgBase>
+export type LogMsgInput =
+  | ({ type: 'stdout'; content: string; timestamp?: number } & Partial<LogMsgBase>)
+  | ({ type: 'stderr'; content: string; timestamp?: number } & Partial<LogMsgBase>)
+  | ({ type: 'normalized'; entry: NormalizedEntry; timestamp?: number } & Partial<LogMsgBase>)
+  | ({ type: 'finished'; exit_code?: number; timestamp?: number } & Partial<LogMsgBase>)
 
 // 标准化日志条目类型
 export type NormalizedEntryType =

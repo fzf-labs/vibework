@@ -3,53 +3,20 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import iconMac from '../../resources/icon-mac.png?asset'
-import { getAppPaths } from './services/AppPaths'
-import { ProjectService } from './services/ProjectService'
-import { GitService } from './services/GitService'
-import { CLIProcessService } from './services/CLIProcessService'
-import { ClaudeCodeService } from './services/ClaudeCodeService'
-import { CLIToolDetectorService } from './services/CLIToolDetectorService'
-import { CLIToolConfigService } from './services/CLIToolConfigService'
-import { EditorService } from './services/EditorService'
-import { PipelineService } from './services/PipelineService'
-import { PreviewConfigService } from './services/PreviewConfigService'
-import { PreviewService } from './services/PreviewService'
-import { NotificationService } from './services/NotificationService'
-import { DatabaseService } from './services/DatabaseService'
-import { SettingsService } from './services/SettingsService'
-import { TaskService } from './services/TaskService'
-import { CliSessionService } from './services/cli/CliSessionService'
 import { assertUrlAllowed } from './utils/url-guard'
 import { registerIpcHandlers } from './ipc'
+import { IPC_EVENTS } from './ipc/channels'
+import { AppContext } from './app/AppContext'
+import { createAppContext } from './app/create-app-context'
 
-let projectService: ProjectService
-let gitService: GitService
-let cliProcessService: CLIProcessService
-let claudeCodeService: ClaudeCodeService
-let cliToolDetectorService: CLIToolDetectorService
-let cliToolConfigService: CLIToolConfigService
-let editorService: EditorService
-let pipelineService: PipelineService
-let previewConfigService: PreviewConfigService
-let previewService: PreviewService
-let notificationService: NotificationService
-let databaseService: DatabaseService
-let settingsService: SettingsService
-let taskService: TaskService
-let cliSessionService: CliSessionService
+let appContext: AppContext | null = null
 
 const APP_NAME = 'VibeWork'
 const APP_IDENTIFIER = 'com.fzf-labs.vibework'
 
 let mainWindow: BrowserWindow | null = null
-
-function resolveProjectIdForSession(sessionId: string): string | null {
-  try {
-    return taskService.getTaskBySessionId(sessionId)?.projectId ?? null
-  } catch {
-    return null
-  }
-}
+const resolveProjectIdForSession = (sessionId: string): string | null =>
+  appContext?.resolveProjectIdForSession(sessionId) ?? null
 
 function createWindow(): BrowserWindow {
   // Create the browser window.
@@ -98,7 +65,7 @@ function createWindow(): BrowserWindow {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName(APP_NAME)
 
   // Set app user model id for windows
@@ -115,31 +82,18 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Initialize app paths
-  const appPaths = getAppPaths()
+  appContext = createAppContext()
+  await appContext.init()
 
-  // Initialize services
-  databaseService = new DatabaseService()
-  projectService = new ProjectService(databaseService)
-  gitService = new GitService()
-  cliProcessService = new CLIProcessService()
-  claudeCodeService = new ClaudeCodeService()
-  cliToolDetectorService = new CLIToolDetectorService()
-  cliToolConfigService = new CLIToolConfigService()
-  cliSessionService = new CliSessionService(claudeCodeService, cliToolConfigService)
-  editorService = new EditorService()
-  pipelineService = new PipelineService()
-  previewConfigService = new PreviewConfigService()
-  previewService = new PreviewService()
-  notificationService = new NotificationService()
-  settingsService = new SettingsService()
-  taskService = new TaskService(databaseService, gitService)
+  const { services, appPaths } = appContext
+  const { databaseService, claudeCodeService, cliSessionService } = services
 
-  databaseService.onWorkNodeStatusChange((node) => {
+  appContext.trackDisposable(
+    databaseService.onWorkNodeStatusChange((node) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
 
     if (node.status === 'in_review') {
-      mainWindow.webContents.send('workNode:review', {
+      mainWindow.webContents.send(IPC_EVENTS.workNode.review, {
         id: node.id,
         name: node.name || ''
       })
@@ -147,75 +101,60 @@ app.whenReady().then(() => {
     }
 
     if (node.status === 'done') {
-      mainWindow.webContents.send('workNode:completed', {
+      mainWindow.webContents.send(IPC_EVENTS.workNode.completed, {
         id: node.id,
         name: node.name || ''
       })
     }
-  })
+    })
+  )
 
   // Forward ClaudeCode events to renderer
-  claudeCodeService.on('output', (data) => {
+  appContext.trackEvent(claudeCodeService, 'output', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('claudeCode:output', data)
+      mainWindow.webContents.send(IPC_EVENTS.claudeCode.output, data)
     }
   })
 
-  claudeCodeService.on('close', (data) => {
+  appContext.trackEvent(claudeCodeService, 'close', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('claudeCode:close', data)
+      mainWindow.webContents.send(IPC_EVENTS.claudeCode.close, data)
     }
   })
 
-  claudeCodeService.on('error', (data) => {
+  appContext.trackEvent(claudeCodeService, 'error', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('claudeCode:error', data)
+      mainWindow.webContents.send(IPC_EVENTS.claudeCode.error, data)
     }
   })
 
   // Forward unified CLI session events to renderer
-  cliSessionService.on('output', (data) => {
+  appContext.trackEvent(cliSessionService, 'output', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cliSession:output', data)
+      mainWindow.webContents.send(IPC_EVENTS.cliSession.output, data)
     }
   })
 
-  cliSessionService.on('status', (data) => {
+  appContext.trackEvent(cliSessionService, 'status', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cliSession:status', data)
+      mainWindow.webContents.send(IPC_EVENTS.cliSession.status, data)
     }
   })
 
-  cliSessionService.on('close', (data) => {
+  appContext.trackEvent(cliSessionService, 'close', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cliSession:close', data)
+      mainWindow.webContents.send(IPC_EVENTS.cliSession.close, data)
     }
   })
 
-  cliSessionService.on('error', (data) => {
+  appContext.trackEvent(cliSessionService, 'error', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cliSession:error', data)
+      mainWindow.webContents.send(IPC_EVENTS.cliSession.error, data)
     }
   })
 
   registerIpcHandlers({
-    services: {
-      projectService,
-      gitService,
-      cliProcessService,
-      claudeCodeService,
-      cliToolDetectorService,
-      cliToolConfigService,
-      editorService,
-      pipelineService,
-      previewConfigService,
-      previewService,
-      notificationService,
-      databaseService,
-      settingsService,
-      taskService,
-      cliSessionService
-    },
+    services,
     appPaths,
     resolveProjectIdForSession
   })
@@ -240,8 +179,8 @@ app.on('window-all-closed', () => {
 
 // Close database connection before app quits
 app.on('before-quit', () => {
-  if (databaseService) {
-    databaseService.close()
+  if (appContext) {
+    void appContext.dispose()
   }
 })
 

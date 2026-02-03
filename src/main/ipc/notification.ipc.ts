@@ -1,11 +1,12 @@
 import type { IpcModuleContext } from './types'
 import type { NotificationService } from '../services/NotificationService'
+import { IPC_CHANNELS } from './channels'
 
 export const registerNotificationIpc = ({ handle, v, services }: IpcModuleContext): void => {
   const { notificationService } = services
 
   handle(
-    'notification:show',
+    IPC_CHANNELS.notification.show,
     [
       v.shape({
         title: v.string(),
@@ -20,20 +21,20 @@ export const registerNotificationIpc = ({ handle, v, services }: IpcModuleContex
     }
   )
 
-  handle('notification:setEnabled', [v.boolean()], (_, enabled) => {
+  handle(IPC_CHANNELS.notification.setEnabled, [v.boolean()], (_, enabled) => {
     notificationService.setEnabled(enabled)
   })
 
-  handle('notification:isEnabled', [], () => notificationService.isEnabled())
+  handle(IPC_CHANNELS.notification.isEnabled, [], () => notificationService.isEnabled())
 
-  handle('notification:setSoundEnabled', [v.boolean()], (_, enabled) => {
+  handle(IPC_CHANNELS.notification.setSoundEnabled, [v.boolean()], (_, enabled) => {
     notificationService.setSoundEnabled(enabled)
   })
 
-  handle('notification:isSoundEnabled', [], () => notificationService.isSoundEnabled())
+  handle(IPC_CHANNELS.notification.isSoundEnabled, [], () => notificationService.isSoundEnabled())
 
   handle(
-    'notification:setSoundSettings',
+    IPC_CHANNELS.notification.setSoundSettings,
     [
       v.shape({
         enabled: v.optional(v.boolean()),
@@ -47,5 +48,5 @@ export const registerNotificationIpc = ({ handle, v, services }: IpcModuleContex
     }
   )
 
-  handle('notification:getSoundSettings', [], () => notificationService.getSoundSettings())
+  handle(IPC_CHANNELS.notification.getSoundSettings, [], () => notificationService.getSoundSettings())
 }

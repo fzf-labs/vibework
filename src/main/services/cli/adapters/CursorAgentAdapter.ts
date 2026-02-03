@@ -3,7 +3,7 @@ import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
 import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
-import { NormalizedEntry } from '../../types/log'
+import { NormalizedEntry } from '../../../types/log'
 
 const AUTH_REQUIRED_PATTERNS = [
   /authentication required/i,

@@ -4,6 +4,7 @@ import { readFile, writeFile, appendFile, stat, rm, access, readdir, realpath, m
 import type { IpcModuleContext } from './types'
 import { assertFsPathAllowed, addAllowedPath } from '../utils/fs-allowlist'
 import { assertUrlAllowed } from '../utils/url-guard'
+import { IPC_CHANNELS } from './channels'
 
 interface FileEntry {
   name: string
@@ -74,7 +75,7 @@ export const registerFilesystemIpc = ({
   appPaths
 }: IpcModuleContext): void => {
   handle(
-    'fs:readDir',
+    IPC_CHANNELS.fs.readDir,
     [
       v.string(),
       v.optional(
@@ -90,18 +91,18 @@ export const registerFilesystemIpc = ({
     }
   )
 
-  handle('fs:readFile', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.fs.readFile, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:readFile')
     const buffer = await readFile(path)
     return new Uint8Array(buffer)
   })
 
-  handle('fs:readTextFile', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.fs.readTextFile, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:readTextFile')
     return await readFile(path, 'utf-8')
   })
 
-  handle('fs:writeFile', [v.string(), fileDataValidator], async (event, path, data) => {
+  handle(IPC_CHANNELS.fs.writeFile, [v.string(), fileDataValidator], async (event, path, data) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:writeFile')
     try {
       await access(path)
@@ -112,7 +113,10 @@ export const registerFilesystemIpc = ({
     await writeFile(path, data)
   })
 
-  handle('fs:writeTextFile', [v.string(), v.string({ allowEmpty: true })], async (event, path, content) => {
+  handle(
+    IPC_CHANNELS.fs.writeTextFile,
+    [v.string(), v.string({ allowEmpty: true })],
+    async (event, path, content) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:writeTextFile')
     try {
       await access(path)
@@ -123,12 +127,15 @@ export const registerFilesystemIpc = ({
     await writeFile(path, content, 'utf-8')
   })
 
-  handle('fs:appendTextFile', [v.string(), v.string({ allowEmpty: true })], async (_, path, content) => {
+  handle(
+    IPC_CHANNELS.fs.appendTextFile,
+    [v.string(), v.string({ allowEmpty: true })],
+    async (_, path, content) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:appendTextFile')
     await appendFile(path, content, 'utf-8')
   })
 
-  handle('fs:stat', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.fs.stat, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:stat')
     const stats = await stat(path)
     return {
@@ -138,7 +145,7 @@ export const registerFilesystemIpc = ({
     }
   })
 
-  handle('fs:exists', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.fs.exists, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:exists')
     try {
       await access(path)
@@ -149,7 +156,7 @@ export const registerFilesystemIpc = ({
   })
 
   handle(
-    'fs:remove',
+    IPC_CHANNELS.fs.remove,
     [
       v.string(),
       v.optional(
@@ -169,20 +176,22 @@ export const registerFilesystemIpc = ({
     }
   )
 
-  handle('fs:mkdir', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.fs.mkdir, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'fs:mkdir')
     await mkdir(path, { recursive: true })
   })
 
-  handle('dialog:save', [v.object()], async (event, options) => {
+  handle(IPC_CHANNELS.dialog.save, [v.object()], async (event, options) => {
     const window = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showSaveDialog(window ?? undefined, options)
+    const result = window
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
     await addAllowedPath(result.filePath)
     return result.filePath
   })
 
-  handle('dialog:open', [v.object()], async (event, options: any) => {
+  handle(IPC_CHANNELS.dialog.open, [v.object()], async (event, options: any) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     const normalizedOptions: Record<string, unknown> = { ...options }
     const properties = new Set<string>(
@@ -201,7 +210,9 @@ export const registerFilesystemIpc = ({
       normalizedOptions.properties = Array.from(properties)
     }
 
-    const result = await dialog.showOpenDialog(window ?? undefined, normalizedOptions)
+    const result = window
+      ? await dialog.showOpenDialog(window, normalizedOptions)
+      : await dialog.showOpenDialog(normalizedOptions)
     if (result.canceled) return null
     for (const filePath of result.filePaths) {
       await addAllowedPath(filePath)
@@ -209,12 +220,12 @@ export const registerFilesystemIpc = ({
     return properties.has('multiSelections') ? result.filePaths : result.filePaths[0]
   })
 
-  handle('shell:openUrl', [v.string()], async (_, url) => {
+  handle(IPC_CHANNELS.shell.openUrl, [v.string()], async (_, url) => {
     assertUrlAllowed(url, 'shell:openUrl')
     await shell.openExternal(url)
   })
 
-  handle('shell:openPath', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.shell.openPath, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'shell:openPath')
     const result = await shell.openPath(path)
     if (result) {
@@ -222,16 +233,16 @@ export const registerFilesystemIpc = ({
     }
   })
 
-  handle('shell:showItemInFolder', [v.string()], async (_, path) => {
+  handle(IPC_CHANNELS.shell.showItemInFolder, [v.string()], async (_, path) => {
     await assertFsPathAllowed(path, getFsAllowlistRoots(), 'shell:showItemInFolder')
     shell.showItemInFolder(path)
   })
 
-  handle('path:appDataDir', [], () => app.getPath('appData'))
-  handle('path:appConfigDir', [], () => app.getPath('userData'))
-  handle('path:tempDir', [], () => app.getPath('temp'))
-  handle('path:resourcesDir', [], () => process.resourcesPath)
-  handle('path:appPath', [], () => app.getAppPath())
-  handle('path:vibeworkDataDir', [], () => appPaths.getRootDir())
-  handle('path:homeDir', [], () => app.getPath('home'))
+  handle(IPC_CHANNELS.path.appDataDir, [], () => app.getPath('appData'))
+  handle(IPC_CHANNELS.path.appConfigDir, [], () => app.getPath('userData'))
+  handle(IPC_CHANNELS.path.tempDir, [], () => app.getPath('temp'))
+  handle(IPC_CHANNELS.path.resourcesDir, [], () => process.resourcesPath)
+  handle(IPC_CHANNELS.path.appPath, [], () => app.getAppPath())
+  handle(IPC_CHANNELS.path.vibeworkDataDir, [], () => appPaths.getRootDir())
+  handle(IPC_CHANNELS.path.homeDir, [], () => app.getPath('home'))
 }

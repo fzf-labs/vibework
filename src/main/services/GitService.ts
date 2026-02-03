@@ -69,7 +69,8 @@ export class GitService {
     }
   }
 
-  async init(path: string): Promise<void> {
+  async init(path?: string): Promise<void> {
+    if (!path) return
     try {
       await this.runGit(['init', path])
     } catch (error) {

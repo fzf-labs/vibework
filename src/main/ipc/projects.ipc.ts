@@ -1,14 +1,15 @@
 import type { IpcModuleContext } from './types'
+import { IPC_CHANNELS } from './channels'
 
 export const registerProjectsIpc = ({ handle, v, services }: IpcModuleContext): void => {
   const { projectService } = services
 
-  handle('projects:getAll', [], () => projectService.getAllProjects())
+  handle(IPC_CHANNELS.projects.getAll, [], () => projectService.getAllProjects())
 
-  handle('projects:get', [v.string()], (_, id) => projectService.getProject(id))
+  handle(IPC_CHANNELS.projects.get, [v.string()], (_, id) => projectService.getProject(id))
 
   handle(
-    'projects:add',
+    IPC_CHANNELS.projects.add,
     [
       v.shape({
         name: v.string(),
@@ -28,7 +29,7 @@ export const registerProjectsIpc = ({ handle, v, services }: IpcModuleContext): 
   )
 
   handle(
-    'projects:update',
+    IPC_CHANNELS.projects.update,
     [
       v.string(),
       v.shape({
@@ -40,7 +41,9 @@ export const registerProjectsIpc = ({ handle, v, services }: IpcModuleContext): 
     (_, id, updates) => projectService.updateProject(id, updates as any)
   )
 
-  handle('projects:delete', [v.string()], (_, id) => projectService.deleteProject(id))
+  handle(IPC_CHANNELS.projects.delete, [v.string()], (_, id) => projectService.deleteProject(id))
 
-  handle('projects:checkPath', [v.string()], (_, id) => projectService.checkProjectPath(id))
+  handle(IPC_CHANNELS.projects.checkPath, [v.string()], (_, id) =>
+    projectService.checkProjectPath(id)
+  )
 }

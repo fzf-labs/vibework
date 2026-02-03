@@ -1,4 +1,6 @@
 import type { IpcModuleContext } from './types'
+import type { LogMsgInput } from '../types/log'
+import { IPC_CHANNELS, IPC_EVENTS } from './channels'
 
 export const registerCliSessionIpc = ({
   handle,
@@ -10,7 +12,7 @@ export const registerCliSessionIpc = ({
   const logStreamSubscriptions = new Map<string, () => void>()
 
   handle(
-    'cliSession:startSession',
+    IPC_CHANNELS.cliSession.startSession,
     [
       v.string(),
       v.string(),
@@ -43,31 +45,34 @@ export const registerCliSessionIpc = ({
     }
   )
 
-  handle('cliSession:stopSession', [v.string()], (_, sessionId) => {
+  handle(IPC_CHANNELS.cliSession.stopSession, [v.string()], (_, sessionId) => {
     cliSessionService.stopSession(sessionId)
   })
 
-  handle('cliSession:sendInput', [v.string(), v.string({ allowEmpty: true })], (_, sessionId, input) => {
+  handle(
+    IPC_CHANNELS.cliSession.sendInput,
+    [v.string(), v.string({ allowEmpty: true })],
+    (_, sessionId, input) => {
     cliSessionService.sendInput(sessionId, input)
   })
 
-  handle('cliSession:getSessions', [], () => cliSessionService.getAllSessions())
+  handle(IPC_CHANNELS.cliSession.getSessions, [], () => cliSessionService.getAllSessions())
 
-  handle('cliSession:getSession', [v.string()], (_, sessionId) => {
+  handle(IPC_CHANNELS.cliSession.getSession, [v.string()], (_, sessionId) => {
     const session = cliSessionService.getSession(sessionId)
     if (!session) return null
     return session
   })
 
   handle(
-    'cliSession:appendLog',
+    IPC_CHANNELS.cliSession.appendLog,
     [v.string(), v.object(), v.optional(v.nullable(v.string({ allowEmpty: true })))],
     (_, sessionId, msg, projectId) => {
-      cliSessionService.appendSessionLog(sessionId, msg, projectId ?? null)
+      cliSessionService.appendSessionLog(sessionId, msg as LogMsgInput, projectId ?? null)
     }
   )
 
-  handle('logStream:subscribe', [v.string()], (event, sessionId) => {
+  handle(IPC_CHANNELS.logStream.subscribe, [v.string()], (event, sessionId) => {
     console.log('[IPC] logStream:subscribe called:', sessionId)
     const webContents = event.sender
     const key = `${webContents.id}-${sessionId}`
@@ -80,7 +85,7 @@ export const registerCliSessionIpc = ({
     const unsubscribe = cliSessionService.subscribeToSession(sessionId, (msg) => {
       console.log('[IPC] logStream:message sending:', sessionId, msg.type)
       if (!webContents.isDestroyed()) {
-        webContents.send('logStream:message', sessionId, msg)
+        webContents.send(IPC_EVENTS.logStream.message, sessionId, msg)
       }
     })
 
@@ -101,7 +106,7 @@ export const registerCliSessionIpc = ({
     return { success: true }
   })
 
-  handle('logStream:unsubscribe', [v.string()], (event, sessionId) => {
+  handle(IPC_CHANNELS.logStream.unsubscribe, [v.string()], (event, sessionId) => {
     const key = `${event.sender.id}-${sessionId}`
     const unsubscribe = logStreamSubscriptions.get(key)
     if (unsubscribe) {
@@ -111,7 +116,7 @@ export const registerCliSessionIpc = ({
     return { success: true }
   })
 
-  handle('logStream:getHistory', [v.string()], (_, sessionId) => {
+  handle(IPC_CHANNELS.logStream.getHistory, [v.string()], (_, sessionId) => {
     console.log('[IPC] logStream:getHistory called:', sessionId)
     const history = cliSessionService.getSessionLogHistory(sessionId)
     console.log('[IPC] logStream:getHistory returning:', history.length, 'messages')

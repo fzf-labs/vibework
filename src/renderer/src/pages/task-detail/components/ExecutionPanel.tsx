@@ -23,12 +23,12 @@ interface ExecutionPanelProps {
   isRunning: boolean;
   sessionId: string;
   toolId: string;
-  workingDir: string | null;
+  workingDir: string;
   prompt: string;
-  cliSessionRef: RefObject<CLISessionHandle>;
+  cliSessionRef: RefObject<CLISessionHandle | null>;
   onCliStatusChange: (status: 'idle' | 'running' | 'stopped' | 'error') => void;
-  messagesContainerRef: RefObject<HTMLDivElement>;
-  messagesEndRef: RefObject<HTMLDivElement>;
+  messagesContainerRef: RefObject<HTMLDivElement | null>;
+  messagesEndRef: RefObject<HTMLDivElement | null>;
 }
 
 export function ExecutionPanel({

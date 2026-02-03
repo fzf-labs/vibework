@@ -15,6 +15,14 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const parseBoolean = (value: string | undefined, fallback: boolean): boolean => {
+  if (!value) return fallback
+  const normalized = value.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return fallback
+}
+
 const defaultCommandAllowlist = [
   'git',
   'node',
@@ -60,6 +68,19 @@ export const config = {
     rotation: {
       maxFileBytes: parseNumber(process.env.VIBEWORK_LOG_MAX_BYTES, 10 * 1024 * 1024),
       maxFiles: parseNumber(process.env.VIBEWORK_LOG_MAX_FILES, 5)
+    }
+  },
+  output: {
+    buffer: {
+      maxBytes: parseNumber(process.env.VIBEWORK_OUTPUT_MAX_BYTES, 512 * 1024),
+      maxEntries: parseNumber(process.env.VIBEWORK_OUTPUT_MAX_ENTRIES, 2000)
+    },
+    spool: {
+      enabled: parseBoolean(process.env.VIBEWORK_OUTPUT_SPOOL_ENABLED, false),
+      flushIntervalMs: parseNumber(process.env.VIBEWORK_OUTPUT_SPOOL_FLUSH_MS, 250),
+      maxBatchBytes: parseNumber(process.env.VIBEWORK_OUTPUT_SPOOL_BATCH_BYTES, 128 * 1024),
+      maxFileBytes: parseNumber(process.env.VIBEWORK_OUTPUT_SPOOL_MAX_BYTES, 5 * 1024 * 1024),
+      maxFiles: parseNumber(process.env.VIBEWORK_OUTPUT_SPOOL_MAX_FILES, 3)
     }
   },
   ipc: {

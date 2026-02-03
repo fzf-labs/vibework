@@ -334,6 +334,7 @@ export function GitDiffView({
             const diffData = buildDiffData(file, fileLang);
             const diffFile = createDiffFileFromHunks(diffData, theme);
             const contentDiffFile = buildDiffFileFromContents(file, null, theme, fileLang);
+            const resolvedDiffFile = contentDiffFile ?? diffFile ?? undefined;
 
             return (
               <div key={`${group.title}-${file.key}`} className="rounded-lg border bg-background">
@@ -347,8 +348,8 @@ export function GitDiffView({
                     </div>
                   ) : (
                     <DiffView
-                      diffFile={contentDiffFile ?? diffFile}
-                      data={!contentDiffFile && !diffFile ? diffData : undefined}
+                      diffFile={resolvedDiffFile}
+                      data={!resolvedDiffFile ? diffData : undefined}
                       diffViewTheme={theme}
                       diffViewMode={diffMode}
                       diffViewHighlight={!!highlighter}

@@ -4,6 +4,8 @@ import { PipelineService } from '../../src/main/services/PipelineService'
 import { PreviewService } from '../../src/main/services/PreviewService'
 import { registerCliSessionIpc } from '../../src/main/ipc/cli-session.ipc'
 import { v } from '../../src/main/utils/ipc-response'
+import { AppContext } from '../../src/main/app/AppContext'
+import { IPC_CHANNELS } from '../../src/main/ipc/channels'
 
 describe('pipeline cancellation', () => {
   it('terminates running stage processes on cancel', () => {
@@ -95,9 +97,25 @@ describe('log stream subscription cleanup', () => {
     webContents.isDestroyed = () => false
     webContents.send = vi.fn()
 
-    handlers['logStream:subscribe']({ sender: webContents }, 'session-1')
+    handlers[IPC_CHANNELS.logStream.subscribe]({ sender: webContents }, 'session-1')
     webContents.emit('destroyed')
 
     expect(unsubscribe).toHaveBeenCalled()
+  })
+})
+
+describe('app context disposal order', () => {
+  it('disposes resources before services in reverse order', async () => {
+    const calls: string[] = []
+    const serviceA = { dispose: () => calls.push('serviceA') }
+    const serviceB = { dispose: () => calls.push('serviceB') }
+    const ctx = new AppContext({} as any, {} as any, [serviceA, serviceB])
+
+    ctx.trackDisposable(() => calls.push('dispose-1'))
+    ctx.trackDisposable(() => calls.push('dispose-2'))
+
+    await ctx.dispose()
+
+    expect(calls).toEqual(['dispose-2', 'dispose-1', 'serviceB', 'serviceA'])
   })
 })

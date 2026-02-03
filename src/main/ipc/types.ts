@@ -16,6 +16,7 @@ import type { TaskService } from '../services/TaskService'
 import type { CliSessionService } from '../services/cli/CliSessionService'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { Validator } from '../utils/ipc-response'
+import type { IpcArgs, IpcContractChannel, IpcResult } from './channels'
 
 export interface IpcServices {
   projectService: ProjectService
@@ -42,10 +43,10 @@ export interface IpcDependencies {
 }
 
 export interface IpcHelpers {
-  handle: <T extends unknown[], R>(
-    channel: string,
-    validators: { [K in keyof T]: Validator<T[K]> },
-    handler: (event: IpcMainInvokeEvent, ...args: T) => Promise<R> | R
+  handle: <C extends IpcContractChannel>(
+    channel: C,
+    validators: ReadonlyArray<Validator<unknown>>,
+    handler: (event: IpcMainInvokeEvent, ...args: IpcArgs<C>) => Promise<IpcResult<C>> | IpcResult<C>
   ) => void
   v: typeof import('../utils/ipc-response').v
   fileDataValidator: Validator<Uint8Array | string>

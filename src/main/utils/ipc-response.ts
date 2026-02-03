@@ -8,6 +8,10 @@ export interface IpcResponse<T> {
 
 export type Validator<T> = (value: unknown, name: string) => T
 
+type InferShape<T extends Record<string, Validator<unknown>>> = {
+  [K in keyof T]: T[K] extends Validator<infer U> ? U : never
+}
+
 const fail = (name: string, expected: string): never => {
   throw new Error(`Invalid ${name}: expected ${expected}`)
 }
@@ -61,7 +65,7 @@ export const v = {
     return value
   },
   shape:
-    <T extends Record<string, Validator<unknown>>>(shape: T): Validator<{ [K in keyof T]: unknown }> =>
+    <T extends Record<string, Validator<unknown>>>(shape: T): Validator<InferShape<T>> =>
     (value, name) => {
       if (!isRecord(value)) {
         return fail(name, 'object')
@@ -70,7 +74,7 @@ export const v = {
         const validator = shape[key]
         validator(value[key], `${name}.${key}`)
       }
-      return value as { [K in keyof T]: unknown }
+      return value as InferShape<T>
     },
   enum:
     <T extends string>(values: readonly T[]): Validator<T> =>
@@ -98,7 +102,7 @@ export const v = {
 }
 
 export const validateArgs = <T extends unknown[]>(
-  validators: { [K in keyof T]: Validator<T[K]> },
+  validators: ReadonlyArray<Validator<unknown>>,
   args: unknown[]
 ): T => {
   return validators.map((validator, index) =>
@@ -108,7 +112,7 @@ export const validateArgs = <T extends unknown[]>(
 
 export const wrapHandler = <T extends unknown[], R>(
   handler: (event: IpcMainInvokeEvent, ...args: T) => Promise<R> | R,
-  validators: { [K in keyof T]: Validator<T[K]> }
+  validators: ReadonlyArray<Validator<unknown>>
 ) => {
   return async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IpcResponse<R>> => {
     try {

@@ -1,11 +1,12 @@
 import { ChatInput } from '@/components/shared/ChatInput';
+import type { MessageAttachment } from '@/hooks/useAgent';
 
 import type { LanguageStrings } from '../types';
 
 interface ReplyCardProps {
   t: LanguageStrings;
   isRunning: boolean;
-  onSubmit: (value: string) => void;
+  onSubmit: (value: string, attachments?: MessageAttachment[]) => Promise<void>;
   onStop?: () => void;
 }
 

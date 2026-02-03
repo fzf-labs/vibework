@@ -2,6 +2,9 @@ import { ChildProcess } from 'child_process'
 import EventEmitter from 'events'
 import { safeSpawn } from '../utils/safe-exec'
 import { config } from '../config'
+import { OutputBuffer } from '../utils/output-buffer'
+import { OutputSpooler } from '../utils/output-spooler'
+import { getAppPaths } from './AppPaths'
 
 const pipelineAllowlist = config.commandAllowlist
 
@@ -26,7 +29,9 @@ interface StageExecution {
   startedAt?: Date
   completedAt?: Date
   output?: string
+  outputTruncated?: boolean
   error?: string
+  errorTruncated?: boolean
   exitCode?: number
   process?: ChildProcess
 }
@@ -43,6 +48,7 @@ interface PipelineExecution {
 export class PipelineService extends EventEmitter {
   private executions: Map<string, PipelineExecution> = new Map()
   private pendingApprovals: Map<string, { executionId: string; stageId: string }> = new Map()
+  private stageSpoolers: Map<string, OutputSpooler> = new Map()
 
   constructor() {
     super()
@@ -85,19 +91,21 @@ export class PipelineService extends EventEmitter {
     const execution = this.executions.get(executionId)
     if (!execution) return
 
+    const isCancelled = (): boolean => execution.status === 'cancelled'
+
     execution.status = 'running'
     this.emit('execution:updated', execution)
 
     const sortedStages = [...stages].sort((a, b) => a.order - b.order)
 
     for (const stage of sortedStages) {
-      if (execution.status === 'cancelled') {
+      if (isCancelled()) {
         this.emit('execution:completed', execution)
         return
       }
       const stageExecution = await this.executeStage(executionId, stage, workingDirectory)
 
-      if (execution.status === 'cancelled') {
+      if (isCancelled()) {
         execution.completedAt = new Date()
         this.emit('execution:completed', execution)
         return
@@ -127,6 +135,8 @@ export class PipelineService extends EventEmitter {
     const execution = this.executions.get(executionId)
     if (!execution) throw new Error('Execution not found')
 
+    const isCancelled = (): boolean => execution.status === 'cancelled'
+
     const stageExecution: StageExecution = {
       id: Date.now().toString(),
       stageId: stage.id,
@@ -137,7 +147,7 @@ export class PipelineService extends EventEmitter {
     execution.stageExecutions.push(stageExecution)
     this.emit('stage:started', { executionId, stageExecution })
 
-    if (execution.status === 'cancelled') {
+    if (isCancelled()) {
       stageExecution.status = 'skipped'
       stageExecution.completedAt = new Date()
       this.emit('stage:completed', { executionId, stageExecution })
@@ -161,7 +171,7 @@ export class PipelineService extends EventEmitter {
         await this.executeCommand(stageExecution, stage, workingDirectory)
       }
 
-      if (execution.status === 'cancelled') {
+      if (isCancelled()) {
         stageExecution.status = 'failed'
         stageExecution.error = 'Execution cancelled'
       } else {
@@ -217,31 +227,60 @@ export class PipelineService extends EventEmitter {
 
         stageExecution.process = childProcess
 
-        const outputChunks: string[] = []
-        const errorChunks: string[] = []
-
-        childProcess.stdout?.on('data', (data) => {
-          outputChunks.push(data.toString())
+        const outputBuffer = new OutputBuffer({
+          maxBytes: config.output.buffer.maxBytes,
+          maxEntries: config.output.buffer.maxEntries
+        })
+        const errorBuffer = new OutputBuffer({
+          maxBytes: config.output.buffer.maxBytes,
+          maxEntries: config.output.buffer.maxEntries
         })
 
-        childProcess.stderr?.on('data', (data) => {
-          errorChunks.push(data.toString())
-        })
+        const appPaths = getAppPaths()
+        const spooler = new OutputSpooler(
+          appPaths.getPipelineStageOutputFile(stageExecution.id, stage.id),
+          config.output.spool
+        )
+        this.stageSpoolers.set(stageExecution.id, spooler)
 
-        const result = await new Promise<{ code: number | null }>((resolve, reject) => {
-          childProcess.once('error', reject)
-          childProcess.once('close', (code) => resolve({ code }))
-        })
+        let exitCode: number | null = null
+        let stderrMessage = ''
+        try {
+          childProcess.stdout?.on('data', (data) => {
+            const chunk = data.toString()
+            outputBuffer.push(chunk)
+            spooler.append(chunk)
+          })
 
-        stageExecution.output = outputChunks.join('')
-        const stderr = errorChunks.join('')
-        if (stderr) {
-          stageExecution.error = stderr
+          childProcess.stderr?.on('data', (data) => {
+            const chunk = data.toString()
+            errorBuffer.push(chunk)
+            spooler.append(chunk)
+          })
+
+          const result = await new Promise<{ code: number | null }>((resolve, reject) => {
+            childProcess.once('error', reject)
+            childProcess.once('close', (code) => resolve({ code }))
+          })
+
+          const outputSnapshot = outputBuffer.snapshot()
+          const errorSnapshot = errorBuffer.snapshot()
+          stageExecution.output = outputSnapshot.output.join('')
+          stageExecution.outputTruncated = outputSnapshot.truncated
+          stderrMessage = errorSnapshot.output.join('')
+          if (stderrMessage) {
+            stageExecution.error = stderrMessage
+            stageExecution.errorTruncated = errorSnapshot.truncated
+          }
+          exitCode = result.code
+          stageExecution.exitCode = result.code ?? 0
+        } finally {
+          await spooler.dispose()
+          this.stageSpoolers.delete(stageExecution.id)
         }
-        stageExecution.exitCode = result.code ?? 0
 
-        if (result.code && result.code !== 0) {
-          throw new Error(stderr || `Command exited with code ${result.code}`)
+        if (exitCode && exitCode !== 0) {
+          throw new Error(stderrMessage || `Command exited with code ${exitCode}`)
         }
 
         return
@@ -317,7 +356,21 @@ export class PipelineService extends EventEmitter {
         stage.completedAt = new Date()
       }
       stage.process?.kill('SIGTERM')
+      const spooler = this.stageSpoolers.get(stage.id)
+      if (spooler) {
+        void spooler.dispose()
+        this.stageSpoolers.delete(stage.id)
+      }
     }
     this.emit('execution:cancelled', execution)
+  }
+
+  dispose(): void {
+    for (const executionId of this.executions.keys()) {
+      this.cancelExecution(executionId)
+    }
+    this.executions.clear()
+    this.pendingApprovals.clear()
+    this.stageSpoolers.clear()
   }
 }

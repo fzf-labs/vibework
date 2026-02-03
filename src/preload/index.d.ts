@@ -1,6 +1,15 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
 type UnknownRecord = Record<string, unknown>
+type CliSessionStatus = 'idle' | 'running' | 'stopped' | 'error'
+
+interface CliSessionInfo {
+  id: string
+  status: CliSessionStatus
+  workdir: string
+  toolId: string
+  startTime: string
+}
 interface FileEntry {
   name: string
   path: string
@@ -80,7 +89,12 @@ interface CLIAPI {
     cwd?: string
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
-  getOutput: (sessionId: string) => Promise<string[]>
+  getOutput: (sessionId: string) => Promise<{
+    output: string[]
+    truncated: boolean
+    byteLength: number
+    entryCount: number
+  }>
 }
 
 interface ClaudeCodeAPI {
@@ -94,7 +108,7 @@ interface ClaudeCodeAPI {
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getOutput: (sessionId: string) => Promise<string[]>
-  getSessions: () => Promise<unknown[]>
+  getSessions: () => Promise<CliSessionInfo[]>
   getSession: (sessionId: string) => Promise<unknown>
   onStatus: (
     callback: (data: { sessionId: string; status: string; forced?: boolean }) => void
@@ -118,16 +132,16 @@ interface CliSessionAPI {
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getSessions: () => Promise<unknown[]>
-  getSession: (sessionId: string) => Promise<unknown>
+  getSession: (sessionId: string) => Promise<CliSessionInfo | null>
   appendLog: (sessionId: string, msg: unknown, projectId?: string | null) => Promise<unknown>
   onStatus: (
-    callback: (data: { sessionId: string; status: string; forced?: boolean }) => void
+    callback: (data: { sessionId: string; status: CliSessionStatus; forced?: boolean }) => void
   ) => () => void
   onOutput: (
     callback: (data: { sessionId: string; type: string; content: string }) => void
   ) => () => void
   onClose: (
-    callback: (data: { sessionId: string; code: number; forcedStatus?: string }) => void
+    callback: (data: { sessionId: string; code: number; forcedStatus?: CliSessionStatus }) => void
   ) => () => void
   onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void
 }

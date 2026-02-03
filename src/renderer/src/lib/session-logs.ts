@@ -23,10 +23,7 @@ export async function getSessionLogPath(
   return `${root}/data/sessions/${projectKey}/${sessionId}.jsonl`
 }
 
-export async function ensureSessionDir(
-  sessionId: string,
-  projectId?: string | null
-): Promise<string> {
+export async function ensureSessionDir(projectId?: string | null): Promise<string> {
   const root = await getVibeworkDataDir()
   const projectKey = projectId?.trim() || 'project'
   const dir = `${root}/data/sessions/${projectKey}`
@@ -46,7 +43,7 @@ export async function appendSessionLog(
   entry: SessionLogEntry,
   projectId?: string | null
 ): Promise<void> {
-  await ensureSessionDir(sessionId, projectId)
+  await ensureSessionDir(projectId)
   const logPath = await getSessionLogPath(sessionId, projectId)
   const line = JSON.stringify(entry) + '\n'
   await fs.appendTextFile(logPath, line)

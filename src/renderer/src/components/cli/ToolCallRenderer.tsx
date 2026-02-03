@@ -374,8 +374,7 @@ export function ToolCallRenderer({ entry, result, timestampLabel }: ToolCallRend
     return safeStringify(result.content)
   }, [result])
 
-  const { status, isError } = deriveStatus(result, outputText)
-  const isRunning = status === 'running' && !result
+  const { isError } = deriveStatus(result, outputText)
 
   const parsedOutput = useMemo(() => {
     if (!outputText) return undefined

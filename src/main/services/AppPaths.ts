@@ -122,6 +122,41 @@ export class AppPaths {
   }
 
   /**
+   * 获取数据库备份目录
+   */
+  getDatabaseBackupsDir(): string {
+    return join(this.getDataDir(), 'db-backups')
+  }
+
+  /**
+   * 获取 CLI 输出日志目录
+   */
+  getCliOutputDir(): string {
+    return join(this.getLogsDir(), 'cli-output')
+  }
+
+  /**
+   * 获取 CLI 输出日志文件路径
+   */
+  getCliOutputFile(sessionId: string): string {
+    return join(this.getCliOutputDir(), `${sessionId}.log`)
+  }
+
+  /**
+   * 获取流水线输出日志目录
+   */
+  getPipelineOutputDir(): string {
+    return join(this.getLogsDir(), 'pipeline-output')
+  }
+
+  /**
+   * 获取流水线阶段输出日志文件路径
+   */
+  getPipelineStageOutputFile(executionId: string, stageId: string): string {
+    return join(this.getPipelineOutputDir(), `${executionId}-${stageId}.log`)
+  }
+
+  /**
    * 获取应用设置文件路径
    */
   getSettingsFile(): string {
@@ -138,6 +173,9 @@ export class AppPaths {
       this.getDataDir(),
       this.getLogsDir(),
       this.getSessionsDir(),
+      this.getDatabaseBackupsDir(),
+      this.getCliOutputDir(),
+      this.getPipelineOutputDir(),
       this.getCacheDir(),
       this.getWorktreesDir(),
     ]

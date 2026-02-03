@@ -10,7 +10,6 @@ import { db, type Task } from '@/data';
 import { getSettings } from '@/data/settings';
 import {
   useAgent,
-  type AgentMessage,
   type MessageAttachment,
 } from '@/hooks/useAgent';
 import { useVitePreview } from '@/hooks/useVitePreview';
@@ -401,9 +400,11 @@ export function TaskDetailContainer() {
   }, [taskId, navigate]);
 
   // Handle artifact selection - opens preview
-  const handleSelectArtifact = useCallback((artifact: Artifact) => {
+  const handleSelectArtifact = useCallback((artifact: Artifact | null) => {
     setSelectedArtifact(artifact);
-    setIsPreviewVisible(true);
+    if (artifact) {
+      setIsPreviewVisible(true);
+    }
   }, []);
 
   // Handle closing preview

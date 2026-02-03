@@ -3,6 +3,7 @@ import type { IpcMainInvokeEvent } from 'electron'
 import type { IpcDependencies, IpcModuleContext } from './types'
 import { wrapHandler, v, Validator } from '../utils/ipc-response'
 import { auditSecurityEvent } from '../utils/security-audit'
+import type { IpcArgs, IpcContractChannel, IpcResult } from './channels'
 import { registerProjectsIpc } from './projects.ipc'
 import { registerGitIpc } from './git.ipc'
 import { registerCliIpc } from './cli.ipc'
@@ -21,10 +22,10 @@ import { registerTaskIpc } from './task.ipc'
 import { registerAppIpc } from './app.ipc'
 
 export const registerIpcHandlers = (deps: IpcDependencies): void => {
-  const handle = <T extends unknown[], R>(
-    channel: string,
-    validators: { [K in keyof T]: Validator<T[K]> },
-    handler: (event: IpcMainInvokeEvent, ...args: T) => Promise<R> | R
+  const handle = <C extends IpcContractChannel>(
+    channel: C,
+    validators: ReadonlyArray<Validator<unknown>>,
+    handler: (event: IpcMainInvokeEvent, ...args: IpcArgs<C>) => Promise<IpcResult<C>> | IpcResult<C>
   ): void => {
     ipcMain.handle(channel, wrapHandler(handler, validators))
   }
@@ -49,15 +50,25 @@ export const registerIpcHandlers = (deps: IpcDependencies): void => {
     targetPath: string
   ): Promise<void> => {
     const window = BrowserWindow.fromWebContents(event.sender)
-    const result = await dialog.showMessageBox(window ?? undefined, {
-      type: 'warning',
-      buttons: ['Cancel', 'Confirm'],
-      defaultId: 1,
-      cancelId: 0,
-      title: 'Confirm Destructive Operation',
-      message: `${action} will modify or remove data at:\n${targetPath}`,
-      noLink: true
-    })
+    const result = window
+      ? await dialog.showMessageBox(window, {
+          type: 'warning',
+          buttons: ['Cancel', 'Confirm'],
+          defaultId: 1,
+          cancelId: 0,
+          title: 'Confirm Destructive Operation',
+          message: `${action} will modify or remove data at:\n${targetPath}`,
+          noLink: true
+        })
+      : await dialog.showMessageBox({
+          type: 'warning',
+          buttons: ['Cancel', 'Confirm'],
+          defaultId: 1,
+          cancelId: 0,
+          title: 'Confirm Destructive Operation',
+          message: `${action} will modify or remove data at:\n${targetPath}`,
+          noLink: true
+        })
 
     if (result.response !== 1) {
       auditSecurityEvent('destructive_operation_cancelled', { action, path: targetPath })

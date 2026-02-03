@@ -1,11 +1,12 @@
 import type { IpcModuleContext } from './types'
 import type { TaskService } from '../services/TaskService'
+import { IPC_CHANNELS } from './channels'
 
 export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcModuleContext): void => {
   const { taskService } = services
 
   handle(
-    'task:create',
+    IPC_CHANNELS.task.create,
     [
       v.shape({
         title: v.string(),
@@ -30,17 +31,19 @@ export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcMo
     }
   )
 
-  handle('task:get', [v.string()], (_, id) => taskService.getTask(id))
+  handle(IPC_CHANNELS.task.get, [v.string()], (_, id) => taskService.getTask(id))
 
-  handle('task:getAll', [], () => taskService.getAllTasks())
+  handle(IPC_CHANNELS.task.getAll, [], () => taskService.getAllTasks())
 
-  handle('task:getByProject', [v.string()], (_, projectId) => taskService.getTasksByProjectId(projectId))
+  handle(IPC_CHANNELS.task.getByProject, [v.string()], (_, projectId) =>
+    taskService.getTasksByProjectId(projectId)
+  )
 
-  handle('task:updateStatus', [v.string(), v.enum(taskStatusValues)], (_, id, status) =>
+  handle(IPC_CHANNELS.task.updateStatus, [v.string(), v.enum(taskStatusValues)], (_, id, status) =>
     taskService.updateTaskStatus(id, status)
   )
 
-  handle('task:delete', [v.string(), v.optional(v.boolean())], async (_, id, removeWorktree) => {
+  handle(IPC_CHANNELS.task.delete, [v.string(), v.optional(v.boolean())], async (_, id, removeWorktree) => {
     return await taskService.deleteTask(id, removeWorktree)
   })
 }

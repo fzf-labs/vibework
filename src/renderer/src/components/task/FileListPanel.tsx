@@ -27,7 +27,7 @@ interface WorkspaceEntry {
 }
 
 interface FileListPanelProps {
-  workingDir: string;
+  workingDir: string | null;
   branchName?: string | null;
   selectedArtifact: Artifact | null;
   onSelectArtifact: (artifact: Artifact) => void;

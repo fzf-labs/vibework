@@ -177,4 +177,15 @@ export class CliSessionService extends EventEmitter {
     const fallbackStore = new MsgStoreService(undefined, sessionId, projectId)
     fallbackStore.push(msg)
   }
+
+  dispose(): void {
+    for (const [sessionId, session] of this.sessions.entries()) {
+      try {
+        session.handle.stop()
+      } catch (error) {
+        console.error('[CliSessionService] Failed to stop session:', sessionId, error)
+      }
+      this.sessions.delete(sessionId)
+    }
+  }
 }

@@ -1,7 +1,14 @@
 import Database from 'better-sqlite3'
-import { existsSync, rmSync } from 'fs'
+import { existsSync } from 'fs'
 import { getAppPaths } from './AppPaths'
 import { newUlid } from '../utils/ids'
+import { dialog } from 'electron'
+import {
+  createDatabaseBackup,
+  restoreDatabaseBackup,
+  resetDatabaseFiles,
+  DatabaseBackup
+} from '../utils/db-backup'
 
 // 类型定义
 export interface Project {
@@ -167,39 +174,126 @@ interface UpdateWorkflowTemplateInput {
 export class DatabaseService {
   private db: Database.Database
   private workNodeStatusListeners: Array<(node: WorkNode) => void> = []
+  private dbPath: string
+  private backupPaths: DatabaseBackup | null = null
 
   constructor() {
     const appPaths = getAppPaths()
-    const dbPath = appPaths.getDatabaseFile()
-    this.resetLegacyDatabase(dbPath)
-    console.log('[DatabaseService] Initializing database at:', dbPath)
-    this.db = new Database(dbPath)
+    this.dbPath = appPaths.getDatabaseFile()
+    this.handleLegacyDatabase(this.dbPath, appPaths)
+    console.log('[DatabaseService] Initializing database at:', this.dbPath)
+    try {
+      this.db = new Database(this.dbPath)
+    } catch (error) {
+      if (this.backupPaths) {
+        console.error('[DatabaseService] Failed to open database, restoring backup:', error)
+        this.restoreDatabaseBackup(this.backupPaths)
+        dialog.showErrorBox(
+          'Database Open Failed',
+          'Failed to open the database after migration. The backup has been restored.'
+        )
+      }
+      throw error
+    }
     this.db.pragma('journal_mode = WAL')
-    this.initTables()
+    try {
+      this.initTables()
+    } catch (error) {
+      if (this.backupPaths) {
+        console.error('[DatabaseService] Failed to initialize tables, restoring backup:', error)
+        this.restoreDatabaseBackup(this.backupPaths)
+        dialog.showErrorBox(
+          'Database Initialization Failed',
+          'Failed to initialize the database. The backup has been restored.'
+        )
+      }
+      throw error
+    }
   }
 
-  private resetLegacyDatabase(dbPath: string): void {
+  private handleLegacyDatabase(dbPath: string, appPaths: ReturnType<typeof getAppPaths>): void {
     if (!existsSync(dbPath)) return
+
+    const legacyTables = [
+      'sessions',
+      'messages',
+      'global_workflow_templates',
+      'project_workflow_templates',
+      'global_work_node_templates',
+      'project_work_node_templates'
+    ]
+
     let shouldReset = false
+    let reason = ''
     try {
       const probe = new Database(dbPath, { readonly: true })
-      const legacyTables = probe.prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('sessions', 'messages', 'global_workflow_templates', 'project_workflow_templates', 'global_work_node_templates', 'project_work_node_templates')"
-      ).all()
-      shouldReset = legacyTables.length > 0
+      const found = probe
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name IN (${legacyTables
+            .map(() => '?')
+            .join(',')})`
+        )
+        .all(...legacyTables)
+      shouldReset = found.length > 0
+      if (shouldReset) {
+        reason = `Detected legacy tables: ${found.map((row: any) => row.name).join(', ')}`
+      }
       probe.close()
     } catch (error) {
-      console.error('[DatabaseService] Failed to probe database schema, resetting:', error)
+      console.error('[DatabaseService] Failed to probe database schema:', error)
       shouldReset = true
+      reason = 'Database probe failed; possible legacy or corrupted schema.'
     }
 
     if (!shouldReset) return
 
-    const walPath = `${dbPath}-wal`
-    const shmPath = `${dbPath}-shm`
-    rmSync(dbPath, { force: true })
-    rmSync(walPath, { force: true })
-    rmSync(shmPath, { force: true })
+    const approved = this.confirmLegacyReset(dbPath, reason)
+    if (!approved) {
+      console.warn('[DatabaseService] Legacy database reset cancelled by user.')
+      return
+    }
+
+    const backup = createDatabaseBackup(dbPath, appPaths.getDatabaseBackupsDir())
+    console.log('[DatabaseService] Backup created at:', backup.backup.db)
+    this.backupPaths = backup
+    try {
+      resetDatabaseFiles(dbPath)
+    } catch (error) {
+      console.error('[DatabaseService] Failed to reset legacy database:', error)
+      restoreDatabaseBackup(backup)
+      dialog.showErrorBox(
+        'Database Reset Failed',
+        'Failed to reset the legacy database. Your backup has been restored.'
+      )
+      throw error
+    }
+  }
+
+  private confirmLegacyReset(dbPath: string, reason: string): boolean {
+    try {
+      const result = dialog.showMessageBoxSync({
+        type: 'warning',
+        buttons: ['Cancel', 'Reset Database'],
+        defaultId: 1,
+        cancelId: 0,
+        title: 'Legacy Database Detected',
+        message: `A legacy or incompatible database was detected at:\n${dbPath}\n\n${reason}\n\nResetting will remove the existing database after creating a backup.`,
+        noLink: true
+      })
+      return result === 1
+    } catch (error) {
+      console.error('[DatabaseService] Failed to show confirmation dialog:', error)
+      return false
+    }
+  }
+
+  private restoreDatabaseBackup(backup: DatabaseBackup): void {
+    try {
+      restoreDatabaseBackup(backup)
+      console.log('[DatabaseService] Backup restored from:', backup.backup.db)
+    } catch (error) {
+      console.error('[DatabaseService] Failed to restore database backup:', error)
+    }
   }
 
   onWorkNodeStatusChange(listener: (node: WorkNode) => void): () => void {
@@ -1090,5 +1184,9 @@ export class DatabaseService {
   close(): void {
     console.log('[DatabaseService] Closing database connection')
     this.db.close()
+  }
+
+  dispose(): void {
+    this.close()
   }
 }

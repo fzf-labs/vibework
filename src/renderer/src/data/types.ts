@@ -43,6 +43,7 @@ export interface Task {
   workspace_path?: string | null; // Actual workspace path for the task
   cli_tool_id?: string | null; // Selected CLI tool id
   workflow_template_id?: string | null; // Selected workflow template
+  pipeline_template_id?: string | null; // Selected pipeline template
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +61,7 @@ export interface CreateTaskInput {
   workspace_path?: string | null;
   cli_tool_id?: string | null;
   workflow_template_id?: string | null;
+  pipeline_template_id?: string | null;
 }
 
 export interface UpdateTaskInput {
@@ -76,4 +78,5 @@ export interface UpdateTaskInput {
   workspace_path?: string | null;
   cli_tool_id?: string | null;
   workflow_template_id?: string | null;
+  pipeline_template_id?: string | null;
 }

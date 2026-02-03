@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { IPC_CHANNELS, IPC_EVENTS } from '../main/ipc/channels'
 
 const electronAPI = {
   ipcRenderer: {
@@ -25,20 +26,20 @@ const invoke = async <T>(channel: string, ...args: unknown[]): Promise<T> => {
 // Custom APIs for renderer
 const api = {
   projects: {
-    getAll: () => invoke('projects:getAll'),
-    get: (id: string) => invoke('projects:get', id),
-    add: (project: Record<string, unknown>) => invoke('projects:add', project),
+    getAll: () => invoke(IPC_CHANNELS.projects.getAll),
+    get: (id: string) => invoke(IPC_CHANNELS.projects.get, id),
+    add: (project: Record<string, unknown>) => invoke(IPC_CHANNELS.projects.add, project),
     update: (id: string, updates: Record<string, unknown>) =>
-      invoke('projects:update', id, updates),
-    delete: (id: string) => invoke('projects:delete', id),
-    checkPath: (id: string) => invoke('projects:checkPath', id)
+      invoke(IPC_CHANNELS.projects.update, id, updates),
+    delete: (id: string) => invoke(IPC_CHANNELS.projects.delete, id),
+    checkPath: (id: string) => invoke(IPC_CHANNELS.projects.checkPath, id)
   },
   git: {
-    checkInstalled: () => invoke('git:checkInstalled'),
+    checkInstalled: () => invoke(IPC_CHANNELS.git.checkInstalled),
     clone: (remoteUrl: string, targetPath: string) =>
-      invoke('git:clone', remoteUrl, targetPath),
-    init: (path: string) => invoke('git:init', path),
-    listWorktrees: (repoPath: string) => invoke('git:listWorktrees', repoPath),
+      invoke(IPC_CHANNELS.git.clone, remoteUrl, targetPath),
+    init: (path: string) => invoke(IPC_CHANNELS.git.init, path),
+    listWorktrees: (repoPath: string) => invoke(IPC_CHANNELS.git.listWorktrees, repoPath),
     addWorktree: (
       repoPath: string,
       worktreePath: string,
@@ -47,7 +48,7 @@ const api = {
       baseBranch?: string
     ) =>
       invoke(
-        'git:addWorktree',
+        IPC_CHANNELS.git.addWorktree,
         repoPath,
         worktreePath,
         branchName,
@@ -55,85 +56,85 @@ const api = {
         baseBranch
       ),
     removeWorktree: (repoPath: string, worktreePath: string, force: boolean) =>
-      invoke('git:removeWorktree', repoPath, worktreePath, force),
-    pruneWorktrees: (repoPath: string) => invoke('git:pruneWorktrees', repoPath),
+      invoke(IPC_CHANNELS.git.removeWorktree, repoPath, worktreePath, force),
+    pruneWorktrees: (repoPath: string) => invoke(IPC_CHANNELS.git.pruneWorktrees, repoPath),
     getDiff: (repoPath: string, filePath?: string) =>
-      invoke('git:getDiff', repoPath, filePath),
+      invoke(IPC_CHANNELS.git.getDiff, repoPath, filePath),
     getStagedDiff: (repoPath: string, filePath?: string) =>
-      invoke('git:getStagedDiff', repoPath, filePath),
-    getBranches: (repoPath: string) => invoke('git:getBranches', repoPath),
-    getCurrentBranch: (repoPath: string) => invoke('git:getCurrentBranch', repoPath),
-    getChangedFiles: (repoPath: string) => invoke('git:getChangedFiles', repoPath),
+      invoke(IPC_CHANNELS.git.getStagedDiff, repoPath, filePath),
+    getBranches: (repoPath: string) => invoke(IPC_CHANNELS.git.getBranches, repoPath),
+    getCurrentBranch: (repoPath: string) => invoke(IPC_CHANNELS.git.getCurrentBranch, repoPath),
+    getChangedFiles: (repoPath: string) => invoke(IPC_CHANNELS.git.getChangedFiles, repoPath),
     getBranchDiffFiles: (
       repoPath: string,
       baseBranch: string,
       compareBranch?: string
-    ) => invoke('git:getBranchDiffFiles', repoPath, baseBranch, compareBranch),
+    ) => invoke(IPC_CHANNELS.git.getBranchDiffFiles, repoPath, baseBranch, compareBranch),
     stageFiles: (repoPath: string, filePaths: string[]) =>
-      invoke('git:stageFiles', repoPath, filePaths),
+      invoke(IPC_CHANNELS.git.stageFiles, repoPath, filePaths),
     unstageFiles: (repoPath: string, filePaths: string[]) =>
-      invoke('git:unstageFiles', repoPath, filePaths),
+      invoke(IPC_CHANNELS.git.unstageFiles, repoPath, filePaths),
     mergeBranch: (repoPath: string, branchName: string) =>
-      invoke('git:mergeBranch', repoPath, branchName),
-    getConflictFiles: (repoPath: string) => invoke('git:getConflictFiles', repoPath),
-    abortMerge: (repoPath: string) => invoke('git:abortMerge', repoPath),
+      invoke(IPC_CHANNELS.git.mergeBranch, repoPath, branchName),
+    getConflictFiles: (repoPath: string) => invoke(IPC_CHANNELS.git.getConflictFiles, repoPath),
+    abortMerge: (repoPath: string) => invoke(IPC_CHANNELS.git.abortMerge, repoPath),
     getConflictContent: (repoPath: string, filePath: string) =>
-      invoke('git:getConflictContent', repoPath, filePath),
+      invoke(IPC_CHANNELS.git.getConflictContent, repoPath, filePath),
     resolveConflict: (repoPath: string, filePath: string, strategy: 'ours' | 'theirs') =>
-      invoke('git:resolveConflict', repoPath, filePath, strategy),
+      invoke(IPC_CHANNELS.git.resolveConflict, repoPath, filePath, strategy),
     rebaseBranch: (repoPath: string, targetBranch: string) =>
-      invoke('git:rebaseBranch', repoPath, targetBranch),
-    rebaseContinue: (repoPath: string) => invoke('git:rebaseContinue', repoPath),
-    rebaseAbort: (repoPath: string) => invoke('git:rebaseAbort', repoPath),
-    rebaseSkip: (repoPath: string) => invoke('git:rebaseSkip', repoPath),
+      invoke(IPC_CHANNELS.git.rebaseBranch, repoPath, targetBranch),
+    rebaseContinue: (repoPath: string) => invoke(IPC_CHANNELS.git.rebaseContinue, repoPath),
+    rebaseAbort: (repoPath: string) => invoke(IPC_CHANNELS.git.rebaseAbort, repoPath),
+    rebaseSkip: (repoPath: string) => invoke(IPC_CHANNELS.git.rebaseSkip, repoPath),
     getRemoteUrl: (repoPath: string, remoteName?: string) =>
-      invoke('git:getRemoteUrl', repoPath, remoteName),
+      invoke(IPC_CHANNELS.git.getRemoteUrl, repoPath, remoteName),
     pushBranch: (repoPath: string, branchName: string, remoteName?: string, force?: boolean) =>
-      invoke('git:pushBranch', repoPath, branchName, remoteName, force),
+      invoke(IPC_CHANNELS.git.pushBranch, repoPath, branchName, remoteName, force),
     getCommitLog: (repoPath: string, limit?: number) =>
-      invoke('git:getCommitLog', repoPath, limit),
+      invoke(IPC_CHANNELS.git.getCommitLog, repoPath, limit),
     getParsedDiff: (repoPath: string, filePath?: string) =>
-      invoke('git:getParsedDiff', repoPath, filePath),
+      invoke(IPC_CHANNELS.git.getParsedDiff, repoPath, filePath),
     getParsedStagedDiff: (repoPath: string, filePath?: string) =>
-      invoke('git:getParsedStagedDiff', repoPath, filePath),
+      invoke(IPC_CHANNELS.git.getParsedStagedDiff, repoPath, filePath),
     checkoutBranch: (repoPath: string, branchName: string) =>
-      invoke('git:checkoutBranch', repoPath, branchName),
+      invoke(IPC_CHANNELS.git.checkoutBranch, repoPath, branchName),
     createBranch: (repoPath: string, branchName: string) =>
-      invoke('git:createBranch', repoPath, branchName)
+      invoke(IPC_CHANNELS.git.createBranch, repoPath, branchName)
   },
   cli: {
     startSession: (sessionId: string, command: string, args: string[], cwd?: string) =>
-      invoke('cli:startSession', sessionId, command, args, cwd),
-    stopSession: (sessionId: string) => invoke('cli:stopSession', sessionId),
-    getOutput: (sessionId: string) => invoke('cli:getOutput', sessionId)
+      invoke(IPC_CHANNELS.cli.startSession, sessionId, command, args, cwd),
+    stopSession: (sessionId: string) => invoke(IPC_CHANNELS.cli.stopSession, sessionId),
+    getOutput: (sessionId: string) => invoke(IPC_CHANNELS.cli.getOutput, sessionId)
   },
   claudeCode: {
-    getConfig: () => invoke('claudeCode:getConfig'),
+    getConfig: () => invoke(IPC_CHANNELS.claudeCode.getConfig),
     saveConfig: (config: Record<string, unknown>) =>
-      invoke('claudeCode:saveConfig', config),
+      invoke(IPC_CHANNELS.claudeCode.saveConfig, config),
     startSession: (sessionId: string, workdir: string, options?: { model?: string; prompt?: string }) =>
-      invoke('claudeCode:startSession', sessionId, workdir, options),
-    stopSession: (sessionId: string) => invoke('claudeCode:stopSession', sessionId),
+      invoke(IPC_CHANNELS.claudeCode.startSession, sessionId, workdir, options),
+    stopSession: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.stopSession, sessionId),
     sendInput: (sessionId: string, input: string) =>
-      invoke('claudeCode:sendInput', sessionId, input),
-    getOutput: (sessionId: string) => invoke('claudeCode:getOutput', sessionId),
-    getSessions: () => invoke('claudeCode:getSessions'),
-    getSession: (sessionId: string) => invoke('claudeCode:getSession', sessionId),
+      invoke(IPC_CHANNELS.claudeCode.sendInput, sessionId, input),
+    getOutput: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.getOutput, sessionId),
+    getSessions: () => invoke(IPC_CHANNELS.claudeCode.getSessions),
+    getSession: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.getSession, sessionId),
     onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
         callback(data)
-      ipcRenderer.on('claudeCode:output', listener)
-      return () => ipcRenderer.removeListener('claudeCode:output', listener)
+      ipcRenderer.on(IPC_EVENTS.claudeCode.output, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.claudeCode.output, listener)
     },
     onClose: (callback: (data: { sessionId: string; code: number }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; code: number }) => callback(data)
-      ipcRenderer.on('claudeCode:close', listener)
-      return () => ipcRenderer.removeListener('claudeCode:close', listener)
+      ipcRenderer.on(IPC_EVENTS.claudeCode.close, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.claudeCode.close, listener)
     },
     onError: (callback: (data: { sessionId: string; error: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; error: string }) => callback(data)
-      ipcRenderer.on('claudeCode:error', listener)
-      return () => ipcRenderer.removeListener('claudeCode:error', listener)
+      ipcRenderer.on(IPC_EVENTS.claudeCode.error, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.claudeCode.error, listener)
     }
   },
   cliSession: {
@@ -142,92 +143,92 @@ const api = {
       toolId: string,
       workdir: string,
       options?: { model?: string; prompt?: string }
-    ) => invoke('cliSession:startSession', sessionId, toolId, workdir, options),
-    stopSession: (sessionId: string) => invoke('cliSession:stopSession', sessionId),
+    ) => invoke(IPC_CHANNELS.cliSession.startSession, sessionId, toolId, workdir, options),
+    stopSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.stopSession, sessionId),
     sendInput: (sessionId: string, input: string) =>
-      invoke('cliSession:sendInput', sessionId, input),
-    getSessions: () => invoke('cliSession:getSessions'),
-    getSession: (sessionId: string) => invoke('cliSession:getSession', sessionId),
+      invoke(IPC_CHANNELS.cliSession.sendInput, sessionId, input),
+    getSessions: () => invoke(IPC_CHANNELS.cliSession.getSessions),
+    getSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.getSession, sessionId),
     appendLog: (sessionId: string, msg: unknown, projectId?: string | null) =>
-      invoke('cliSession:appendLog', sessionId, msg, projectId),
+      invoke(IPC_CHANNELS.cliSession.appendLog, sessionId, msg, projectId),
     onStatus: (callback: (data: { sessionId: string; status: string; forced?: boolean }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; status: string; forced?: boolean }) =>
         callback(data)
-      ipcRenderer.on('cliSession:status', listener)
-      return () => ipcRenderer.removeListener('cliSession:status', listener)
+      ipcRenderer.on(IPC_EVENTS.cliSession.status, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.cliSession.status, listener)
     },
     onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
         callback(data)
-      ipcRenderer.on('cliSession:output', listener)
-      return () => ipcRenderer.removeListener('cliSession:output', listener)
+      ipcRenderer.on(IPC_EVENTS.cliSession.output, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.cliSession.output, listener)
     },
     onClose: (callback: (data: { sessionId: string; code: number; forcedStatus?: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; code: number; forcedStatus?: string }) => callback(data)
-      ipcRenderer.on('cliSession:close', listener)
-      return () => ipcRenderer.removeListener('cliSession:close', listener)
+      ipcRenderer.on(IPC_EVENTS.cliSession.close, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.cliSession.close, listener)
     },
     onError: (callback: (data: { sessionId: string; error: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; error: string }) => callback(data)
-      ipcRenderer.on('cliSession:error', listener)
-      return () => ipcRenderer.removeListener('cliSession:error', listener)
+      ipcRenderer.on(IPC_EVENTS.cliSession.error, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.cliSession.error, listener)
     }
   },
   logStream: {
-    subscribe: (sessionId: string) => invoke('logStream:subscribe', sessionId),
-    unsubscribe: (sessionId: string) => invoke('logStream:unsubscribe', sessionId),
-    getHistory: (sessionId: string) => invoke('logStream:getHistory', sessionId),
+    subscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.subscribe, sessionId),
+    unsubscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.unsubscribe, sessionId),
+    getHistory: (sessionId: string) => invoke(IPC_CHANNELS.logStream.getHistory, sessionId),
     onMessage: (callback: (sessionId: string, msg: unknown) => void) => {
       const listener = (_: unknown, sessionId: string, msg: unknown) => callback(sessionId, msg)
-      ipcRenderer.on('logStream:message', listener)
-      return () => ipcRenderer.removeListener('logStream:message', listener)
+      ipcRenderer.on(IPC_EVENTS.logStream.message, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.logStream.message, listener)
     }
   },
   workNode: {
     onCompleted: (callback: (data: { id: string; name?: string }) => void) => {
       const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
-      ipcRenderer.on('workNode:completed', listener)
-      return () => ipcRenderer.removeListener('workNode:completed', listener)
+      ipcRenderer.on(IPC_EVENTS.workNode.completed, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.workNode.completed, listener)
     },
     onReview: (callback: (data: { id: string; name?: string }) => void) => {
       const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
-      ipcRenderer.on('workNode:review', listener)
-      return () => ipcRenderer.removeListener('workNode:review', listener)
+      ipcRenderer.on(IPC_EVENTS.workNode.review, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.workNode.review, listener)
     }
   },
   cliTools: {
-    getAll: () => invoke('cliTools:getAll'),
-    detect: (toolId: string) => invoke('cliTools:detect', toolId),
-    detectAll: () => invoke('cliTools:detectAll')
+    getAll: () => invoke(IPC_CHANNELS.cliTools.getAll),
+    detect: (toolId: string) => invoke(IPC_CHANNELS.cliTools.detect, toolId),
+    detectAll: () => invoke(IPC_CHANNELS.cliTools.detectAll)
   },
   cliToolConfig: {
-    get: (toolId: string) => invoke('cliToolConfig:get', toolId),
+    get: (toolId: string) => invoke(IPC_CHANNELS.cliToolConfig.get, toolId),
     save: (toolId: string, config: Record<string, unknown>) =>
-      invoke('cliToolConfig:save', toolId, config)
+      invoke(IPC_CHANNELS.cliToolConfig.save, toolId, config)
   },
   editor: {
-    getAvailable: () => invoke('editor:getAvailable'),
+    getAvailable: () => invoke(IPC_CHANNELS.editor.getAvailable),
     openProject: (projectPath: string, editorCommand: string) =>
-      invoke('editor:openProject', projectPath, editorCommand)
+      invoke(IPC_CHANNELS.editor.openProject, projectPath, editorCommand)
   },
   pipeline: {
     execute: (pipelineId: string, stages: unknown[], workingDirectory?: string) =>
-      invoke('pipeline:execute', pipelineId, stages, workingDirectory),
-    getExecution: (executionId: string) => invoke('pipeline:getExecution', executionId),
-    getAllExecutions: () => invoke('pipeline:getAllExecutions'),
+      invoke(IPC_CHANNELS.pipeline.execute, pipelineId, stages, workingDirectory),
+    getExecution: (executionId: string) => invoke(IPC_CHANNELS.pipeline.getExecution, executionId),
+    getAllExecutions: () => invoke(IPC_CHANNELS.pipeline.getAllExecutions),
     approveStage: (stageExecutionId: string, approvedBy: string) =>
-      invoke('pipeline:approveStage', stageExecutionId, approvedBy),
-    cancel: (executionId: string) => invoke('pipeline:cancel', executionId)
+      invoke(IPC_CHANNELS.pipeline.approveStage, stageExecutionId, approvedBy),
+    cancel: (executionId: string) => invoke(IPC_CHANNELS.pipeline.cancel, executionId)
   },
   previewConfig: {
-    getAll: () => invoke('previewConfig:getAll'),
+    getAll: () => invoke(IPC_CHANNELS.previewConfig.getAll),
     getByProject: (projectId: string) =>
-      invoke('previewConfig:getByProject', projectId),
-    get: (id: string) => invoke('previewConfig:get', id),
-    add: (config: Record<string, unknown>) => invoke('previewConfig:add', config),
+      invoke(IPC_CHANNELS.previewConfig.getByProject, projectId),
+    get: (id: string) => invoke(IPC_CHANNELS.previewConfig.get, id),
+    add: (config: Record<string, unknown>) => invoke(IPC_CHANNELS.previewConfig.add, config),
     update: (id: string, updates: Record<string, unknown>) =>
-      invoke('previewConfig:update', id, updates),
-    delete: (id: string) => invoke('previewConfig:delete', id)
+      invoke(IPC_CHANNELS.previewConfig.update, id, updates),
+    delete: (id: string) => invoke(IPC_CHANNELS.previewConfig.delete, id)
   },
   preview: {
     start: (
@@ -237,13 +238,13 @@ const api = {
       args: string[],
       cwd?: string,
       env?: Record<string, string>
-    ) => invoke('preview:start', instanceId, configId, command, args, cwd, env),
-    stop: (instanceId: string) => invoke('preview:stop', instanceId),
-    getInstance: (instanceId: string) => invoke('preview:getInstance', instanceId),
-    getAllInstances: () => invoke('preview:getAllInstances'),
+    ) => invoke(IPC_CHANNELS.preview.start, instanceId, configId, command, args, cwd, env),
+    stop: (instanceId: string) => invoke(IPC_CHANNELS.preview.stop, instanceId),
+    getInstance: (instanceId: string) => invoke(IPC_CHANNELS.preview.getInstance, instanceId),
+    getAllInstances: () => invoke(IPC_CHANNELS.preview.getAllInstances),
     getOutput: (instanceId: string, limit?: number) =>
-      invoke('preview:getOutput', instanceId, limit),
-    clearInstance: (instanceId: string) => invoke('preview:clearInstance', instanceId)
+      invoke(IPC_CHANNELS.preview.getOutput, instanceId, limit),
+    clearInstance: (instanceId: string) => invoke(IPC_CHANNELS.preview.clearInstance, instanceId)
   },
   notification: {
     show: (options: {
@@ -252,111 +253,113 @@ const api = {
       icon?: string
       silent?: boolean
       urgency?: 'normal' | 'critical' | 'low'
-    }) => invoke('notification:show', options),
-    setEnabled: (enabled: boolean) => invoke('notification:setEnabled', enabled),
-    isEnabled: () => invoke('notification:isEnabled'),
+    }) => invoke(IPC_CHANNELS.notification.show, options),
+    setEnabled: (enabled: boolean) => invoke(IPC_CHANNELS.notification.setEnabled, enabled),
+    isEnabled: () => invoke(IPC_CHANNELS.notification.isEnabled),
     setSoundEnabled: (enabled: boolean) =>
-      invoke('notification:setSoundEnabled', enabled),
-    isSoundEnabled: () => invoke('notification:isSoundEnabled'),
+      invoke(IPC_CHANNELS.notification.setSoundEnabled, enabled),
+    isSoundEnabled: () => invoke(IPC_CHANNELS.notification.isSoundEnabled),
     setSoundSettings: (settings: {
       enabled?: boolean
       taskComplete?: boolean
       stageComplete?: boolean
       error?: boolean
-    }) => invoke('notification:setSoundSettings', settings),
-    getSoundSettings: () => invoke('notification:getSoundSettings')
+    }) => invoke(IPC_CHANNELS.notification.setSoundSettings, settings),
+    getSoundSettings: () => invoke(IPC_CHANNELS.notification.getSoundSettings)
   },
   database: {
     // Task operations
-    createTask: (input: unknown) => invoke('db:createTask', input),
-    getTask: (id: string) => invoke('db:getTask', id),
-    getAllTasks: () => invoke('db:getAllTasks'),
-    updateTask: (id: string, updates: unknown) => invoke('db:updateTask', id, updates),
-    deleteTask: (id: string) => invoke('db:deleteTask', id),
+    createTask: (input: unknown) => invoke(IPC_CHANNELS.database.createTask, input),
+    getTask: (id: string) => invoke(IPC_CHANNELS.database.getTask, id),
+    getAllTasks: () => invoke(IPC_CHANNELS.database.getAllTasks),
+    updateTask: (id: string, updates: unknown) =>
+      invoke(IPC_CHANNELS.database.updateTask, id, updates),
+    deleteTask: (id: string) => invoke(IPC_CHANNELS.database.deleteTask, id),
     getTasksByProjectId: (projectId: string) =>
-      invoke('db:getTasksByProjectId', projectId),
+      invoke(IPC_CHANNELS.database.getTasksByProjectId, projectId),
     // Workflow template operations
-    getGlobalWorkflowTemplates: () => invoke('db:getGlobalWorkflowTemplates'),
+    getGlobalWorkflowTemplates: () => invoke(IPC_CHANNELS.database.getGlobalWorkflowTemplates),
     getWorkflowTemplatesByProject: (projectId: string) =>
-      invoke('db:getWorkflowTemplatesByProject', projectId),
+      invoke(IPC_CHANNELS.database.getWorkflowTemplatesByProject, projectId),
     getWorkflowTemplate: (templateId: string) =>
-      invoke('db:getWorkflowTemplate', templateId),
+      invoke(IPC_CHANNELS.database.getWorkflowTemplate, templateId),
     createWorkflowTemplate: (input: unknown) =>
-      invoke('db:createWorkflowTemplate', input),
+      invoke(IPC_CHANNELS.database.createWorkflowTemplate, input),
     updateWorkflowTemplate: (input: unknown) =>
-      invoke('db:updateWorkflowTemplate', input),
+      invoke(IPC_CHANNELS.database.updateWorkflowTemplate, input),
     deleteWorkflowTemplate: (templateId: string, scope: string) =>
-      invoke('db:deleteWorkflowTemplate', templateId, scope),
+      invoke(IPC_CHANNELS.database.deleteWorkflowTemplate, templateId, scope),
     copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) =>
-      invoke('db:copyGlobalWorkflowToProject', globalTemplateId, projectId),
+      invoke(IPC_CHANNELS.database.copyGlobalWorkflowToProject, globalTemplateId, projectId),
     // Workflow instance operations
     createWorkflow: (taskId: string) =>
-      invoke('db:createWorkflow', taskId),
-    getWorkflow: (id: string) => invoke('db:getWorkflow', id),
-    getWorkflowByTaskId: (taskId: string) => invoke('db:getWorkflowByTaskId', taskId),
+      invoke(IPC_CHANNELS.database.createWorkflow, taskId),
+    getWorkflow: (id: string) => invoke(IPC_CHANNELS.database.getWorkflow, id),
+    getWorkflowByTaskId: (taskId: string) =>
+      invoke(IPC_CHANNELS.database.getWorkflowByTaskId, taskId),
     updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) =>
-      invoke('db:updateWorkflowStatus', id, status, nodeIndex),
+      invoke(IPC_CHANNELS.database.updateWorkflowStatus, id, status, nodeIndex),
     // WorkNode instance operations
     createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) =>
-      invoke('db:createWorkNode', workflowId, templateId, nodeOrder),
+      invoke(IPC_CHANNELS.database.createWorkNode, workflowId, templateId, nodeOrder),
     getWorkNodesByWorkflowId: (workflowId: string) =>
-      invoke('db:getWorkNodesByWorkflowId', workflowId),
+      invoke(IPC_CHANNELS.database.getWorkNodesByWorkflowId, workflowId),
     updateWorkNodeStatus: (id: string, status: string) =>
-      invoke('db:updateWorkNodeStatus', id, status),
-    approveWorkNode: (id: string) => invoke('db:approveWorkNode', id),
-    rejectWorkNode: (id: string) => invoke('db:rejectWorkNode', id),
-    approveTask: (id: string) => invoke('db:approveTask', id),
+      invoke(IPC_CHANNELS.database.updateWorkNodeStatus, id, status),
+    approveWorkNode: (id: string) => invoke(IPC_CHANNELS.database.approveWorkNode, id),
+    rejectWorkNode: (id: string) => invoke(IPC_CHANNELS.database.rejectWorkNode, id),
+    approveTask: (id: string) => invoke(IPC_CHANNELS.database.approveTask, id),
     // AgentExecution operations
     createAgentExecution: (workNodeId: string) =>
-      invoke('db:createAgentExecution', workNodeId),
+      invoke(IPC_CHANNELS.database.createAgentExecution, workNodeId),
     getAgentExecutionsByWorkNodeId: (workNodeId: string) =>
-      invoke('db:getAgentExecutionsByWorkNodeId', workNodeId),
+      invoke(IPC_CHANNELS.database.getAgentExecutionsByWorkNodeId, workNodeId),
     getLatestAgentExecution: (workNodeId: string) =>
-      invoke('db:getLatestAgentExecution', workNodeId),
+      invoke(IPC_CHANNELS.database.getLatestAgentExecution, workNodeId),
     updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) =>
-      invoke('db:updateAgentExecutionStatus', id, status, cost, duration)
+      invoke(IPC_CHANNELS.database.updateAgentExecutionStatus, id, status, cost, duration)
   },
   fs: {
-    readFile: (path: string) => invoke('fs:readFile', path),
-    readTextFile: (path: string) => invoke('fs:readTextFile', path),
-    writeFile: (path: string, data: unknown) => invoke('fs:writeFile', path, data),
+    readFile: (path: string) => invoke(IPC_CHANNELS.fs.readFile, path),
+    readTextFile: (path: string) => invoke(IPC_CHANNELS.fs.readTextFile, path),
+    writeFile: (path: string, data: unknown) => invoke(IPC_CHANNELS.fs.writeFile, path, data),
     writeTextFile: (path: string, content: string) =>
-      invoke('fs:writeTextFile', path, content),
+      invoke(IPC_CHANNELS.fs.writeTextFile, path, content),
     appendTextFile: (path: string, content: string) =>
-      invoke('fs:appendTextFile', path, content),
-    stat: (path: string) => invoke('fs:stat', path),
+      invoke(IPC_CHANNELS.fs.appendTextFile, path, content),
+    stat: (path: string) => invoke(IPC_CHANNELS.fs.stat, path),
     readDir: (path: string, options?: { maxDepth?: number }) =>
-      invoke('fs:readDir', path, options),
-    exists: (path: string) => invoke('fs:exists', path),
+      invoke(IPC_CHANNELS.fs.readDir, path, options),
+    exists: (path: string) => invoke(IPC_CHANNELS.fs.exists, path),
     remove: (path: string, options?: { recursive?: boolean }) =>
-      invoke('fs:remove', path, options),
-    mkdir: (path: string) => invoke('fs:mkdir', path)
+      invoke(IPC_CHANNELS.fs.remove, path, options),
+    mkdir: (path: string) => invoke(IPC_CHANNELS.fs.mkdir, path)
   },
   dialog: {
-    save: (options: unknown) => invoke('dialog:save', options),
-    open: (options: unknown) => invoke('dialog:open', options)
+    save: (options: unknown) => invoke(IPC_CHANNELS.dialog.save, options),
+    open: (options: unknown) => invoke(IPC_CHANNELS.dialog.open, options)
   },
   shell: {
-    openUrl: (url: string) => invoke('shell:openUrl', url),
-    openPath: (path: string) => invoke('shell:openPath', path),
-    showItemInFolder: (path: string) => invoke('shell:showItemInFolder', path)
+    openUrl: (url: string) => invoke(IPC_CHANNELS.shell.openUrl, url),
+    openPath: (path: string) => invoke(IPC_CHANNELS.shell.openPath, path),
+    showItemInFolder: (path: string) => invoke(IPC_CHANNELS.shell.showItemInFolder, path)
   },
   path: {
-    appDataDir: () => invoke('path:appDataDir'),
-    appConfigDir: () => invoke('path:appConfigDir'),
-    tempDir: () => invoke('path:tempDir'),
-    resourcesDir: () => invoke('path:resourcesDir'),
-    appPath: () => invoke('path:appPath'),
-    vibeworkDataDir: () => invoke('path:vibeworkDataDir'),
-    homeDir: () => invoke('path:homeDir')
+    appDataDir: () => invoke(IPC_CHANNELS.path.appDataDir),
+    appConfigDir: () => invoke(IPC_CHANNELS.path.appConfigDir),
+    tempDir: () => invoke(IPC_CHANNELS.path.tempDir),
+    resourcesDir: () => invoke(IPC_CHANNELS.path.resourcesDir),
+    appPath: () => invoke(IPC_CHANNELS.path.appPath),
+    vibeworkDataDir: () => invoke(IPC_CHANNELS.path.vibeworkDataDir),
+    homeDir: () => invoke(IPC_CHANNELS.path.homeDir)
   },
   app: {
-    getVersion: () => invoke('app:getVersion')
+    getVersion: () => invoke(IPC_CHANNELS.app.getVersion)
   },
   settings: {
-    get: () => invoke('settings:get'),
-    update: (updates: unknown) => invoke('settings:update', updates),
-    reset: () => invoke('settings:reset')
+    get: () => invoke(IPC_CHANNELS.settings.get),
+    update: (updates: unknown) => invoke(IPC_CHANNELS.settings.update, updates),
+    reset: () => invoke(IPC_CHANNELS.settings.reset)
   },
   task: {
     create: (options: {
@@ -370,13 +373,14 @@ const api = {
       worktreeRootPath?: string
       cliToolId?: string
       workflowTemplateId?: string
-    }) => invoke('task:create', options),
-    get: (id: string) => invoke('task:get', id),
-    getAll: () => invoke('task:getAll'),
-    getByProject: (projectId: string) => invoke('task:getByProject', projectId),
-    updateStatus: (id: string, status: string) => invoke('task:updateStatus', id, status),
+    }) => invoke(IPC_CHANNELS.task.create, options),
+    get: (id: string) => invoke(IPC_CHANNELS.task.get, id),
+    getAll: () => invoke(IPC_CHANNELS.task.getAll),
+    getByProject: (projectId: string) => invoke(IPC_CHANNELS.task.getByProject, projectId),
+    updateStatus: (id: string, status: string) =>
+      invoke(IPC_CHANNELS.task.updateStatus, id, status),
     delete: (id: string, removeWorktree?: boolean) =>
-      invoke('task:delete', id, removeWorktree)
+      invoke(IPC_CHANNELS.task.delete, id, removeWorktree)
   }
 }
 

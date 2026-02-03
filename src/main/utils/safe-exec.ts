@@ -31,10 +31,8 @@ export interface SafeSpawnOptions extends SpawnOptionsWithoutStdio {
 }
 
 const normalizeAllowlist = (allowlist: ReadonlySet<string> | string[]): Set<string> => {
-  if (allowlist instanceof Set) {
-    return new Set([...allowlist].map((entry) => entry.toLowerCase()))
-  }
-  return new Set(allowlist.map((entry) => entry.toLowerCase()))
+  const entries = Array.isArray(allowlist) ? allowlist : Array.from(allowlist)
+  return new Set(entries.map((entry) => entry.toLowerCase()))
 }
 
 const resolveCommandKey = (command: string): string => basename(command).toLowerCase()
@@ -67,10 +65,15 @@ export async function safeExecFile(
     env: options.env,
     timeout: options.timeoutMs,
     windowsHide: true,
-    maxBuffer: options.maxBuffer
+    maxBuffer: options.maxBuffer,
+    encoding: 'utf8'
   }
 
-  return execFileAsync(command, args, execOptions)
+  const result = await execFileAsync(command, args, execOptions)
+  return {
+    stdout: result.stdout.toString(),
+    stderr: result.stderr.toString()
+  }
 }
 
 export function safeSpawn(

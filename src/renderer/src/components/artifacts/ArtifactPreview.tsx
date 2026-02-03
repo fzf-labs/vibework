@@ -166,30 +166,32 @@ export function ArtifactPreview({
       return;
     }
 
+    const artifactPath = artifact.path;
+
     let active = true;
     const loadTextContent = async () => {
       setTextLoading(true);
       setTextError(null);
       setTextFileTooLarge(null);
       try {
-        if (!isRemoteUrl(artifact.path)) {
-          const fileInfo = await fs.stat(artifact.path);
+        if (!isRemoteUrl(artifactPath)) {
+          const fileInfo = await fs.stat(artifactPath);
           if (fileInfo.size > MAX_PREVIEW_SIZE) {
             if (active) {
               setTextFileTooLarge(fileInfo.size);
             }
             return;
           }
-          const content = await fs.readTextFile(artifact.path);
+          const content = await fs.readTextFile(artifactPath);
           if (active) {
             setTextContent(content);
           }
           return;
         }
 
-        const url = artifact.path.startsWith('//')
-          ? `https:${artifact.path}`
-          : artifact.path;
+        const url = artifactPath.startsWith('//')
+          ? `https:${artifactPath}`
+          : artifactPath;
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(

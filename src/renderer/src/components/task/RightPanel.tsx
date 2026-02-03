@@ -10,11 +10,11 @@ import { FileListPanel } from './FileListPanel';
 export type RightPanelTab = 'files' | 'server' | 'git';
 
 interface RightPanelProps {
-  workingDir: string;
+  workingDir: string | null;
   branchName?: string | null;
   baseBranch?: string | null;
   selectedArtifact: Artifact | null;
-  onSelectArtifact: (artifact: Artifact) => void;
+  onSelectArtifact: (artifact: Artifact | null) => void;
   // Live preview props
   livePreviewUrl: string | null;
   livePreviewStatus: string;
@@ -40,6 +40,12 @@ export function RightPanel({
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightPanelTab>('files');
   const { t } = useLanguage();
+  const handleSelectArtifact = useCallback(
+    (artifact: Artifact) => {
+      onSelectArtifact(artifact);
+    },
+    [onSelectArtifact]
+  );
 
   const tabs: { id: RightPanelTab; label: string; icon: typeof FileText }[] = [
     { id: 'files', label: t.preview.filesTab, icon: FileText },
@@ -78,7 +84,7 @@ export function RightPanel({
               workingDir={workingDir}
               branchName={branchName}
               selectedArtifact={selectedArtifact}
-              onSelectArtifact={onSelectArtifact}
+              onSelectArtifact={handleSelectArtifact}
             />
             <div className="min-w-0 flex-1">{renderFilePreview()}</div>
           </div>
@@ -105,7 +111,7 @@ export function RightPanel({
 
 // Dev Server Panel Component
 interface DevServerPanelProps {
-  workingDir: string;
+  workingDir: string | null;
   previewUrl: string | null;
   status: string;
   error: string | null;
@@ -177,7 +183,7 @@ function DevServerPanel({
 
 // Git Panel Component
 interface GitPanelProps {
-  workingDir: string;
+  workingDir: string | null;
   baseBranch?: string | null;
 }
 

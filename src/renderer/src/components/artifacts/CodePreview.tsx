@@ -104,7 +104,7 @@ export function CodePreview({ artifact }: PreviewComponentProps) {
           background: 'transparent',
         }}
       >
-        {artifact.content}
+        {content}
       </SyntaxHighlighter>
     </div>
   );

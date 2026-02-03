@@ -14,6 +14,8 @@ export type {
   EditorType,
   EditorSettings,
   Settings,
+  SoundChoice,
+  SoundPresetId,
 } from './types';
 
 // General - core functions, theme

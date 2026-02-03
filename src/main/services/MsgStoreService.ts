@@ -16,7 +16,6 @@ export class MsgStoreService extends EventEmitter {
   private totalBytes = 0
   private config: MsgStoreConfig
   private _sessionId: string | null = null
-  private _projectId: string | null = null
   private logFilePath: string | null = null
   private pendingWrites: string[] = []
   private pendingBytes = 0
@@ -32,7 +31,6 @@ export class MsgStoreService extends EventEmitter {
     this.config = { ...DEFAULT_CONFIG, ...config }
     if (sessionId) {
       this._sessionId = sessionId
-      this._projectId = projectId ?? null
       const appPaths = getAppPaths()
       const projectDir = appPaths.getProjectSessionsDir(projectId)
       if (!existsSync(projectDir)) {

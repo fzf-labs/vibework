@@ -3,13 +3,17 @@ import { EventEmitter } from 'events'
 import { DataBatcher } from './DataBatcher'
 import { safeSpawn } from '../utils/safe-exec'
 import { config } from '../config'
+import { OutputBuffer, OutputSnapshot } from '../utils/output-buffer'
+import { OutputSpooler } from '../utils/output-spooler'
+import { getAppPaths } from './AppPaths'
 
 const cliProcessAllowlist = config.commandAllowlist
 
 interface Session {
   id: string
   process: ChildProcess
-  output: string[]
+  output: OutputBuffer
+  spooler?: OutputSpooler
   status: 'running' | 'stopped' | 'error'
   stdoutBatcher: DataBatcher
   stderrBatcher: DataBatcher
@@ -39,21 +43,32 @@ export class CLIProcessService extends EventEmitter {
       label: 'CLIProcessService'
     })
 
+    const outputBuffer = new OutputBuffer({
+      maxBytes: config.output.buffer.maxBytes,
+      maxEntries: config.output.buffer.maxEntries
+    })
+
+    const appPaths = getAppPaths()
+    const spooler = new OutputSpooler(appPaths.getCliOutputFile(sessionId), config.output.spool)
+
     // 创建批处理器
     const stdoutBatcher = new DataBatcher((data) => {
-      session.output.push(data)
+      outputBuffer.push(data)
+      spooler.append(`[stdout] ${data}`)
       this.emit('output', { sessionId, type: 'stdout', content: data })
     })
 
     const stderrBatcher = new DataBatcher((data) => {
-      session.output.push(data)
+      outputBuffer.push(data)
+      spooler.append(`[stderr] ${data}`)
       this.emit('output', { sessionId, type: 'stderr', content: data })
     })
 
     const session: Session = {
       id: sessionId,
       process: childProcess,
-      output: [],
+      output: outputBuffer,
+      spooler,
       status: 'running',
       stdoutBatcher,
       stderrBatcher
@@ -72,6 +87,7 @@ export class CLIProcessService extends EventEmitter {
       // 刷新批处理器
       session.stdoutBatcher.destroy()
       session.stderrBatcher.destroy()
+      void session.spooler?.dispose()
 
       session.status = code === 0 ? 'stopped' : 'error'
       this.emit('close', { sessionId, code })
@@ -90,12 +106,12 @@ export class CLIProcessService extends EventEmitter {
     session.process.kill('SIGTERM')
   }
 
-  getSessionOutput(sessionId: string): string[] {
+  getSessionOutput(sessionId: string): OutputSnapshot {
     const session = this.sessions.get(sessionId)
     if (!session) {
       throw new Error(`Session ${sessionId} not found`)
     }
-    return session.output
+    return session.output.snapshot()
   }
 
   getAllSessions(): Array<{ id: string; status: string }> {
@@ -103,5 +119,15 @@ export class CLIProcessService extends EventEmitter {
       id: s.id,
       status: s.status
     }))
+  }
+
+  dispose(): void {
+    for (const session of this.sessions.values()) {
+      session.stdoutBatcher.destroy()
+      session.stderrBatcher.destroy()
+      session.process.kill('SIGTERM')
+      void session.spooler?.dispose()
+    }
+    this.sessions.clear()
   }
 }
