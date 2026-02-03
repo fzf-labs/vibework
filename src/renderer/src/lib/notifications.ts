@@ -112,9 +112,9 @@ const getAudioContext = (): AudioContext | null => {
 const playToneSequence = (
   sequence: Array<{ frequency: number; duration: number }>,
   gapSeconds = 0.05
-): void => {
+): number => {
   const audioContext = getAudioContext();
-  if (!audioContext) return;
+  if (!audioContext) return 0;
 
   try {
     let time = audioContext.currentTime;
@@ -144,8 +144,10 @@ const playToneSequence = (
     setTimeout(() => {
       audioContext.close().catch(() => undefined);
     }, Math.max(totalDuration * 1000, 100));
+    return totalDuration;
   } catch {
     audioContext.close().catch(() => undefined);
+    return 0;
   }
 };
 
@@ -156,16 +158,15 @@ const resolvePresetId = (preset?: string): SoundPresetId => {
   return 'chime';
 };
 
-export const playSoundPreset = (preset?: string): void => {
+export const playSoundPreset = (preset?: string): number => {
   const resolved = resolvePresetId(preset);
-  if (resolved === 'silent') return;
+  if (resolved === 'silent') return 0;
 
   switch (resolved) {
     case 'ding':
-      playToneSequence([{ frequency: 740, duration: 0.28 }]);
-      return;
+      return playToneSequence([{ frequency: 740, duration: 0.28 }]);
     case 'pulse':
-      playToneSequence(
+      return playToneSequence(
         [
           { frequency: 520, duration: 0.1 },
           { frequency: 520, duration: 0.1 },
@@ -173,10 +174,9 @@ export const playSoundPreset = (preset?: string): void => {
         ],
         0.04
       );
-      return;
     case 'chime':
     default:
-      playToneSequence(
+      return playToneSequence(
         [
           { frequency: 880, duration: 0.14 },
           { frequency: 1320, duration: 0.22 },
@@ -205,7 +205,7 @@ const getAudioMimeType = (ext: string): string => {
   }
 };
 
-const playAudioFile = async (filePath: string): Promise<void> => {
+const playAudioFile = async (filePath: string, waitForEnd = false): Promise<void> => {
   if (typeof window === 'undefined' || !window.api?.fs) return;
 
   const resolvedPath = await resolveResourceSoundPath(filePath);
@@ -224,22 +224,46 @@ const playAudioFile = async (filePath: string): Promise<void> => {
       audio.src = '';
     };
 
-    audio.addEventListener('ended', cleanup, { once: true });
-    audio.addEventListener('error', cleanup, { once: true });
+    if (!waitForEnd) {
+      audio.addEventListener('ended', cleanup, { once: true });
+      audio.addEventListener('error', cleanup, { once: true });
+      await audio.play();
+      return;
+    }
 
-    await audio.play();
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+
+      audio.addEventListener('ended', finish, { once: true });
+      audio.addEventListener('error', finish, { once: true });
+      audio.play().catch(finish);
+    });
   } catch {
     // Ignore file playback errors
   }
 };
 
-export const playSoundChoice = async (choice: SoundChoice): Promise<void> => {
+export const playSoundChoice = async (
+  choice: SoundChoice,
+  options: { waitForEnd?: boolean } = {}
+): Promise<void> => {
   if (choice.source === 'file' && choice.filePath) {
-    await playAudioFile(choice.filePath);
+    await playAudioFile(choice.filePath, options.waitForEnd === true);
     return;
   }
 
-  playSoundPreset(choice.presetId);
+  const duration = playSoundPreset(choice.presetId);
+  if (options.waitForEnd && duration > 0) {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, duration * 1000);
+    });
+  }
 };
 
 export const isAudioFileExtensionSupported = (filePath: string): boolean => {

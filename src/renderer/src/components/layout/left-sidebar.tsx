@@ -49,7 +49,7 @@ export function LeftSidebar({ collapsed = false }: { collapsed?: boolean }) {
     <aside
       className={cn(
         'bg-sidebar flex h-full shrink-0 flex-col transition-all duration-300 ease-in-out',
-        collapsed ? 'w-12' : 'w-52'
+        collapsed ? 'w-12' : 'w-40'
       )}
     >
       <Navigation

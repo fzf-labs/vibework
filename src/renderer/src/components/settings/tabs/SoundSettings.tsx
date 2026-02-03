@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   isAudioFileExtensionSupported,
@@ -30,6 +30,8 @@ export function SoundSettings({
 }: SettingsTabProps) {
   const { t } = useLanguage();
   const [fileError, setFileError] = useState<string | null>(null);
+  const [previewLocks, setPreviewLocks] = useState({ task: false, node: false });
+  const previewLocksRef = useRef({ task: false, node: false });
   const filePickerDisabled =
     typeof window === 'undefined' || !window.api?.dialog || !window.api?.fs;
 
@@ -160,6 +162,21 @@ export function SoundSettings({
     });
   };
 
+  const setPreviewLocked = (kind: 'task' | 'node', locked: boolean) => {
+    previewLocksRef.current[kind] = locked;
+    setPreviewLocks((prev) => (prev[kind] === locked ? prev : { ...prev, [kind]: locked }));
+  };
+
+  const handlePreview = async (kind: 'task' | 'node', choice: SoundChoice) => {
+    if (previewLocksRef.current[kind]) return;
+    setPreviewLocked(kind, true);
+    try {
+      await playSoundChoice(choice, { waitForEnd: true });
+    } finally {
+      setPreviewLocked(kind, false);
+    }
+  };
+
   const resolveResourceSelectValue = (
     choice: SoundChoice,
     fallbackFile: string
@@ -232,13 +249,13 @@ export function SoundSettings({
               variant="outline"
               size="sm"
               onClick={() =>
-                void playSoundChoice({
+                void handlePreview('task', {
                   ...taskChoice,
                   source: 'file',
                   filePath: taskSelectValue,
                 })
               }
-              disabled={!settings.taskCompleteSoundEnabled}
+              disabled={!settings.taskCompleteSoundEnabled || previewLocks.task}
             >
               {t.settings?.soundPreview || 'Preview'}
             </Button>
@@ -280,8 +297,10 @@ export function SoundSettings({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => void playSoundChoice(taskChoice)}
-                disabled={filePickerDisabled || !settings.taskCompleteSoundEnabled}
+                onClick={() => void handlePreview('task', taskChoice)}
+                disabled={
+                  filePickerDisabled || !settings.taskCompleteSoundEnabled || previewLocks.task
+                }
               >
                 {t.settings?.soundPreview || 'Preview'}
               </Button>
@@ -339,13 +358,13 @@ export function SoundSettings({
               variant="outline"
               size="sm"
               onClick={() =>
-                void playSoundChoice({
+                void handlePreview('node', {
                   ...nodeChoice,
                   source: 'file',
                   filePath: nodeSelectValue,
                 })
               }
-              disabled={!settings.workNodeCompleteSoundEnabled}
+              disabled={!settings.workNodeCompleteSoundEnabled || previewLocks.node}
             >
               {t.settings?.soundPreview || 'Preview'}
             </Button>
@@ -387,8 +406,10 @@ export function SoundSettings({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => void playSoundChoice(nodeChoice)}
-                disabled={filePickerDisabled || !settings.workNodeCompleteSoundEnabled}
+                onClick={() => void handlePreview('node', nodeChoice)}
+                disabled={
+                  filePickerDisabled || !settings.workNodeCompleteSoundEnabled || previewLocks.node
+                }
               >
                 {t.settings?.soundPreview || 'Preview'}
               </Button>

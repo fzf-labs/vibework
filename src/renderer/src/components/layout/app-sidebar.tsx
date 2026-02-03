@@ -22,7 +22,7 @@ export function AppSidebar() {
       <aside
         className={cn(
           'bg-sidebar border-sidebar-border flex h-full shrink-0 flex-col border-r transition-all duration-300 ease-in-out',
-          leftOpen ? 'w-64' : 'w-24'
+          leftOpen ? 'w-52' : 'w-24'
         )}
       >
         <div className="border-sidebar-border flex h-12 items-stretch border-b">

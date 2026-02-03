@@ -130,6 +130,25 @@ export class WorkflowRepository {
     return del()
   }
 
+  deleteWorkflowTemplatesByProject(projectId: string): number {
+    const del = this.db.transaction(() => {
+      this.db.prepare(`
+        DELETE FROM workflow_template_nodes
+        WHERE template_id IN (
+          SELECT id FROM workflow_templates WHERE scope = 'project' AND project_id = ?
+        )
+      `).run(projectId)
+
+      const result = this.db.prepare(
+        "DELETE FROM workflow_templates WHERE scope = 'project' AND project_id = ?"
+      ).run(projectId)
+
+      return result.changes
+    })
+
+    return del()
+  }
+
   copyGlobalWorkflowToProject(globalTemplateId: string, projectId: string): WorkflowTemplate {
     const template = this.getWorkflowTemplate(globalTemplateId)
     if (!template || template.scope !== 'global') {

@@ -176,6 +176,7 @@ export function SkillsSettings({
   const [showGitHubImport, setShowGitHubImport] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [importing, setImporting] = useState(false);
+  const [homeDir, setHomeDir] = useState<string | null>(null);
   const { t } = useLanguage();
   const defaultAppSkillsPath = '~/.vibework/skills';
   const appSkillsPath = settings.skillsPath || defaultAppSkillsPath;
@@ -216,6 +217,32 @@ export function SkillsSettings({
       return targetPath.replace(/^~(?=\/|\\)/, homeDir);
     }
     return targetPath;
+  }, []);
+
+  const formatDisplayPath = useCallback((targetPath: string) => {
+    if (!targetPath || targetPath.startsWith('~') || !homeDir) return targetPath;
+    const normalizedHome = homeDir.replace(/\/$/, '');
+    if (targetPath.startsWith(normalizedHome)) {
+      const suffix = targetPath.slice(normalizedHome.length);
+      return `~${suffix || ''}`;
+    }
+    return targetPath;
+  }, [homeDir]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (window.api?.path?.homeDir) {
+      window.api.path.homeDir()
+        .then((dir) => {
+          if (!cancelled) setHomeDir(dir);
+        })
+        .catch(() => {
+          if (!cancelled) setHomeDir(null);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const readDirectoryEntries = useCallback(async (
@@ -518,7 +545,7 @@ export function SkillsSettings({
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
-                      {appSkillsPath}
+                      {formatDisplayPath(appSkillsPath)}
                     </code>
                     <button
                       onClick={() => openFolderInSystem(appSkillsPath)}
@@ -607,7 +634,7 @@ export function SkillsSettings({
                           </div>
                           <div className="mt-2 flex items-center gap-2">
                             <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
-                              {group.path}
+                              {formatDisplayPath(group.path)}
                             </code>
                             <button
                               onClick={() => openFolderInSystem(group.path)}
@@ -656,7 +683,7 @@ export function SkillsSettings({
             </p>
             <div className="bg-muted mb-4 rounded-lg p-3">
               <code className="text-foreground text-xs break-all">
-                {deleteDialogSkill.path}
+                {formatDisplayPath(deleteDialogSkill.path)}
               </code>
             </div>
             <div className="flex justify-end gap-2">

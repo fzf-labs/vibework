@@ -1,4 +1,6 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { homedir } from 'os'
+import { join } from 'path'
 import type { IpcMainInvokeEvent } from 'electron'
 import type { IpcDependencies, IpcModuleContext } from './types'
 import { wrapHandler, v, Validator } from '../utils/ipc-response'
@@ -41,8 +43,26 @@ export const registerIpcHandlers = (deps: IpcDependencies): void => {
     throw new Error(`Invalid ${name}: expected string or Uint8Array`)
   }
 
-  const getFsAllowlistRoots = (): string[] =>
-    deps.services.projectService.getAllProjects().map((project) => project.path)
+  const getFsAllowlistRoots = (): string[] => {
+    const projectRoots = deps.services.projectService
+      .getAllProjects()
+      .map((project) => project.path)
+
+    const homeDir = homedir()
+    const skillRoots = [
+      join(homeDir, '.claude'),
+      join(homeDir, '.claude.json'),
+      join(homeDir, '.mcp.json'),
+      join(homeDir, '.codex'),
+      join(homeDir, '.gemini'),
+      join(homeDir, '.opencode'),
+      join(homeDir, '.cursor'),
+      join(homeDir, '.agents'),
+      join(homeDir, '.config', 'claude')
+    ]
+
+    return Array.from(new Set([...projectRoots, ...skillRoots]))
+  }
 
   const confirmDestructiveOperation = async (
     event: IpcMainInvokeEvent,

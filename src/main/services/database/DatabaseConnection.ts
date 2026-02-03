@@ -12,6 +12,7 @@ export class DatabaseConnection {
     if (!this.db) {
       this.db = new Database(this.dbPath)
       this.db.pragma('journal_mode = WAL')
+      this.db.pragma('foreign_keys = ON')
     }
     return this.db
   }

@@ -271,6 +271,12 @@ export class DatabaseService {
   }
 
   deleteProject(id: string): boolean {
+    const project = this.projectRepo.getProject(id)
+    if (!project) return false
+
+    this.taskRepo.deleteTasksByProjectId(id)
+    this.workflowRepo.deleteWorkflowTemplatesByProject(id)
+
     return this.projectRepo.deleteProject(id)
   }
 

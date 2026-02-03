@@ -30,6 +30,185 @@ import type {
   SettingsTabProps,
 } from '../types';
 
+type MCPConfigSource = {
+  name: string;
+  path: string;
+  exists: boolean;
+  servers: Record<
+    string,
+    MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+  >;
+  label?: string;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const extractMcpServers = (
+  value: unknown
+): Record<
+  string,
+  MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+> => {
+  if (!isRecord(value)) return {};
+  const direct = value.mcpServers || value.mcp_servers;
+  if (isRecord(direct)) {
+    return direct as Record<
+      string,
+      MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+    >;
+  }
+  return {};
+};
+
+const stripTomlComment = (line: string): string => {
+  let inSingle = false;
+  let inDouble = false;
+  let out = '';
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    const prev = i > 0 ? line[i - 1] : '';
+    if (ch === "'" && !inDouble && prev !== '\\') inSingle = !inSingle;
+    if (ch === '"' && !inSingle && prev !== '\\') inDouble = !inDouble;
+    if (ch === '#' && !inSingle && !inDouble) break;
+    out += ch;
+  }
+  return out.trim();
+};
+
+const splitTopLevel = (input: string, delimiter = ','): string[] => {
+  const parts: string[] = [];
+  let current = '';
+  let depth = 0;
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    const prev = i > 0 ? input[i - 1] : '';
+    if (ch === "'" && !inDouble && prev !== '\\') inSingle = !inSingle;
+    if (ch === '"' && !inSingle && prev !== '\\') inDouble = !inDouble;
+    if (!inSingle && !inDouble) {
+      if (ch === '{' || ch === '[' || ch === '(') depth += 1;
+      if (ch === '}' || ch === ']' || ch === ')') depth -= 1;
+      if (ch === delimiter && depth === 0) {
+        if (current.trim()) parts.push(current.trim());
+        current = '';
+        continue;
+      }
+    }
+    current += ch;
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+};
+
+const unquote = (value: string): string => {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+};
+
+const parseTomlValue = (raw: string): unknown => {
+  const value = raw.trim();
+  if (!value) return '';
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return unquote(value);
+  }
+  if (value.startsWith('[') && value.endsWith(']')) {
+    const inner = value.slice(1, -1).trim();
+    if (!inner) return [];
+    return splitTopLevel(inner).map((item) => parseTomlValue(item));
+  }
+  if (value.startsWith('{') && value.endsWith('}')) {
+    const inner = value.slice(1, -1).trim();
+    if (!inner) return {};
+    const pairs = splitTopLevel(inner);
+    const obj: Record<string, unknown> = {};
+    for (const pair of pairs) {
+      const idx = pair.indexOf('=');
+      if (idx === -1) continue;
+      const key = unquote(pair.slice(0, idx).trim());
+      const val = pair.slice(idx + 1).trim();
+      obj[key] = parseTomlValue(val);
+    }
+    return obj;
+  }
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (/^[+-]?\d+(\.\d+)?$/.test(value)) return Number(value);
+  return value;
+};
+
+const splitTomlPath = (path: string): string[] => {
+  const parts: string[] = [];
+  let current = '';
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < path.length; i += 1) {
+    const ch = path[i];
+    const prev = i > 0 ? path[i - 1] : '';
+    if (ch === "'" && !inDouble && prev !== '\\') inSingle = !inSingle;
+    if (ch === '"' && !inSingle && prev !== '\\') inDouble = !inDouble;
+    if (ch === '.' && !inSingle && !inDouble) {
+      if (current.trim()) parts.push(unquote(current.trim()));
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) parts.push(unquote(current.trim()));
+  return parts;
+};
+
+const parseToml = (content: string): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  let currentPath: string[] = [];
+  const ensurePath = (pathParts: string[]): Record<string, unknown> => {
+    let cursor = result as Record<string, unknown>;
+    for (const part of pathParts) {
+      if (!isRecord(cursor[part])) cursor[part] = {};
+      cursor = cursor[part] as Record<string, unknown>;
+    }
+    return cursor;
+  };
+
+  const lines = content.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = stripTomlComment(rawLine);
+    if (!line) continue;
+    if (line.startsWith('[') && line.endsWith(']')) {
+      const section = line.slice(1, -1).trim();
+      currentPath = splitTomlPath(section);
+      continue;
+    }
+    const idx = line.indexOf('=');
+    if (idx === -1) continue;
+    const key = unquote(line.slice(0, idx).trim());
+    const value = line.slice(idx + 1).trim();
+    const target = ensurePath(currentPath);
+    target[key] = parseTomlValue(value);
+  }
+
+  return result;
+};
+
+const parseTomlMcpServers = (
+  content: string
+): Record<
+  string,
+  MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+> => {
+  const parsed = parseToml(content);
+  return extractMcpServers(parsed);
+};
+
 // MCP Card component
 function MCPCard({
   server,
@@ -156,6 +335,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
   const [appError, setAppError] = useState<string | null>(null);
   const [cliError, setCliError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [homeDir, setHomeDir] = useState<string | null>(null);
 
   // Import by JSON dialog
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -175,6 +355,32 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       return targetPath.replace(/^~(?=\/|\\)/, homeDir);
     }
     return targetPath;
+  }, []);
+
+  const formatDisplayPath = useCallback((targetPath: string) => {
+    if (!targetPath || targetPath.startsWith('~') || !homeDir) return targetPath;
+    const normalizedHome = homeDir.replace(/\/$/, '');
+    if (targetPath.startsWith(normalizedHome)) {
+      const suffix = targetPath.slice(normalizedHome.length);
+      return `~${suffix || ''}`;
+    }
+    return targetPath;
+  }, [homeDir]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (window.api?.path?.homeDir) {
+      window.api.path.homeDir()
+        .then((dir) => {
+          if (!cancelled) setHomeDir(dir);
+        })
+        .catch(() => {
+          if (!cancelled) setHomeDir(null);
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const getSaveConfigPath = useCallback(async (): Promise<string> => {
@@ -303,41 +509,154 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     );
   }, [buildServersFromConfig, getSaveConfigPath, resolvePath]);
 
-  const fetchAllConfigs = useCallback(async (): Promise<{
-    name: string;
-    path: string;
-    exists: boolean;
-    servers: Record<
-      string,
-      MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-    >;
-  }[]> => {
-    const response = await fetch(`${API_BASE_URL}/mcp/all-configs`);
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to load config');
+  const fetchAllConfigs = useCallback(async (): Promise<MCPConfigSource[]> => {
+    const fsApi = window.api?.fs;
+    if (!fsApi?.readTextFile || !fsApi?.exists) {
+      const response = await fetch(`${API_BASE_URL}/mcp/all-configs`);
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load config');
+      }
+      return result.configs as MCPConfigSource[];
     }
-    return result.configs as {
-      name: string;
-      path: string;
-      exists: boolean;
-      servers: Record<
-        string,
-        MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-      >;
-    }[];
-  }, []);
+
+    const configs: MCPConfigSource[] = [];
+    const readTextIfExists = async (path: string) => {
+      try {
+        const resolved = await resolvePath(path);
+        if (!resolved) return null;
+        const exists = await fsApi.exists(resolved);
+        if (!exists) return null;
+        const content = await fsApi.readTextFile(resolved);
+        return { path: resolved, content };
+      } catch (error) {
+        console.warn('[MCP] Failed to read config path:', path, error);
+        return null;
+      }
+    };
+    const addConfig = (
+      name: string,
+      path: string,
+      servers: MCPConfigSource['servers'],
+      label?: string
+    ) => {
+      configs.push({ name, path, exists: true, servers, label });
+    };
+    const safeParseJsonServers = (content: string) => {
+      try {
+        const parsed = JSON.parse(content) as unknown;
+        return extractMcpServers(parsed);
+      } catch (error) {
+        console.warn('[MCP] Failed to parse JSON config:', error);
+        return {};
+      }
+    };
+    const safeParseTomlServers = (content: string) => {
+      try {
+        return parseTomlMcpServers(content);
+      } catch (error) {
+        console.warn('[MCP] Failed to parse TOML config:', error);
+        return {};
+      }
+    };
+    const buildLabel = (prefix: string, suffix?: string) =>
+      suffix ? `${prefix} (${suffix})` : prefix;
+    
+
+    const appConfigPath = await getSaveConfigPath();
+    const appConfig = await readTextIfExists(appConfigPath);
+    if (appConfig) {
+      addConfig('VibeWork', appConfig.path, safeParseJsonServers(appConfig.content));
+    }
+
+    const cursorMcp = await readTextIfExists('~/.cursor/mcp.json');
+    if (cursorMcp) {
+      addConfig('cursor-agent', cursorMcp.path, safeParseJsonServers(cursorMcp.content), buildLabel('Cursor Agent', 'mcp.json'));
+    }
+    const cursorAgentConfig = await readTextIfExists('~/.cursor/agent-config.json');
+    if (cursorAgentConfig) {
+      addConfig(
+        'cursor-agent@config',
+        cursorAgentConfig.path,
+        safeParseJsonServers(cursorAgentConfig.content),
+        buildLabel('Cursor Agent', 'agent-config.json')
+      );
+    }
+
+    const codexToml = await readTextIfExists('~/.codex/config.toml');
+    if (codexToml) {
+      addConfig('codex', codexToml.path, safeParseTomlServers(codexToml.content), buildLabel('Codex CLI', 'config.toml'));
+    }
+    const codexJson = await readTextIfExists('~/.codex/config.json');
+    if (codexJson) {
+      addConfig('codex@config', codexJson.path, safeParseJsonServers(codexJson.content), buildLabel('Codex CLI', 'config.json'));
+    }
+
+    const geminiSettings = await readTextIfExists('~/.gemini/settings.json');
+    if (geminiSettings) {
+      addConfig(
+        'gemini-cli',
+        geminiSettings.path,
+        safeParseJsonServers(geminiSettings.content),
+        buildLabel('Gemini CLI', 'settings.json')
+      );
+    }
+    const geminiConfig = await readTextIfExists('~/.gemini/config.json');
+    if (geminiConfig) {
+      addConfig(
+        'gemini-cli@config',
+        geminiConfig.path,
+        safeParseJsonServers(geminiConfig.content),
+        buildLabel('Gemini CLI', 'config.json')
+      );
+    }
+
+    const opencodeConfig = await readTextIfExists('~/.opencode/config.json');
+    if (opencodeConfig) {
+      addConfig(
+        'opencode',
+        opencodeConfig.path,
+        safeParseJsonServers(opencodeConfig.content),
+        buildLabel('OpenCode', 'config.json')
+      );
+    }
+
+    const claudeState = await readTextIfExists('~/.claude.json');
+    if (claudeState) {
+      let claudeParsed: Record<string, unknown> | null = null;
+      try {
+        claudeParsed = JSON.parse(claudeState.content) as Record<string, unknown>;
+      } catch (error) {
+        console.warn('[MCP] Failed to parse Claude Code state:', error);
+      }
+      if (claudeParsed) {
+        addConfig(
+          'claude-code',
+          claudeState.path,
+          extractMcpServers(claudeParsed),
+          buildLabel('Claude Code', 'global')
+        );
+        // Only read global CLI MCP config; skip project-scoped entries.
+      } else {
+        addConfig('claude-code', claudeState.path, {}, buildLabel('Claude Code', 'global'));
+      }
+    }
+
+    const claudeConfig = await readTextIfExists('~/.config/claude/config.json');
+    if (claudeConfig) {
+      addConfig(
+        'claude-code@config',
+        claudeConfig.path,
+        safeParseJsonServers(claudeConfig.content),
+        buildLabel('Claude Code', 'config.json')
+      );
+    }
+
+    return configs;
+  }, [getSaveConfigPath, resolvePath]);
 
   const buildCliGroups = useCallback(async (
-    configs: {
-      name: string;
-      path: string;
-      exists: boolean;
-      servers: Record<
-        string,
-        MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-      >;
-    }[]
+    configs: MCPConfigSource[]
   ): Promise<CliMcpGroup[]> => {
     const tools =
       (await window.api?.cliTools?.getAll?.())?.filter(Boolean) ?? [];
@@ -350,7 +669,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       .filter((config) => config.exists && !isAppConfigName(config.name))
       .map((config) => ({
         id: config.name,
-        label: toolNameMap.get(config.name) || formatCliLabel(config.name),
+        label: config.label || toolNameMap.get(config.name) || formatCliLabel(config.name),
         path: config.path,
         exists: config.exists,
         servers: buildServersFromConfig(config.servers, config.name),
@@ -373,15 +692,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
         console.error('[MCP] Failed to read app MCP config:', err);
       }
 
-      let configs: {
-        name: string;
-        path: string;
-        exists: boolean;
-        servers: Record<
-          string,
-          MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-        >;
-      }[] | null = null;
+      let configs: MCPConfigSource[] | null = null;
 
       try {
         configs = await fetchAllConfigs();
@@ -851,9 +1162,9 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                       {t.settings.mcpConfigPath}
                     </h3>
                     <div className="mt-2 flex items-center gap-2">
-                      <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
-                        {settings?.mcpConfigPath || '~/.vibework/mcp/mcp.json'}
-                      </code>
+                    <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
+                        {formatDisplayPath(settings?.mcpConfigPath || '~/.vibework/mcp/mcp.json')}
+                    </code>
                       <button
                         onClick={() => {
                           void handleOpenMcpFolder();
@@ -981,7 +1292,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                           </div>
                           <div className="mt-2 flex items-center gap-2">
                             <code className="bg-muted text-muted-foreground block min-w-0 flex-1 truncate rounded px-2 py-1 text-xs">
-                              {group.path}
+                              {formatDisplayPath(group.path)}
                             </code>
                             <button
                               onClick={() => {

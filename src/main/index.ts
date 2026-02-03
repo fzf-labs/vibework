@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import iconMac from '../../resources/icon-mac.png?asset'
 import { assertUrlAllowed } from './utils/url-guard'
+import { addAllowedRoot } from './utils/fs-allowlist'
 import { registerIpcHandlers } from './ipc'
 import { IPC_EVENTS } from './ipc/channels'
 import { AppContext } from './app/AppContext'
@@ -87,6 +88,17 @@ app.whenReady().then(async () => {
 
   const { services, appPaths } = appContext
   const { databaseService, claudeCodeService, cliSessionService } = services
+
+  try {
+    await addAllowedRoot(process.resourcesPath)
+  } catch (error) {
+    console.warn('[fs-allowlist] Failed to add resources root:', error)
+  }
+  try {
+    await addAllowedRoot(app.getAppPath())
+  } catch (error) {
+    console.warn('[fs-allowlist] Failed to add app root:', error)
+  }
 
   appContext.trackDisposable(
     databaseService.onWorkNodeStatusChange((node) => {

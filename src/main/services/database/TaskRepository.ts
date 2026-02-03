@@ -142,9 +142,60 @@ export class TaskRepository {
       .run(status, now, id)
   }
 
+  deleteTasksByProjectId(projectId: string): number {
+    const del = this.db.transaction(() => {
+      this.db.prepare(`
+        DELETE FROM agent_executions
+        WHERE work_node_id IN (
+          SELECT id FROM work_nodes WHERE workflow_id IN (
+            SELECT id FROM workflows WHERE task_id IN (
+              SELECT id FROM tasks WHERE project_id = ?
+            )
+          )
+        )
+      `).run(projectId)
+
+      this.db.prepare(`
+        DELETE FROM work_nodes
+        WHERE workflow_id IN (
+          SELECT id FROM workflows WHERE task_id IN (
+            SELECT id FROM tasks WHERE project_id = ?
+          )
+        )
+      `).run(projectId)
+
+      this.db.prepare(
+        'DELETE FROM workflows WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)'
+      ).run(projectId)
+
+      const result = this.db.prepare('DELETE FROM tasks WHERE project_id = ?').run(projectId)
+      return result.changes
+    })
+
+    return del()
+  }
+
   deleteTask(id: string): boolean {
-    const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?')
-    const result = stmt.run(id)
-    return result.changes > 0
+    const del = this.db.transaction(() => {
+      this.db.prepare(`
+        DELETE FROM agent_executions
+        WHERE work_node_id IN (
+          SELECT id FROM work_nodes WHERE workflow_id IN (
+            SELECT id FROM workflows WHERE task_id = ?
+          )
+        )
+      `).run(id)
+
+      this.db.prepare(
+        'DELETE FROM work_nodes WHERE workflow_id IN (SELECT id FROM workflows WHERE task_id = ?)'
+      ).run(id)
+
+      this.db.prepare('DELETE FROM workflows WHERE task_id = ?').run(id)
+
+      const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
+      return result.changes > 0
+    })
+
+    return del()
   }
 }
