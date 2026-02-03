@@ -1,23 +1,44 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+
+const electronAPI = {
+  ipcRenderer: {
+    invoke: (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
+  }
+}
+
+type IpcResponse<T> = { success: boolean; data?: T; error?: string }
+
+const invoke = async <T>(channel: string, ...args: unknown[]): Promise<T> => {
+  const response = await ipcRenderer.invoke(channel, ...args)
+  if (response && typeof response === 'object' && 'success' in response) {
+    const wrapped = response as IpcResponse<T>
+    if ('data' in wrapped || 'error' in wrapped) {
+      if (wrapped.success) {
+        return wrapped.data as T
+      }
+      throw new Error(wrapped.error || 'IPC request failed')
+    }
+  }
+  return response as T
+}
 
 // Custom APIs for renderer
 const api = {
   projects: {
-    getAll: () => ipcRenderer.invoke('projects:getAll'),
-    get: (id: string) => ipcRenderer.invoke('projects:get', id),
-    add: (project: Record<string, unknown>) => ipcRenderer.invoke('projects:add', project),
+    getAll: () => invoke('projects:getAll'),
+    get: (id: string) => invoke('projects:get', id),
+    add: (project: Record<string, unknown>) => invoke('projects:add', project),
     update: (id: string, updates: Record<string, unknown>) =>
-      ipcRenderer.invoke('projects:update', id, updates),
-    delete: (id: string) => ipcRenderer.invoke('projects:delete', id),
-    checkPath: (id: string) => ipcRenderer.invoke('projects:checkPath', id)
+      invoke('projects:update', id, updates),
+    delete: (id: string) => invoke('projects:delete', id),
+    checkPath: (id: string) => invoke('projects:checkPath', id)
   },
   git: {
-    checkInstalled: () => ipcRenderer.invoke('git:checkInstalled'),
+    checkInstalled: () => invoke('git:checkInstalled'),
     clone: (remoteUrl: string, targetPath: string) =>
-      ipcRenderer.invoke('git:clone', remoteUrl, targetPath),
-    init: (path: string) => ipcRenderer.invoke('git:init', path),
-    listWorktrees: (repoPath: string) => ipcRenderer.invoke('git:listWorktrees', repoPath),
+      invoke('git:clone', remoteUrl, targetPath),
+    init: (path: string) => invoke('git:init', path),
+    listWorktrees: (repoPath: string) => invoke('git:listWorktrees', repoPath),
     addWorktree: (
       repoPath: string,
       worktreePath: string,
@@ -25,7 +46,7 @@ const api = {
       createBranch: boolean,
       baseBranch?: string
     ) =>
-      ipcRenderer.invoke(
+      invoke(
         'git:addWorktree',
         repoPath,
         worktreePath,
@@ -34,70 +55,70 @@ const api = {
         baseBranch
       ),
     removeWorktree: (repoPath: string, worktreePath: string, force: boolean) =>
-      ipcRenderer.invoke('git:removeWorktree', repoPath, worktreePath, force),
-    pruneWorktrees: (repoPath: string) => ipcRenderer.invoke('git:pruneWorktrees', repoPath),
+      invoke('git:removeWorktree', repoPath, worktreePath, force),
+    pruneWorktrees: (repoPath: string) => invoke('git:pruneWorktrees', repoPath),
     getDiff: (repoPath: string, filePath?: string) =>
-      ipcRenderer.invoke('git:getDiff', repoPath, filePath),
+      invoke('git:getDiff', repoPath, filePath),
     getStagedDiff: (repoPath: string, filePath?: string) =>
-      ipcRenderer.invoke('git:getStagedDiff', repoPath, filePath),
-    getBranches: (repoPath: string) => ipcRenderer.invoke('git:getBranches', repoPath),
-    getCurrentBranch: (repoPath: string) => ipcRenderer.invoke('git:getCurrentBranch', repoPath),
-    getChangedFiles: (repoPath: string) => ipcRenderer.invoke('git:getChangedFiles', repoPath),
+      invoke('git:getStagedDiff', repoPath, filePath),
+    getBranches: (repoPath: string) => invoke('git:getBranches', repoPath),
+    getCurrentBranch: (repoPath: string) => invoke('git:getCurrentBranch', repoPath),
+    getChangedFiles: (repoPath: string) => invoke('git:getChangedFiles', repoPath),
     getBranchDiffFiles: (
       repoPath: string,
       baseBranch: string,
       compareBranch?: string
-    ) => ipcRenderer.invoke('git:getBranchDiffFiles', repoPath, baseBranch, compareBranch),
+    ) => invoke('git:getBranchDiffFiles', repoPath, baseBranch, compareBranch),
     stageFiles: (repoPath: string, filePaths: string[]) =>
-      ipcRenderer.invoke('git:stageFiles', repoPath, filePaths),
+      invoke('git:stageFiles', repoPath, filePaths),
     unstageFiles: (repoPath: string, filePaths: string[]) =>
-      ipcRenderer.invoke('git:unstageFiles', repoPath, filePaths),
+      invoke('git:unstageFiles', repoPath, filePaths),
     mergeBranch: (repoPath: string, branchName: string) =>
-      ipcRenderer.invoke('git:mergeBranch', repoPath, branchName),
-    getConflictFiles: (repoPath: string) => ipcRenderer.invoke('git:getConflictFiles', repoPath),
-    abortMerge: (repoPath: string) => ipcRenderer.invoke('git:abortMerge', repoPath),
+      invoke('git:mergeBranch', repoPath, branchName),
+    getConflictFiles: (repoPath: string) => invoke('git:getConflictFiles', repoPath),
+    abortMerge: (repoPath: string) => invoke('git:abortMerge', repoPath),
     getConflictContent: (repoPath: string, filePath: string) =>
-      ipcRenderer.invoke('git:getConflictContent', repoPath, filePath),
+      invoke('git:getConflictContent', repoPath, filePath),
     resolveConflict: (repoPath: string, filePath: string, strategy: 'ours' | 'theirs') =>
-      ipcRenderer.invoke('git:resolveConflict', repoPath, filePath, strategy),
+      invoke('git:resolveConflict', repoPath, filePath, strategy),
     rebaseBranch: (repoPath: string, targetBranch: string) =>
-      ipcRenderer.invoke('git:rebaseBranch', repoPath, targetBranch),
-    rebaseContinue: (repoPath: string) => ipcRenderer.invoke('git:rebaseContinue', repoPath),
-    rebaseAbort: (repoPath: string) => ipcRenderer.invoke('git:rebaseAbort', repoPath),
-    rebaseSkip: (repoPath: string) => ipcRenderer.invoke('git:rebaseSkip', repoPath),
+      invoke('git:rebaseBranch', repoPath, targetBranch),
+    rebaseContinue: (repoPath: string) => invoke('git:rebaseContinue', repoPath),
+    rebaseAbort: (repoPath: string) => invoke('git:rebaseAbort', repoPath),
+    rebaseSkip: (repoPath: string) => invoke('git:rebaseSkip', repoPath),
     getRemoteUrl: (repoPath: string, remoteName?: string) =>
-      ipcRenderer.invoke('git:getRemoteUrl', repoPath, remoteName),
+      invoke('git:getRemoteUrl', repoPath, remoteName),
     pushBranch: (repoPath: string, branchName: string, remoteName?: string, force?: boolean) =>
-      ipcRenderer.invoke('git:pushBranch', repoPath, branchName, remoteName, force),
+      invoke('git:pushBranch', repoPath, branchName, remoteName, force),
     getCommitLog: (repoPath: string, limit?: number) =>
-      ipcRenderer.invoke('git:getCommitLog', repoPath, limit),
+      invoke('git:getCommitLog', repoPath, limit),
     getParsedDiff: (repoPath: string, filePath?: string) =>
-      ipcRenderer.invoke('git:getParsedDiff', repoPath, filePath),
+      invoke('git:getParsedDiff', repoPath, filePath),
     getParsedStagedDiff: (repoPath: string, filePath?: string) =>
-      ipcRenderer.invoke('git:getParsedStagedDiff', repoPath, filePath),
+      invoke('git:getParsedStagedDiff', repoPath, filePath),
     checkoutBranch: (repoPath: string, branchName: string) =>
-      ipcRenderer.invoke('git:checkoutBranch', repoPath, branchName),
+      invoke('git:checkoutBranch', repoPath, branchName),
     createBranch: (repoPath: string, branchName: string) =>
-      ipcRenderer.invoke('git:createBranch', repoPath, branchName)
+      invoke('git:createBranch', repoPath, branchName)
   },
   cli: {
     startSession: (sessionId: string, command: string, args: string[], cwd?: string) =>
-      ipcRenderer.invoke('cli:startSession', sessionId, command, args, cwd),
-    stopSession: (sessionId: string) => ipcRenderer.invoke('cli:stopSession', sessionId),
-    getOutput: (sessionId: string) => ipcRenderer.invoke('cli:getOutput', sessionId)
+      invoke('cli:startSession', sessionId, command, args, cwd),
+    stopSession: (sessionId: string) => invoke('cli:stopSession', sessionId),
+    getOutput: (sessionId: string) => invoke('cli:getOutput', sessionId)
   },
   claudeCode: {
-    getConfig: () => ipcRenderer.invoke('claudeCode:getConfig'),
+    getConfig: () => invoke('claudeCode:getConfig'),
     saveConfig: (config: Record<string, unknown>) =>
-      ipcRenderer.invoke('claudeCode:saveConfig', config),
+      invoke('claudeCode:saveConfig', config),
     startSession: (sessionId: string, workdir: string, options?: { model?: string; prompt?: string }) =>
-      ipcRenderer.invoke('claudeCode:startSession', sessionId, workdir, options),
-    stopSession: (sessionId: string) => ipcRenderer.invoke('claudeCode:stopSession', sessionId),
+      invoke('claudeCode:startSession', sessionId, workdir, options),
+    stopSession: (sessionId: string) => invoke('claudeCode:stopSession', sessionId),
     sendInput: (sessionId: string, input: string) =>
-      ipcRenderer.invoke('claudeCode:sendInput', sessionId, input),
-    getOutput: (sessionId: string) => ipcRenderer.invoke('claudeCode:getOutput', sessionId),
-    getSessions: () => ipcRenderer.invoke('claudeCode:getSessions'),
-    getSession: (sessionId: string) => ipcRenderer.invoke('claudeCode:getSession', sessionId),
+      invoke('claudeCode:sendInput', sessionId, input),
+    getOutput: (sessionId: string) => invoke('claudeCode:getOutput', sessionId),
+    getSessions: () => invoke('claudeCode:getSessions'),
+    getSession: (sessionId: string) => invoke('claudeCode:getSession', sessionId),
     onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
         callback(data)
@@ -121,14 +142,14 @@ const api = {
       toolId: string,
       workdir: string,
       options?: { model?: string; prompt?: string }
-    ) => ipcRenderer.invoke('cliSession:startSession', sessionId, toolId, workdir, options),
-    stopSession: (sessionId: string) => ipcRenderer.invoke('cliSession:stopSession', sessionId),
+    ) => invoke('cliSession:startSession', sessionId, toolId, workdir, options),
+    stopSession: (sessionId: string) => invoke('cliSession:stopSession', sessionId),
     sendInput: (sessionId: string, input: string) =>
-      ipcRenderer.invoke('cliSession:sendInput', sessionId, input),
-    getSessions: () => ipcRenderer.invoke('cliSession:getSessions'),
-    getSession: (sessionId: string) => ipcRenderer.invoke('cliSession:getSession', sessionId),
+      invoke('cliSession:sendInput', sessionId, input),
+    getSessions: () => invoke('cliSession:getSessions'),
+    getSession: (sessionId: string) => invoke('cliSession:getSession', sessionId),
     appendLog: (sessionId: string, msg: unknown, projectId?: string | null) =>
-      ipcRenderer.invoke('cliSession:appendLog', sessionId, msg, projectId),
+      invoke('cliSession:appendLog', sessionId, msg, projectId),
     onStatus: (callback: (data: { sessionId: string; status: string; forced?: boolean }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; status: string; forced?: boolean }) =>
         callback(data)
@@ -153,9 +174,9 @@ const api = {
     }
   },
   logStream: {
-    subscribe: (sessionId: string) => ipcRenderer.invoke('logStream:subscribe', sessionId),
-    unsubscribe: (sessionId: string) => ipcRenderer.invoke('logStream:unsubscribe', sessionId),
-    getHistory: (sessionId: string) => ipcRenderer.invoke('logStream:getHistory', sessionId),
+    subscribe: (sessionId: string) => invoke('logStream:subscribe', sessionId),
+    unsubscribe: (sessionId: string) => invoke('logStream:unsubscribe', sessionId),
+    getHistory: (sessionId: string) => invoke('logStream:getHistory', sessionId),
     onMessage: (callback: (sessionId: string, msg: unknown) => void) => {
       const listener = (_: unknown, sessionId: string, msg: unknown) => callback(sessionId, msg)
       ipcRenderer.on('logStream:message', listener)
@@ -175,38 +196,38 @@ const api = {
     }
   },
   cliTools: {
-    getAll: () => ipcRenderer.invoke('cliTools:getAll'),
-    detect: (toolId: string) => ipcRenderer.invoke('cliTools:detect', toolId),
-    detectAll: () => ipcRenderer.invoke('cliTools:detectAll')
+    getAll: () => invoke('cliTools:getAll'),
+    detect: (toolId: string) => invoke('cliTools:detect', toolId),
+    detectAll: () => invoke('cliTools:detectAll')
   },
   cliToolConfig: {
-    get: (toolId: string) => ipcRenderer.invoke('cliToolConfig:get', toolId),
+    get: (toolId: string) => invoke('cliToolConfig:get', toolId),
     save: (toolId: string, config: Record<string, unknown>) =>
-      ipcRenderer.invoke('cliToolConfig:save', toolId, config)
+      invoke('cliToolConfig:save', toolId, config)
   },
   editor: {
-    getAvailable: () => ipcRenderer.invoke('editor:getAvailable'),
+    getAvailable: () => invoke('editor:getAvailable'),
     openProject: (projectPath: string, editorCommand: string) =>
-      ipcRenderer.invoke('editor:openProject', projectPath, editorCommand)
+      invoke('editor:openProject', projectPath, editorCommand)
   },
   pipeline: {
     execute: (pipelineId: string, stages: unknown[], workingDirectory?: string) =>
-      ipcRenderer.invoke('pipeline:execute', pipelineId, stages, workingDirectory),
-    getExecution: (executionId: string) => ipcRenderer.invoke('pipeline:getExecution', executionId),
-    getAllExecutions: () => ipcRenderer.invoke('pipeline:getAllExecutions'),
+      invoke('pipeline:execute', pipelineId, stages, workingDirectory),
+    getExecution: (executionId: string) => invoke('pipeline:getExecution', executionId),
+    getAllExecutions: () => invoke('pipeline:getAllExecutions'),
     approveStage: (stageExecutionId: string, approvedBy: string) =>
-      ipcRenderer.invoke('pipeline:approveStage', stageExecutionId, approvedBy),
-    cancel: (executionId: string) => ipcRenderer.invoke('pipeline:cancel', executionId)
+      invoke('pipeline:approveStage', stageExecutionId, approvedBy),
+    cancel: (executionId: string) => invoke('pipeline:cancel', executionId)
   },
   previewConfig: {
-    getAll: () => ipcRenderer.invoke('previewConfig:getAll'),
+    getAll: () => invoke('previewConfig:getAll'),
     getByProject: (projectId: string) =>
-      ipcRenderer.invoke('previewConfig:getByProject', projectId),
-    get: (id: string) => ipcRenderer.invoke('previewConfig:get', id),
-    add: (config: Record<string, unknown>) => ipcRenderer.invoke('previewConfig:add', config),
+      invoke('previewConfig:getByProject', projectId),
+    get: (id: string) => invoke('previewConfig:get', id),
+    add: (config: Record<string, unknown>) => invoke('previewConfig:add', config),
     update: (id: string, updates: Record<string, unknown>) =>
-      ipcRenderer.invoke('previewConfig:update', id, updates),
-    delete: (id: string) => ipcRenderer.invoke('previewConfig:delete', id)
+      invoke('previewConfig:update', id, updates),
+    delete: (id: string) => invoke('previewConfig:delete', id)
   },
   preview: {
     start: (
@@ -216,13 +237,13 @@ const api = {
       args: string[],
       cwd?: string,
       env?: Record<string, string>
-    ) => ipcRenderer.invoke('preview:start', instanceId, configId, command, args, cwd, env),
-    stop: (instanceId: string) => ipcRenderer.invoke('preview:stop', instanceId),
-    getInstance: (instanceId: string) => ipcRenderer.invoke('preview:getInstance', instanceId),
-    getAllInstances: () => ipcRenderer.invoke('preview:getAllInstances'),
+    ) => invoke('preview:start', instanceId, configId, command, args, cwd, env),
+    stop: (instanceId: string) => invoke('preview:stop', instanceId),
+    getInstance: (instanceId: string) => invoke('preview:getInstance', instanceId),
+    getAllInstances: () => invoke('preview:getAllInstances'),
     getOutput: (instanceId: string, limit?: number) =>
-      ipcRenderer.invoke('preview:getOutput', instanceId, limit),
-    clearInstance: (instanceId: string) => ipcRenderer.invoke('preview:clearInstance', instanceId)
+      invoke('preview:getOutput', instanceId, limit),
+    clearInstance: (instanceId: string) => invoke('preview:clearInstance', instanceId)
   },
   notification: {
     show: (options: {
@@ -231,111 +252,111 @@ const api = {
       icon?: string
       silent?: boolean
       urgency?: 'normal' | 'critical' | 'low'
-    }) => ipcRenderer.invoke('notification:show', options),
-    setEnabled: (enabled: boolean) => ipcRenderer.invoke('notification:setEnabled', enabled),
-    isEnabled: () => ipcRenderer.invoke('notification:isEnabled'),
+    }) => invoke('notification:show', options),
+    setEnabled: (enabled: boolean) => invoke('notification:setEnabled', enabled),
+    isEnabled: () => invoke('notification:isEnabled'),
     setSoundEnabled: (enabled: boolean) =>
-      ipcRenderer.invoke('notification:setSoundEnabled', enabled),
-    isSoundEnabled: () => ipcRenderer.invoke('notification:isSoundEnabled'),
+      invoke('notification:setSoundEnabled', enabled),
+    isSoundEnabled: () => invoke('notification:isSoundEnabled'),
     setSoundSettings: (settings: {
       enabled?: boolean
       taskComplete?: boolean
       stageComplete?: boolean
       error?: boolean
-    }) => ipcRenderer.invoke('notification:setSoundSettings', settings),
-    getSoundSettings: () => ipcRenderer.invoke('notification:getSoundSettings')
+    }) => invoke('notification:setSoundSettings', settings),
+    getSoundSettings: () => invoke('notification:getSoundSettings')
   },
   database: {
     // Task operations
-    createTask: (input: unknown) => ipcRenderer.invoke('db:createTask', input),
-    getTask: (id: string) => ipcRenderer.invoke('db:getTask', id),
-    getAllTasks: () => ipcRenderer.invoke('db:getAllTasks'),
-    updateTask: (id: string, updates: unknown) => ipcRenderer.invoke('db:updateTask', id, updates),
-    deleteTask: (id: string) => ipcRenderer.invoke('db:deleteTask', id),
+    createTask: (input: unknown) => invoke('db:createTask', input),
+    getTask: (id: string) => invoke('db:getTask', id),
+    getAllTasks: () => invoke('db:getAllTasks'),
+    updateTask: (id: string, updates: unknown) => invoke('db:updateTask', id, updates),
+    deleteTask: (id: string) => invoke('db:deleteTask', id),
     getTasksByProjectId: (projectId: string) =>
-      ipcRenderer.invoke('db:getTasksByProjectId', projectId),
+      invoke('db:getTasksByProjectId', projectId),
     // Workflow template operations
-    getGlobalWorkflowTemplates: () => ipcRenderer.invoke('db:getGlobalWorkflowTemplates'),
+    getGlobalWorkflowTemplates: () => invoke('db:getGlobalWorkflowTemplates'),
     getWorkflowTemplatesByProject: (projectId: string) =>
-      ipcRenderer.invoke('db:getWorkflowTemplatesByProject', projectId),
+      invoke('db:getWorkflowTemplatesByProject', projectId),
     getWorkflowTemplate: (templateId: string) =>
-      ipcRenderer.invoke('db:getWorkflowTemplate', templateId),
+      invoke('db:getWorkflowTemplate', templateId),
     createWorkflowTemplate: (input: unknown) =>
-      ipcRenderer.invoke('db:createWorkflowTemplate', input),
+      invoke('db:createWorkflowTemplate', input),
     updateWorkflowTemplate: (input: unknown) =>
-      ipcRenderer.invoke('db:updateWorkflowTemplate', input),
+      invoke('db:updateWorkflowTemplate', input),
     deleteWorkflowTemplate: (templateId: string, scope: string) =>
-      ipcRenderer.invoke('db:deleteWorkflowTemplate', templateId, scope),
+      invoke('db:deleteWorkflowTemplate', templateId, scope),
     copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) =>
-      ipcRenderer.invoke('db:copyGlobalWorkflowToProject', globalTemplateId, projectId),
+      invoke('db:copyGlobalWorkflowToProject', globalTemplateId, projectId),
     // Workflow instance operations
     createWorkflow: (taskId: string) =>
-      ipcRenderer.invoke('db:createWorkflow', taskId),
-    getWorkflow: (id: string) => ipcRenderer.invoke('db:getWorkflow', id),
-    getWorkflowByTaskId: (taskId: string) => ipcRenderer.invoke('db:getWorkflowByTaskId', taskId),
+      invoke('db:createWorkflow', taskId),
+    getWorkflow: (id: string) => invoke('db:getWorkflow', id),
+    getWorkflowByTaskId: (taskId: string) => invoke('db:getWorkflowByTaskId', taskId),
     updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) =>
-      ipcRenderer.invoke('db:updateWorkflowStatus', id, status, nodeIndex),
+      invoke('db:updateWorkflowStatus', id, status, nodeIndex),
     // WorkNode instance operations
     createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) =>
-      ipcRenderer.invoke('db:createWorkNode', workflowId, templateId, nodeOrder),
+      invoke('db:createWorkNode', workflowId, templateId, nodeOrder),
     getWorkNodesByWorkflowId: (workflowId: string) =>
-      ipcRenderer.invoke('db:getWorkNodesByWorkflowId', workflowId),
+      invoke('db:getWorkNodesByWorkflowId', workflowId),
     updateWorkNodeStatus: (id: string, status: string) =>
-      ipcRenderer.invoke('db:updateWorkNodeStatus', id, status),
-    approveWorkNode: (id: string) => ipcRenderer.invoke('db:approveWorkNode', id),
-    rejectWorkNode: (id: string) => ipcRenderer.invoke('db:rejectWorkNode', id),
-    approveTask: (id: string) => ipcRenderer.invoke('db:approveTask', id),
+      invoke('db:updateWorkNodeStatus', id, status),
+    approveWorkNode: (id: string) => invoke('db:approveWorkNode', id),
+    rejectWorkNode: (id: string) => invoke('db:rejectWorkNode', id),
+    approveTask: (id: string) => invoke('db:approveTask', id),
     // AgentExecution operations
     createAgentExecution: (workNodeId: string) =>
-      ipcRenderer.invoke('db:createAgentExecution', workNodeId),
+      invoke('db:createAgentExecution', workNodeId),
     getAgentExecutionsByWorkNodeId: (workNodeId: string) =>
-      ipcRenderer.invoke('db:getAgentExecutionsByWorkNodeId', workNodeId),
+      invoke('db:getAgentExecutionsByWorkNodeId', workNodeId),
     getLatestAgentExecution: (workNodeId: string) =>
-      ipcRenderer.invoke('db:getLatestAgentExecution', workNodeId),
+      invoke('db:getLatestAgentExecution', workNodeId),
     updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) =>
-      ipcRenderer.invoke('db:updateAgentExecutionStatus', id, status, cost, duration)
+      invoke('db:updateAgentExecutionStatus', id, status, cost, duration)
   },
   fs: {
-    readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
-    readTextFile: (path: string) => ipcRenderer.invoke('fs:readTextFile', path),
-    writeFile: (path: string, data: unknown) => ipcRenderer.invoke('fs:writeFile', path, data),
+    readFile: (path: string) => invoke('fs:readFile', path),
+    readTextFile: (path: string) => invoke('fs:readTextFile', path),
+    writeFile: (path: string, data: unknown) => invoke('fs:writeFile', path, data),
     writeTextFile: (path: string, content: string) =>
-      ipcRenderer.invoke('fs:writeTextFile', path, content),
+      invoke('fs:writeTextFile', path, content),
     appendTextFile: (path: string, content: string) =>
-      ipcRenderer.invoke('fs:appendTextFile', path, content),
-    stat: (path: string) => ipcRenderer.invoke('fs:stat', path),
+      invoke('fs:appendTextFile', path, content),
+    stat: (path: string) => invoke('fs:stat', path),
     readDir: (path: string, options?: { maxDepth?: number }) =>
-      ipcRenderer.invoke('fs:readDir', path, options),
-    exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
+      invoke('fs:readDir', path, options),
+    exists: (path: string) => invoke('fs:exists', path),
     remove: (path: string, options?: { recursive?: boolean }) =>
-      ipcRenderer.invoke('fs:remove', path, options),
-    mkdir: (path: string) => ipcRenderer.invoke('fs:mkdir', path)
+      invoke('fs:remove', path, options),
+    mkdir: (path: string) => invoke('fs:mkdir', path)
   },
   dialog: {
-    save: (options: unknown) => ipcRenderer.invoke('dialog:save', options),
-    open: (options: unknown) => ipcRenderer.invoke('dialog:open', options)
+    save: (options: unknown) => invoke('dialog:save', options),
+    open: (options: unknown) => invoke('dialog:open', options)
   },
   shell: {
-    openUrl: (url: string) => ipcRenderer.invoke('shell:openUrl', url),
-    openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
-    showItemInFolder: (path: string) => ipcRenderer.invoke('shell:showItemInFolder', path)
+    openUrl: (url: string) => invoke('shell:openUrl', url),
+    openPath: (path: string) => invoke('shell:openPath', path),
+    showItemInFolder: (path: string) => invoke('shell:showItemInFolder', path)
   },
   path: {
-    appDataDir: () => ipcRenderer.invoke('path:appDataDir'),
-    appConfigDir: () => ipcRenderer.invoke('path:appConfigDir'),
-    tempDir: () => ipcRenderer.invoke('path:tempDir'),
-    resourcesDir: () => ipcRenderer.invoke('path:resourcesDir'),
-    appPath: () => ipcRenderer.invoke('path:appPath'),
-    vibeworkDataDir: () => ipcRenderer.invoke('path:vibeworkDataDir'),
-    homeDir: () => ipcRenderer.invoke('path:homeDir')
+    appDataDir: () => invoke('path:appDataDir'),
+    appConfigDir: () => invoke('path:appConfigDir'),
+    tempDir: () => invoke('path:tempDir'),
+    resourcesDir: () => invoke('path:resourcesDir'),
+    appPath: () => invoke('path:appPath'),
+    vibeworkDataDir: () => invoke('path:vibeworkDataDir'),
+    homeDir: () => invoke('path:homeDir')
   },
   app: {
-    getVersion: () => ipcRenderer.invoke('app:getVersion')
+    getVersion: () => invoke('app:getVersion')
   },
   settings: {
-    get: () => ipcRenderer.invoke('settings:get'),
-    update: (updates: unknown) => ipcRenderer.invoke('settings:update', updates),
-    reset: () => ipcRenderer.invoke('settings:reset')
+    get: () => invoke('settings:get'),
+    update: (updates: unknown) => invoke('settings:update', updates),
+    reset: () => invoke('settings:reset')
   },
   task: {
     create: (options: {
@@ -349,13 +370,13 @@ const api = {
       worktreeRootPath?: string
       cliToolId?: string
       workflowTemplateId?: string
-    }) => ipcRenderer.invoke('task:create', options),
-    get: (id: string) => ipcRenderer.invoke('task:get', id),
-    getAll: () => ipcRenderer.invoke('task:getAll'),
-    getByProject: (projectId: string) => ipcRenderer.invoke('task:getByProject', projectId),
-    updateStatus: (id: string, status: string) => ipcRenderer.invoke('task:updateStatus', id, status),
+    }) => invoke('task:create', options),
+    get: (id: string) => invoke('task:get', id),
+    getAll: () => invoke('task:getAll'),
+    getByProject: (projectId: string) => invoke('task:getByProject', projectId),
+    updateStatus: (id: string, status: string) => invoke('task:updateStatus', id, status),
     delete: (id: string, removeWorktree?: boolean) =>
-      ipcRenderer.invoke('task:delete', id, removeWorktree)
+      invoke('task:delete', id, removeWorktree)
   }
 }
 

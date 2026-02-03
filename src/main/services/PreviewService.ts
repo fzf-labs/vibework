@@ -1,5 +1,9 @@
-import { spawn, ChildProcess } from 'child_process'
+import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
+import { safeSpawn } from '../utils/safe-exec'
+import { config } from '../config'
+
+const previewAllowlist = config.commandAllowlist
 
 interface PreviewInstance {
   id: string
@@ -41,10 +45,11 @@ export class PreviewService extends EventEmitter {
 
     try {
       // 启动进程
-      const childProcess = spawn(command, args, {
+      const childProcess = safeSpawn(command, args, {
         cwd: cwd || globalThis.process.cwd(),
         env: { ...globalThis.process.env, ...env },
-        shell: true
+        allowlist: previewAllowlist,
+        label: 'PreviewService'
       })
 
       this.processes.set(instanceId, childProcess)
@@ -78,7 +83,7 @@ export class PreviewService extends EventEmitter {
     }
   }
 
-  stopPreview(instanceId: string): void {
+  async stopPreview(instanceId: string): Promise<void> {
     const instance = this.instances.get(instanceId)
     if (!instance) {
       throw new Error(`Preview instance ${instanceId} not found`)
@@ -87,7 +92,24 @@ export class PreviewService extends EventEmitter {
     const process = this.processes.get(instanceId)
     if (process) {
       instance.status = 'stopping'
-      process.kill()
+      if (process.exitCode !== null) {
+        return
+      }
+
+      await new Promise<void>((resolve) => {
+        const onExit = () => {
+          resolve()
+        }
+
+        process.once('exit', onExit)
+        process.kill('SIGTERM')
+
+        setTimeout(() => {
+          if (!process.killed) {
+            process.kill('SIGKILL')
+          }
+        }, 5000)
+      })
     }
   }
 

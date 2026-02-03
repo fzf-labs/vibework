@@ -1,8 +1,9 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
+import { ChildProcess } from 'child_process'
 import EventEmitter from 'events'
+import { safeSpawn } from '../utils/safe-exec'
+import { config } from '../config'
 
-const execAsync = promisify(exec)
+const pipelineAllowlist = config.commandAllowlist
 
 interface PipelineStage {
   id: string
@@ -27,6 +28,7 @@ interface StageExecution {
   output?: string
   error?: string
   exitCode?: number
+  process?: ChildProcess
 }
 
 interface PipelineExecution {
@@ -89,7 +91,17 @@ export class PipelineService extends EventEmitter {
     const sortedStages = [...stages].sort((a, b) => a.order - b.order)
 
     for (const stage of sortedStages) {
+      if (execution.status === 'cancelled') {
+        this.emit('execution:completed', execution)
+        return
+      }
       const stageExecution = await this.executeStage(executionId, stage, workingDirectory)
+
+      if (execution.status === 'cancelled') {
+        execution.completedAt = new Date()
+        this.emit('execution:completed', execution)
+        return
+      }
 
       if (stageExecution.status === 'failed' && !stage.continueOnError) {
         execution.status = 'failed'
@@ -125,6 +137,13 @@ export class PipelineService extends EventEmitter {
     execution.stageExecutions.push(stageExecution)
     this.emit('stage:started', { executionId, stageExecution })
 
+    if (execution.status === 'cancelled') {
+      stageExecution.status = 'skipped'
+      stageExecution.completedAt = new Date()
+      this.emit('stage:completed', { executionId, stageExecution })
+      return stageExecution
+    }
+
     // 检查是否需要审批
     if (stage.requiresApproval) {
       stageExecution.status = 'waiting_approval'
@@ -142,7 +161,12 @@ export class PipelineService extends EventEmitter {
         await this.executeCommand(stageExecution, stage, workingDirectory)
       }
 
-      stageExecution.status = 'success'
+      if (execution.status === 'cancelled') {
+        stageExecution.status = 'failed'
+        stageExecution.error = 'Execution cancelled'
+      } else {
+        stageExecution.status = 'success'
+      }
       stageExecution.completedAt = new Date()
       this.emit('stage:completed', { executionId, stageExecution })
     } catch (error) {
@@ -166,14 +190,13 @@ export class PipelineService extends EventEmitter {
     const command = stage.command!
     const args = stage.args || []
     const cwd = stage.workingDirectory || workingDirectory
-    const timeout = stage.timeout || 300000
+    const timeout = stage.timeout ?? 300000
     const retryCount = stage.retryCount || 0
 
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= retryCount; attempt++) {
       try {
-        const fullCommand = `${command} ${args.join(' ')}`
         console.log('[PipelineService] executeCommand:', {
           command,
           args,
@@ -182,17 +205,45 @@ export class PipelineService extends EventEmitter {
           attempt,
           retryCount
         })
-        console.log('[PipelineService] fullCommand:', fullCommand)
-        const { stdout, stderr } = await execAsync(fullCommand, {
+        console.log('[PipelineService] fullCommand:', [command, ...args].join(' '))
+
+        const childProcess = safeSpawn(command, args, {
           cwd,
-          timeout
+          env: process.env,
+          timeoutMs: timeout,
+          allowlist: pipelineAllowlist,
+          label: 'PipelineService'
         })
 
-        stageExecution.output = stdout
+        stageExecution.process = childProcess
+
+        const outputChunks: string[] = []
+        const errorChunks: string[] = []
+
+        childProcess.stdout?.on('data', (data) => {
+          outputChunks.push(data.toString())
+        })
+
+        childProcess.stderr?.on('data', (data) => {
+          errorChunks.push(data.toString())
+        })
+
+        const result = await new Promise<{ code: number | null }>((resolve, reject) => {
+          childProcess.once('error', reject)
+          childProcess.once('close', (code) => resolve({ code }))
+        })
+
+        stageExecution.output = outputChunks.join('')
+        const stderr = errorChunks.join('')
         if (stderr) {
           stageExecution.error = stderr
         }
-        stageExecution.exitCode = 0
+        stageExecution.exitCode = result.code ?? 0
+
+        if (result.code && result.code !== 0) {
+          throw new Error(stderr || `Command exited with code ${result.code}`)
+        }
+
         return
       } catch (error) {
         const execError = error as NodeJS.ErrnoException
@@ -259,6 +310,14 @@ export class PipelineService extends EventEmitter {
 
     execution.status = 'cancelled'
     execution.completedAt = new Date()
+    for (const stage of execution.stageExecutions) {
+      if (stage.status === 'running') {
+        stage.status = 'failed'
+        stage.error = 'Execution cancelled'
+        stage.completedAt = new Date()
+      }
+      stage.process?.kill('SIGTERM')
+    }
     this.emit('execution:cancelled', execution)
   }
 }

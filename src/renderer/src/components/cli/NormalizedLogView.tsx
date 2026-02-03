@@ -209,10 +209,6 @@ function ToolCallLogEntry({
 }
 
 export function NormalizedLogView({ entries, className }: NormalizedLogViewProps) {
-  if (entries.length === 0) {
-    return null
-  }
-
   const toolResultById = useMemo(() => {
     const map = new Map<string, NormalizedEntry>()
     for (const entry of entries) {
@@ -234,6 +230,10 @@ export function NormalizedLogView({ entries, className }: NormalizedLogViewProps
     }
     return hidden
   }, [entries, toolResultById])
+
+  if (entries.length === 0) {
+    return null
+  }
 
   return (
     <div className={cn('space-y-1', className)}>

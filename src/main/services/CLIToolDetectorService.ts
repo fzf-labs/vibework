@@ -1,10 +1,11 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
+import { safeExecFile } from '../utils/safe-exec'
+import { config } from '../config'
 
-const execAsync = promisify(exec)
+const cliToolAllowlist = config.commandAllowlist
+const defaultTimeoutMs = config.commandTimeoutMs
 
 export interface CLIToolInfo {
   id: string
@@ -79,7 +80,12 @@ export class CLIToolDetectorService {
     if (!tool) return null
 
     try {
-      const { stdout } = await execAsync(tool.detectionCommand)
+      const [command, ...args] = tool.detectionCommand.split(' ').filter(Boolean)
+      const { stdout } = await safeExecFile(command, args, {
+        allowlist: cliToolAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'CLIToolDetectorService'
+      })
       tool.installed = true
       tool.version = stdout
         .split(/\r?\n/)
@@ -99,10 +105,14 @@ export class CLIToolDetectorService {
 
   private async resolveInstallPath(command: string): Promise<string | undefined> {
     const platform = os.platform()
-    const lookupCommand = platform === 'win32' ? `where ${command}` : `which ${command}`
+    const lookupCommand = platform === 'win32' ? 'where' : 'which'
 
     try {
-      const { stdout } = await execAsync(lookupCommand)
+      const { stdout } = await safeExecFile(lookupCommand, [command], {
+        allowlist: cliToolAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'CLIToolDetectorService'
+      })
       const resolvedPath = stdout
         .split(/\r?\n/)
         .map((line) => line.trim())

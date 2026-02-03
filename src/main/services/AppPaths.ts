@@ -1,6 +1,6 @@
-import { homedir } from 'os'
 import { join } from 'path'
 import { existsSync, mkdirSync } from 'fs'
+import { config } from '../config'
 
 /**
  * 应用数据路径管理服务
@@ -11,7 +11,7 @@ export class AppPaths {
   private rootDir: string
 
   private constructor() {
-    this.rootDir = join(homedir(), '.vibework')
+    this.rootDir = config.paths.appRoot
     this.ensureDirectories()
   }
 

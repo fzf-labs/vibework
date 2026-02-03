@@ -1,6 +1,10 @@
-import { spawn, ChildProcess } from 'child_process'
+import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { DataBatcher } from './DataBatcher'
+import { safeSpawn } from '../utils/safe-exec'
+import { config } from '../config'
+
+const cliProcessAllowlist = config.commandAllowlist
 
 interface Session {
   id: string
@@ -28,9 +32,11 @@ export class CLIProcessService extends EventEmitter {
     })
     console.log('[CLIProcessService] fullCommand:', fullCommand)
 
-    const childProcess = spawn(command, args, {
+    const childProcess = safeSpawn(command, args, {
       cwd,
-      shell: true
+      env: process.env,
+      allowlist: cliProcessAllowlist,
+      label: 'CLIProcessService'
     })
 
     // 创建批处理器
@@ -69,6 +75,7 @@ export class CLIProcessService extends EventEmitter {
 
       session.status = code === 0 ? 'stopped' : 'error'
       this.emit('close', { sessionId, code })
+      this.sessions.delete(sessionId)
     })
 
     this.sessions.set(sessionId, session)
@@ -80,8 +87,7 @@ export class CLIProcessService extends EventEmitter {
       throw new Error(`Session ${sessionId} not found`)
     }
 
-    session.process.kill()
-    this.sessions.delete(sessionId)
+    session.process.kill('SIGTERM')
   }
 
   getSessionOutput(sessionId: string): string[] {

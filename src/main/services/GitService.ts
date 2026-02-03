@@ -1,8 +1,9 @@
-import { exec } from 'child_process'
+import { readFile } from 'fs/promises'
 import { isAbsolute, resolve } from 'path'
-import { promisify } from 'util'
+import { safeExecFile } from '../utils/safe-exec'
 
-const execAsync = promisify(exec)
+const gitAllowlist = new Set(['git'])
+const defaultTimeoutMs = 300000
 
 interface WorktreeInfo {
   path: string
@@ -37,9 +38,23 @@ export interface FileDiff {
 }
 
 export class GitService {
+  private async runGit(
+    args: string[],
+    cwd?: string,
+    timeoutMs: number = defaultTimeoutMs
+  ): Promise<string> {
+    const { stdout } = await safeExecFile('git', args, {
+      cwd,
+      timeoutMs,
+      allowlist: gitAllowlist,
+      label: 'GitService'
+    })
+    return stdout
+  }
+
   async isInstalled(): Promise<boolean> {
     try {
-      await execAsync('git --version')
+      await this.runGit(['--version'])
       return true
     } catch {
       return false
@@ -48,7 +63,7 @@ export class GitService {
 
   async clone(remoteUrl: string, targetPath: string): Promise<void> {
     try {
-      await execAsync(`git clone ${remoteUrl} "${targetPath}"`)
+      await this.runGit(['clone', remoteUrl, targetPath])
     } catch (error) {
       throw new Error(`Failed to clone repository: ${error}`)
     }
@@ -56,7 +71,7 @@ export class GitService {
 
   async init(path: string): Promise<void> {
     try {
-      await execAsync(`git init "${path}"`)
+      await this.runGit(['init', path])
     } catch (error) {
       throw new Error(`Failed to initialize repository: ${error}`)
     }
@@ -64,8 +79,7 @@ export class GitService {
 
   async getStatus(path: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`git -C "${path}" status`)
-      return stdout
+      return await this.runGit(['status'], path)
     } catch (error) {
       throw new Error(`Failed to get git status: ${error}`)
     }
@@ -73,8 +87,8 @@ export class GitService {
 
   async getBranches(path: string): Promise<string[]> {
     try {
-      const { stdout } = await execAsync(`git -C "${path}" branch --list`)
-      return stdout
+      const output = await this.runGit(['branch', '--list'], path)
+      return output
         .split('\n')
         .filter((b) => b.trim())
         .map((b) => b.replace('*', '').trim())
@@ -85,8 +99,8 @@ export class GitService {
 
   async getCurrentBranch(path: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`git -C "${path}" branch --show-current`)
-      return stdout.trim()
+      const output = await this.runGit(['branch', '--show-current'], path)
+      return output.trim()
     } catch (error) {
       throw new Error(`Failed to get current branch: ${error}`)
     }
@@ -94,10 +108,11 @@ export class GitService {
 
   async inferRepoPathFromWorktree(worktreePath: string): Promise<string | null> {
     try {
-      const { stdout } = await execAsync(
-        `git -C "${worktreePath}" rev-parse --git-common-dir`
+      const output = await this.runGit(
+        ['rev-parse', '--git-common-dir'],
+        worktreePath
       )
-      const rawPath = stdout.trim()
+      const rawPath = output.trim()
       if (!rawPath) return null
       const commonDir = isAbsolute(rawPath) ? rawPath : resolve(worktreePath, rawPath)
       if (commonDir.endsWith('/.git') || commonDir.endsWith('\\.git')) {
@@ -114,7 +129,7 @@ export class GitService {
    */
   async listWorktrees(repoPath: string): Promise<WorktreeInfo[]> {
     try {
-      const { stdout } = await execAsync(`git -C "${repoPath}" worktree list --porcelain`)
+      const stdout = await this.runGit(['worktree', 'list', '--porcelain'], repoPath)
       const worktrees: WorktreeInfo[] = []
       const lines = stdout.split('\n')
       let current: Partial<WorktreeInfo> = {}
@@ -162,13 +177,17 @@ export class GitService {
     baseBranch?: string
   ): Promise<void> {
     try {
-      const command = createBranch
-        ? `git -C "${repoPath}" worktree add -b "${branchName}" "${worktreePath}"${
-            baseBranch ? ` "${baseBranch}"` : ''
-          }`
-        : `git -C "${repoPath}" worktree add "${worktreePath}" "${branchName}"`
+      const args = ['worktree', 'add']
+      if (createBranch) {
+        args.push('-b', branchName, worktreePath)
+        if (baseBranch) {
+          args.push(baseBranch)
+        }
+      } else {
+        args.push(worktreePath, branchName)
+      }
 
-      await execAsync(command)
+      await this.runGit(args, repoPath)
     } catch (error) {
       throw new Error(`Failed to add worktree: ${error}`)
     }
@@ -183,11 +202,12 @@ export class GitService {
     force: boolean = false
   ): Promise<void> {
     try {
-      const command = force
-        ? `git -C "${repoPath}" worktree remove --force "${worktreePath}"`
-        : `git -C "${repoPath}" worktree remove "${worktreePath}"`
-
-      await execAsync(command)
+      const args = ['worktree', 'remove']
+      if (force) {
+        args.push('--force')
+      }
+      args.push(worktreePath)
+      await this.runGit(args, repoPath)
     } catch (error) {
       throw new Error(`Failed to remove worktree: ${error}`)
     }
@@ -198,7 +218,7 @@ export class GitService {
    */
   async pruneWorktrees(repoPath: string): Promise<void> {
     try {
-      await execAsync(`git -C "${repoPath}" worktree prune`)
+      await this.runGit(['worktree', 'prune'], repoPath)
     } catch (error) {
       throw new Error(`Failed to prune worktrees: ${error}`)
     }
@@ -209,11 +229,11 @@ export class GitService {
    */
   async getDiff(repoPath: string, filePath?: string): Promise<string> {
     try {
-      const command = filePath
-        ? `git -C "${repoPath}" diff "${filePath}"`
-        : `git -C "${repoPath}" diff`
-      const { stdout } = await execAsync(command)
-      return stdout
+      const args = ['diff']
+      if (filePath) {
+        args.push('--', filePath)
+      }
+      return await this.runGit(args, repoPath)
     } catch (error) {
       throw new Error(`Failed to get diff: ${error}`)
     }
@@ -224,11 +244,11 @@ export class GitService {
    */
   async getStagedDiff(repoPath: string, filePath?: string): Promise<string> {
     try {
-      const command = filePath
-        ? `git -C "${repoPath}" diff --staged "${filePath}"`
-        : `git -C "${repoPath}" diff --staged`
-      const { stdout } = await execAsync(command)
-      return stdout
+      const args = ['diff', '--staged']
+      if (filePath) {
+        args.push('--', filePath)
+      }
+      return await this.runGit(args, repoPath)
     } catch (error) {
       throw new Error(`Failed to get staged diff: ${error}`)
     }
@@ -245,7 +265,7 @@ export class GitService {
     }>
   > {
     try {
-      const { stdout } = await execAsync(`git -C "${repoPath}" status --porcelain`)
+      const stdout = await this.runGit(['status', '--porcelain'], repoPath)
       const files = stdout
         .split('\n')
         .filter((line) => line.trim())
@@ -277,9 +297,7 @@ export class GitService {
     try {
       const compare = compareBranch?.trim() || 'HEAD'
       const range = `${baseBranch}...${compare}`
-      const { stdout } = await execAsync(
-        `git -C "${repoPath}" diff --name-status "${range}"`
-      )
+      const stdout = await this.runGit(['diff', '--name-status', range], repoPath)
       const files = stdout
         .split('\n')
         .filter((line) => line.trim())
@@ -301,8 +319,8 @@ export class GitService {
    */
   async stageFiles(repoPath: string, filePaths: string[]): Promise<void> {
     try {
-      const files = filePaths.map((f) => `"${f}"`).join(' ')
-      await execAsync(`git -C "${repoPath}" add ${files}`)
+      if (filePaths.length === 0) return
+      await this.runGit(['add', '--', ...filePaths], repoPath)
     } catch (error) {
       throw new Error(`Failed to stage files: ${error}`)
     }
@@ -313,8 +331,8 @@ export class GitService {
    */
   async unstageFiles(repoPath: string, filePaths: string[]): Promise<void> {
     try {
-      const files = filePaths.map((f) => `"${f}"`).join(' ')
-      await execAsync(`git -C "${repoPath}" reset HEAD ${files}`)
+      if (filePaths.length === 0) return
+      await this.runGit(['reset', 'HEAD', '--', ...filePaths], repoPath)
     } catch (error) {
       throw new Error(`Failed to unstage files: ${error}`)
     }
@@ -328,7 +346,7 @@ export class GitService {
     branchName: string
   ): Promise<{ success: boolean; conflicts?: string[] }> {
     try {
-      await execAsync(`git -C "${repoPath}" merge "${branchName}"`)
+      await this.runGit(['merge', branchName], repoPath)
       return { success: true }
     } catch (error) {
       const conflicts = await this.getConflictFiles(repoPath)
@@ -344,7 +362,10 @@ export class GitService {
    */
   async getConflictFiles(repoPath: string): Promise<string[]> {
     try {
-      const { stdout } = await execAsync(`git -C "${repoPath}" diff --name-only --diff-filter=U`)
+      const stdout = await this.runGit(
+        ['diff', '--name-only', '--diff-filter=U'],
+        repoPath
+      )
       return stdout.split('\n').filter((f) => f.trim())
     } catch {
       return []
@@ -356,7 +377,7 @@ export class GitService {
    */
   async abortMerge(repoPath: string): Promise<void> {
     try {
-      await execAsync(`git -C "${repoPath}" merge --abort`)
+      await this.runGit(['merge', '--abort'], repoPath)
     } catch (error) {
       throw new Error(`Failed to abort merge: ${error}`)
     }
@@ -367,8 +388,7 @@ export class GitService {
    */
   async getConflictContent(repoPath: string, filePath: string): Promise<string> {
     try {
-      const { stdout } = await execAsync(`cat "${repoPath}/${filePath}"`)
-      return stdout
+      return await readFile(resolve(repoPath, filePath), 'utf-8')
     } catch (error) {
       throw new Error(`Failed to get conflict content: ${error}`)
     }
@@ -383,8 +403,8 @@ export class GitService {
     strategy: 'ours' | 'theirs'
   ): Promise<void> {
     try {
-      await execAsync(`git -C "${repoPath}" checkout --${strategy} "${filePath}"`)
-      await execAsync(`git -C "${repoPath}" add "${filePath}"`)
+      await this.runGit(['checkout', `--${strategy}`, '--', filePath], repoPath)
+      await this.runGit(['add', '--', filePath], repoPath)
     } catch (error) {
       throw new Error(`Failed to resolve conflict: ${error}`)
     }
@@ -398,7 +418,7 @@ export class GitService {
     targetBranch: string
   ): Promise<{ success: boolean; conflicts?: string[] }> {
     try {
-      await execAsync(`git -C "${repoPath}" rebase "${targetBranch}"`)
+      await this.runGit(['rebase', targetBranch], repoPath)
       return { success: true }
     } catch (error) {
       const conflicts = await this.getConflictFiles(repoPath)
@@ -414,7 +434,7 @@ export class GitService {
    */
   async rebaseContinue(repoPath: string): Promise<{ success: boolean; conflicts?: string[] }> {
     try {
-      await execAsync(`git -C "${repoPath}" rebase --continue`)
+      await this.runGit(['rebase', '--continue'], repoPath)
       return { success: true }
     } catch (error) {
       const conflicts = await this.getConflictFiles(repoPath)
@@ -430,7 +450,7 @@ export class GitService {
    */
   async rebaseAbort(repoPath: string): Promise<void> {
     try {
-      await execAsync(`git -C "${repoPath}" rebase --abort`)
+      await this.runGit(['rebase', '--abort'], repoPath)
     } catch (error) {
       throw new Error(`Failed to abort rebase: ${error}`)
     }
@@ -441,7 +461,7 @@ export class GitService {
    */
   async rebaseSkip(repoPath: string): Promise<{ success: boolean; conflicts?: string[] }> {
     try {
-      await execAsync(`git -C "${repoPath}" rebase --skip`)
+      await this.runGit(['rebase', '--skip'], repoPath)
       return { success: true }
     } catch (error) {
       const conflicts = await this.getConflictFiles(repoPath)
@@ -457,7 +477,7 @@ export class GitService {
    */
   async getRemoteUrl(repoPath: string, remoteName: string = 'origin'): Promise<string> {
     try {
-      const { stdout } = await execAsync(`git -C "${repoPath}" remote get-url ${remoteName}`)
+      const stdout = await this.runGit(['remote', 'get-url', remoteName], repoPath)
       return stdout.trim()
     } catch (error) {
       throw new Error(`Failed to get remote URL: ${error}`)
@@ -474,10 +494,13 @@ export class GitService {
     force: boolean = false
   ): Promise<void> {
     try {
-      const command = force
-        ? `git -C "${repoPath}" push --force ${remoteName} ${branchName}`
-        : `git -C "${repoPath}" push -u ${remoteName} ${branchName}`
-      await execAsync(command)
+      const args = ['push']
+      if (force) {
+        args.push('--force', remoteName, branchName)
+      } else {
+        args.push('-u', remoteName, branchName)
+      }
+      await this.runGit(args, repoPath)
     } catch (error) {
       throw new Error(`Failed to push branch: ${error}`)
     }
@@ -498,8 +521,9 @@ export class GitService {
     }>
   > {
     try {
-      const { stdout } = await execAsync(
-        `git -C "${repoPath}" log --pretty=format:"%H|%s|%an|%ad" --date=short -n ${limit}`
+      const stdout = await this.runGit(
+        ['log', '--pretty=format:%H|%s|%an|%ad', '--date=short', '-n', String(limit)],
+        repoPath
       )
       const commits = stdout
         .split('\n')
@@ -619,7 +643,7 @@ export class GitService {
    */
   async checkoutBranch(repoPath: string, branchName: string): Promise<void> {
     try {
-      await execAsync(`git -C "${repoPath}" checkout "${branchName}"`)
+      await this.runGit(['checkout', branchName], repoPath)
     } catch (error) {
       throw new Error(`Failed to checkout branch: ${error}`)
     }
@@ -630,7 +654,7 @@ export class GitService {
    */
   async createBranch(repoPath: string, branchName: string): Promise<void> {
     try {
-      await execAsync(`git -C "${repoPath}" checkout -b "${branchName}"`)
+      await this.runGit(['checkout', '-b', branchName], repoPath)
     } catch (error) {
       throw new Error(`Failed to create branch: ${error}`)
     }
@@ -642,7 +666,7 @@ export class GitService {
   async deleteBranch(repoPath: string, branchName: string, force: boolean = false): Promise<void> {
     try {
       const flag = force ? '-D' : '-d'
-      await execAsync(`git -C "${repoPath}" branch ${flag} "${branchName}"`)
+      await this.runGit(['branch', flag, branchName], repoPath)
     } catch (error) {
       throw new Error(`Failed to delete branch: ${error}`)
     }

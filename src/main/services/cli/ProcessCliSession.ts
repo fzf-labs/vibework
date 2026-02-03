@@ -1,10 +1,12 @@
-import { spawn, ChildProcess } from 'child_process'
+import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { DataBatcher } from '../DataBatcher'
 import { LogNormalizerService } from '../LogNormalizerService'
 import { MsgStoreService } from '../MsgStoreService'
 import { CliCompletionSignal, CliSessionHandle, CliSessionStatus } from './types'
 import { LogMsgInput, NormalizedEntry } from '../../types/log'
+import { safeSpawn } from '../../utils/safe-exec'
+import { config } from '../../config'
 
 export interface ProcessCommandSpec {
   command: string
@@ -54,11 +56,12 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     this.stderrNormalizer = stderrNormalizer
     this.msgStore = new MsgStoreService(undefined, sessionId, projectId)
 
-    this.process = spawn(commandSpec.command, commandSpec.args, {
+    this.process = safeSpawn(commandSpec.command, commandSpec.args, {
       cwd: commandSpec.cwd,
       env: commandSpec.env,
-      shell: commandSpec.shell ?? true,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      allowlist: config.commandAllowlist,
+      label: 'ProcessCliSession'
     })
 
     this.stdoutBatcher = new DataBatcher((data) => {

@@ -1,8 +1,10 @@
 import { EventEmitter } from 'events'
-import { appendFileSync, existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
+import { appendFile, rename, stat, unlink } from 'fs/promises'
+import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
 import { LogMsg, LogMsgInput, MsgStoreConfig, StoredMsg } from '../types/log'
 import { getAppPaths } from './AppPaths'
 import { newUlid } from '../utils/ids'
+import { config } from '../config'
 
 const DEFAULT_CONFIG: MsgStoreConfig = {
   maxBytes: 50 * 1024 * 1024, // 50MB
@@ -16,6 +18,14 @@ export class MsgStoreService extends EventEmitter {
   private _sessionId: string | null = null
   private _projectId: string | null = null
   private logFilePath: string | null = null
+  private pendingWrites: string[] = []
+  private pendingBytes = 0
+  private flushTimer: NodeJS.Timeout | null = null
+  private isFlushing = false
+  private logFlushIntervalMs = config.log.batchFlushIntervalMs
+  private logMaxBatchBytes = config.log.maxBatchBytes
+  private logMaxFileBytes = config.log.rotation.maxFileBytes
+  private logMaxFiles = config.log.rotation.maxFiles
 
   constructor(config?: Partial<MsgStoreConfig>, sessionId?: string, projectId?: string | null) {
     super()
@@ -82,6 +92,81 @@ export class MsgStoreService extends EventEmitter {
     }
   }
 
+  private scheduleFlush(): void {
+    if (this.flushTimer) return
+    this.flushTimer = setTimeout(() => {
+      void this.flushPending()
+    }, this.logFlushIntervalMs)
+  }
+
+  private enqueuePersist(line: string): void {
+    if (!this.logFilePath) return
+    this.pendingWrites.push(line)
+    this.pendingBytes += Buffer.byteLength(line)
+
+    if (this.pendingBytes >= this.logMaxBatchBytes) {
+      void this.flushPending()
+      return
+    }
+
+    this.scheduleFlush()
+  }
+
+  private async rotateIfNeeded(incomingBytes: number): Promise<void> {
+    if (!this.logFilePath) return
+    if (this.logMaxFileBytes <= 0 || this.logMaxFiles <= 0) return
+
+    try {
+      const stats = await stat(this.logFilePath)
+      if (stats.size + incomingBytes <= this.logMaxFileBytes) return
+    } catch {
+      return
+    }
+
+    for (let index = this.logMaxFiles; index >= 1; index -= 1) {
+      const source = `${this.logFilePath}.${index}`
+      const target = `${this.logFilePath}.${index + 1}`
+      if (!existsSync(source)) continue
+      if (index === this.logMaxFiles) {
+        await unlink(source)
+      } else {
+        await rename(source, target)
+      }
+    }
+
+    if (existsSync(this.logFilePath)) {
+      await rename(this.logFilePath, `${this.logFilePath}.1`)
+    }
+  }
+
+  private async flushPending(): Promise<void> {
+    if (this.isFlushing || !this.logFilePath) return
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer)
+      this.flushTimer = null
+    }
+
+    if (this.pendingWrites.length === 0) return
+
+    const payload = this.pendingWrites.join('')
+    const payloadBytes = this.pendingBytes
+    this.pendingWrites = []
+    this.pendingBytes = 0
+    this.isFlushing = true
+
+    try {
+      await this.rotateIfNeeded(payloadBytes)
+      await appendFile(this.logFilePath, payload)
+    } catch (error) {
+      console.error('[MsgStore] Failed to persist log:', error)
+    } finally {
+      this.isFlushing = false
+      if (this.pendingWrites.length > 0) {
+        this.scheduleFlush()
+      }
+    }
+  }
+
   /**
    * 推送消息到存储和广播
    */
@@ -90,13 +175,7 @@ export class MsgStoreService extends EventEmitter {
     this.addToHistory(normalized)
 
     // 持久化到文件
-    if (this.logFilePath) {
-      try {
-        appendFileSync(this.logFilePath, JSON.stringify(normalized) + '\n')
-      } catch (error) {
-        console.error('[MsgStore] Failed to persist log:', error)
-      }
-    }
+    this.enqueuePersist(JSON.stringify(normalized) + '\n')
 
     // 广播给所有监听者
     this.emit('message', normalized)

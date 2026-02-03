@@ -45,10 +45,20 @@ export function CreateProjectDialog({
   };
 
   const handleSelectFolder = async () => {
-    const result = await window.api.dialog.open({
+    const options = {
       properties: ['openDirectory', 'createDirectory'],
       title: mode === 'clone' ? '选择克隆目标目录' : '选择项目目录',
-    });
+    };
+    const dialogApi = window.api?.dialog;
+    const ipcInvoke = window.electron?.ipcRenderer?.invoke;
+    if (!dialogApi?.open && !ipcInvoke) {
+      setError('无法访问系统对话框，请重启应用');
+      return;
+    }
+
+    const result = dialogApi?.open
+      ? await dialogApi.open(options)
+      : await ipcInvoke?.('dialog:open', options);
     if (result) {
       setPath(result as string);
     }

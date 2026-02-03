@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process'
+import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -8,6 +8,8 @@ import { LogNormalizerService } from './LogNormalizerService'
 import { ClaudeCodeNormalizer } from './normalizers/ClaudeCodeNormalizer'
 import { LogMsg, LogMsgInput } from '../types/log'
 import { DataBatcher } from './DataBatcher'
+import { safeSpawn } from '../utils/safe-exec'
+import { config } from '../config'
 
 interface MCPServer {
   name: string
@@ -52,6 +54,16 @@ export class ClaudeCodeService extends EventEmitter {
     this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
   }
 
+  private cleanupSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session) return
+
+    session.process.stdout?.removeAllListeners()
+    session.process.stderr?.removeAllListeners()
+    session.process.removeAllListeners()
+    this.sessions.delete(sessionId)
+  }
+
   private loadConfig(): ClaudeCodeConfig {
     const configPath = path.join(os.homedir(), '.vibework', 'claude-code.json')
 
@@ -67,7 +79,7 @@ export class ClaudeCodeService extends EventEmitter {
     // 返回默认配置
     return {
       executablePath: 'claude',
-      defaultModel: 'sonnet'
+      defaultModel: config.models.claudeDefaultModel
     }
   }
 
@@ -143,10 +155,11 @@ export class ClaudeCodeService extends EventEmitter {
       fs.mkdirSync(workdir, { recursive: true })
     }
 
-    const childProcess = spawn(actualCommand, args, {
+    const childProcess = safeSpawn(actualCommand, args, {
       cwd: workdir,
-      shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
+      allowlist: config.commandAllowlist,
+      label: 'ClaudeCodeService',
       env: {
         ...process.env,
         PATH: `${homeDir}/.local/bin:/opt/homebrew/bin:${process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}`
@@ -250,6 +263,7 @@ export class ClaudeCodeService extends EventEmitter {
       })
 
       this.emit('close', { sessionId, code })
+      this.cleanupSession(sessionId)
     })
 
     childProcess.on('error', (error) => {
@@ -313,8 +327,7 @@ export class ClaudeCodeService extends EventEmitter {
       throw new Error(`Session ${sessionId} not found`)
     }
 
-    session.process.kill()
-    this.sessions.delete(sessionId)
+    session.process.kill('SIGTERM')
   }
 
   sendInput(sessionId: string, input: string): void {

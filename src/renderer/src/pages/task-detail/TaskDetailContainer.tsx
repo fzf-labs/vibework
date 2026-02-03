@@ -129,6 +129,7 @@ export function TaskDetailContainer() {
   const { toggleLeft } = useSidebar();
   const [hasStarted, setHasStarted] = useState(false);
   const isInitializingRef = useRef(false);
+  const initializedTaskIdRef = useRef<string | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const useCliSession = Boolean(task?.cli_tool_id);
@@ -325,7 +326,7 @@ export function TaskDetailContainer() {
     }
 
     return '';
-  }, [task?.worktree_path, sessionFolder, artifacts]);
+  }, [artifacts, sessionFolder, task?.workspace_path, task?.worktree_path]);
 
   // Live preview state
   const {
@@ -671,52 +672,67 @@ export function TaskDetailContainer() {
         return;
       }
 
+      if (initializedTaskIdRef.current === taskId) {
+        return;
+      }
+
       // Prevent double initialization in React Strict Mode
       if (isInitializingRef.current) {
         return;
       }
       isInitializingRef.current = true;
 
-      setIsLoading(true);
+      try {
+        setIsLoading(true);
 
-      const existingTask = await loadTask(taskId);
+        const existingTask = await loadTask(taskId);
 
-      if (existingTask) {
-        setTask(existingTask);
-        await loadMessages(taskId);
-        setHasStarted(true);
-        setIsLoading(false);
-      } else if (initialPrompt && !hasStarted) {
-        setHasStarted(true);
-        setIsLoading(false);
-        setMessages([]);
+        if (existingTask) {
+          setTask(existingTask);
+          await loadMessages(taskId);
+          setHasStarted(true);
+          setIsLoading(false);
+        } else if (initialPrompt && !hasStarted) {
+          setHasStarted(true);
+          setIsLoading(false);
+          setMessages([]);
 
-        const sessionId = initialSessionId || newUuid();
+          const sessionId = initialSessionId || newUuid();
 
-        try {
-          const settings = getSettings();
-          const createdTask = await db.createTask({
-            id: taskId,
-            session_id: sessionId,
-            title: initialPrompt,
-            prompt: initialPrompt,
-            cli_tool_id: settings.defaultCliToolId || null,
-          });
-          setTask(createdTask);
-        } catch (error) {
-          console.error('[TaskDetail] Failed to initialize task:', error);
-          const newTask = await loadTask(taskId);
-          setTask(newTask);
+          try {
+            const settings = getSettings();
+            const createdTask = await db.createTask({
+              id: taskId,
+              session_id: sessionId,
+              title: initialPrompt,
+              prompt: initialPrompt,
+              cli_tool_id: settings.defaultCliToolId || null,
+            });
+            setTask(createdTask);
+          } catch (error) {
+            console.error('[TaskDetail] Failed to initialize task:', error);
+            const newTask = await loadTask(taskId);
+            setTask(newTask);
+          }
+        } else {
+          setIsLoading(false);
         }
-      } else {
-        setIsLoading(false);
+      } finally {
+        initializedTaskIdRef.current = taskId;
+        isInitializingRef.current = false;
       }
-
-      isInitializingRef.current = false;
     }
 
     initialize();
-  }, [taskId]);
+  }, [
+    taskId,
+    loadMessages,
+    loadTask,
+    initialPrompt,
+    initialSessionId,
+    hasStarted,
+    setMessages,
+  ]);
 
   useEffect(() => {
     if (!task?.pipeline_template_id) {
@@ -1134,7 +1150,7 @@ export function TaskDetailContainer() {
       if (!taskId) return;
       setMessages((prev) => [...prev, { type: 'text', content }]);
     },
-    [taskId]
+    [setMessages, taskId]
   );
 
   const startPipelineStage = useCallback(
@@ -1389,6 +1405,7 @@ export function TaskDetailContainer() {
       isRunning,
       taskId,
       useCliSession,
+      setMessages,
       loadMessages,
       continueConversation,
       appendCliSystemLog,
@@ -1612,7 +1629,7 @@ export function TaskDetailContainer() {
     if (!task) return false;
     if (task.status && normalizedTaskStatus !== 'todo') return true;
     return false;
-  }, [hasStartedOnce, isRunning, messages.length, normalizedTaskStatus, task, task?.status]);
+  }, [hasStartedOnce, isRunning, messages.length, normalizedTaskStatus, task]);
 
   const showStartButton = !hasExecuted;
   const showActionButton = showStartButton || isCliTaskReviewPending;

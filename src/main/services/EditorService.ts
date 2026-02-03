@@ -1,9 +1,10 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { platform } from 'os'
+import { safeExecFile } from '../utils/safe-exec'
+import { config } from '../config'
 
-const execAsync = promisify(exec)
+const editorAllowlist = config.commandAllowlist
+const defaultTimeoutMs = config.commandTimeoutMs
 
 export interface EditorInfo {
   type: 'vscode' | 'cursor' | 'webstorm' | 'idea' | 'goland' | 'xcode' | 'antigravity' | 'other'
@@ -78,7 +79,12 @@ export class EditorService {
 
     // 尝试通过命令检测
     try {
-      await execAsync(os === 'win32' ? 'where code' : 'which code')
+      const lookupCommand = os === 'win32' ? 'where' : 'which'
+      await safeExecFile(lookupCommand, ['code'], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
       return {
         type: 'vscode',
         name: 'Visual Studio Code',
@@ -110,7 +116,12 @@ export class EditorService {
     }
 
     try {
-      await execAsync(os === 'win32' ? 'where cursor' : 'which cursor')
+      const lookupCommand = os === 'win32' ? 'where' : 'which'
+      await safeExecFile(lookupCommand, ['cursor'], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
       return {
         type: 'cursor',
         name: 'Cursor',
@@ -142,7 +153,12 @@ export class EditorService {
     }
 
     try {
-      await execAsync(os === 'win32' ? 'where webstorm' : 'which webstorm')
+      const lookupCommand = os === 'win32' ? 'where' : 'which'
+      await safeExecFile(lookupCommand, ['webstorm'], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
       return {
         type: 'webstorm',
         name: 'WebStorm',
@@ -174,7 +190,12 @@ export class EditorService {
     }
 
     try {
-      await execAsync(os === 'win32' ? 'where idea' : 'which idea')
+      const lookupCommand = os === 'win32' ? 'where' : 'which'
+      await safeExecFile(lookupCommand, ['idea'], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
       return {
         type: 'idea',
         name: 'IntelliJ IDEA',
@@ -206,7 +227,12 @@ export class EditorService {
     }
 
     try {
-      await execAsync(os === 'win32' ? 'where antigravity' : 'which antigravity')
+      const lookupCommand = os === 'win32' ? 'where' : 'which'
+      await safeExecFile(lookupCommand, ['antigravity'], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
       return {
         type: 'antigravity',
         name: 'Google Antigravity',
@@ -238,7 +264,12 @@ export class EditorService {
     }
 
     try {
-      await execAsync(os === 'win32' ? 'where goland' : 'which goland')
+      const lookupCommand = os === 'win32' ? 'where' : 'which'
+      await safeExecFile(lookupCommand, ['goland'], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
       return {
         type: 'goland',
         name: 'GoLand',
@@ -271,7 +302,11 @@ export class EditorService {
 
     if (os === 'darwin') {
       try {
-        await execAsync('which xed')
+        await safeExecFile('which', ['xed'], {
+          allowlist: editorAllowlist,
+          timeoutMs: defaultTimeoutMs,
+          label: 'EditorService'
+        })
         return {
           type: 'xcode',
           name: 'Xcode',
@@ -408,11 +443,12 @@ export class EditorService {
    */
   async openProject(projectPath: string, editorCommand: string): Promise<void> {
     try {
-      let command = editorCommand.trim()
-      if (existsSync(command) && command.includes(' ')) {
-        command = `"${command}"`
-      }
-      await execAsync(`${command} "${projectPath}"`)
+      const command = editorCommand.trim()
+      await safeExecFile(command, [projectPath], {
+        allowlist: editorAllowlist,
+        timeoutMs: defaultTimeoutMs,
+        label: 'EditorService'
+      })
     } catch (error) {
       throw new Error(`Failed to open project: ${error}`)
     }
