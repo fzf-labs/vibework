@@ -20,6 +20,7 @@ export interface CreateProjectInput {
 }
 
 const CURRENT_PROJECT_KEY = 'vibework_current_project';
+const CURRENT_PROJECT_CHANGED_EVENT = 'current-project:changed';
 
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -58,6 +59,18 @@ export function useProjects() {
     };
   }, [fetchProjects]);
 
+  // Listen for current project changes from other components
+  useEffect(() => {
+    const handleCurrentProjectChanged = (event: Event) => {
+      const customEvent = event as CustomEvent<string | null>;
+      setCurrentProjectIdState(customEvent.detail);
+    };
+    window.addEventListener(CURRENT_PROJECT_CHANGED_EVENT, handleCurrentProjectChanged);
+    return () => {
+      window.removeEventListener(CURRENT_PROJECT_CHANGED_EVENT, handleCurrentProjectChanged);
+    };
+  }, []);
+
   const setCurrentProjectId = useCallback((id: string | null) => {
     setCurrentProjectIdState(id);
     if (id) {
@@ -65,6 +78,8 @@ export function useProjects() {
     } else {
       localStorage.removeItem(CURRENT_PROJECT_KEY);
     }
+    // Notify other components about the change
+    window.dispatchEvent(new CustomEvent(CURRENT_PROJECT_CHANGED_EVENT, { detail: id }));
   }, []);
 
   const addProject = useCallback(async (input: CreateProjectInput): Promise<Project> => {
