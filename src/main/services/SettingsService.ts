@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { getAppPaths } from './AppPaths'
+import { getAppPaths } from '../app/AppPaths'
 
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system'

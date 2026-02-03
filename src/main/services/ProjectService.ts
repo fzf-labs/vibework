@@ -1,28 +1,10 @@
 import { existsSync } from 'fs'
 import { join } from 'path'
-import {
-  DatabaseService,
-  Project as DbProject,
-  CreateProjectInput,
-  UpdateProjectInput
-} from './DatabaseService'
+import { DatabaseService } from './DatabaseService'
+import type { CreateProjectInput, Project as DbProject, UpdateProjectInput } from '../types/project'
+import type { CreateProjectOptions, Project } from '../types/domain/project'
 
-export interface Project {
-  id: string
-  name: string
-  path: string
-  description?: string
-  projectType: 'normal' | 'git'
-  createdAt: string
-  updatedAt: string
-}
-
-export interface CreateProjectOptions {
-  name: string
-  path: string
-  description?: string
-  projectType?: 'normal' | 'git'
-}
+export type { CreateProjectOptions, Project } from '../types/domain/project'
 
 export class ProjectService {
   private db: DatabaseService

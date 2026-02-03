@@ -5,40 +5,8 @@ import { homedir } from 'os'
 import { DatabaseService } from './DatabaseService'
 import { GitService } from './GitService'
 import { newUlid, newUuid } from '../utils/ids'
-import { getAppPaths } from './AppPaths'
-
-interface CreateTaskOptions {
-  title: string
-  prompt: string
-  projectId?: string
-  projectPath?: string
-  createWorktree?: boolean
-  baseBranch?: string
-  worktreeBranchPrefix?: string
-  worktreeRootPath?: string
-  cliToolId?: string
-  workflowTemplateId?: string
-}
-
-interface TaskWithWorktree {
-  id: string
-  sessionId: string
-  title: string
-  prompt: string
-  status: string
-  projectId: string | null
-  worktreePath: string | null
-  branchName: string | null
-  baseBranch: string | null
-  workspacePath: string | null
-  cliToolId: string | null
-  workflowTemplateId: string | null
-  cost: number | null
-  duration: number | null
-  favorite: boolean
-  createdAt: string
-  updatedAt: string
-}
+import { getAppPaths } from '../app/AppPaths'
+import type { CreateTaskOptions, TaskWithWorktree } from '../types/domain/task'
 
 export class TaskService {
   private static readonly DEFAULT_WORKTREE_PREFIX = 'VW-'

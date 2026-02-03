@@ -4,7 +4,7 @@ import { safeSpawn } from '../utils/safe-exec'
 import { config } from '../config'
 import { OutputBuffer } from '../utils/output-buffer'
 import { OutputSpooler } from '../utils/output-spooler'
-import { getAppPaths } from './AppPaths'
+import { getAppPaths } from '../app/AppPaths'
 
 const pipelineAllowlist = config.commandAllowlist
 

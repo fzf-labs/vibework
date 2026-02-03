@@ -1,4 +1,4 @@
-import { getAppPaths } from '../services/AppPaths'
+import { getAppPaths } from './AppPaths'
 import { ProjectService } from '../services/ProjectService'
 import { GitService } from '../services/GitService'
 import { CLIProcessService } from '../services/CLIProcessService'

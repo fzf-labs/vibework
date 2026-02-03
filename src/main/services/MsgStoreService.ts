@@ -2,7 +2,7 @@ import { EventEmitter } from 'events'
 import { appendFile, rename, stat, unlink } from 'fs/promises'
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'fs'
 import { LogMsg, LogMsgInput, MsgStoreConfig, StoredMsg } from '../types/log'
-import { getAppPaths } from './AppPaths'
+import { getAppPaths } from '../app/AppPaths'
 import { newUlid } from '../utils/ids'
 import { config } from '../config'
 

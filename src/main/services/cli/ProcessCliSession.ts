@@ -1,6 +1,6 @@
 import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import { DataBatcher } from '../DataBatcher'
+import { DataBatcher } from '../../utils/data-batcher'
 import { LogNormalizerService } from '../LogNormalizerService'
 import { MsgStoreService } from '../MsgStoreService'
 import { CliCompletionSignal, CliSessionHandle, CliSessionStatus } from './types'

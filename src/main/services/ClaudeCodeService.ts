@@ -7,7 +7,7 @@ import { MsgStoreService } from './MsgStoreService'
 import { LogNormalizerService } from './LogNormalizerService'
 import { ClaudeCodeNormalizer } from './normalizers/ClaudeCodeNormalizer'
 import { LogMsg, LogMsgInput } from '../types/log'
-import { DataBatcher } from './DataBatcher'
+import { DataBatcher } from '../utils/data-batcher'
 import { safeSpawn } from '../utils/safe-exec'
 import { config } from '../config'
 

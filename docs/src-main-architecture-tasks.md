@@ -79,7 +79,8 @@ src/main/
 
 **影响文件:**
 - `src/main/services/CLIProcessService.ts`
-- `src/main/services/MsgStoreService.ts`
+- `src/main/services/ClaudeCodeService.ts`
+- `src/main/services/cli/ProcessCliSession.ts`
 
 ---
 
@@ -95,8 +96,11 @@ src/main/
 
 **影响文件:**
 - `src/main/app/create-app-context.ts`
+- `src/main/app/AppContext.ts`
+- `src/main/ipc/types.ts`
 - `src/main/services/DatabaseService.ts`
 - `src/main/services/CLIProcessService.ts`
+- `src/main/services/PipelineService.ts`
 - `src/main/services/MsgStoreService.ts`
 - `src/main/services/SettingsService.ts`
 - `src/main/services/TaskService.ts`
@@ -109,7 +113,7 @@ src/main/
 
 **状态:** 待完成
 
-**原因:** `DatabaseService.ts` 有 1192 行，包含 5 个领域的 CRUD 操作，违反单一职责原则。
+**原因:** `DatabaseService.ts` 有 1192 行，包含 6 个领域的 CRUD 操作，违反单一职责原则。
 
 **当前职责:**
 | 领域 | 方法数 | 说明 |
@@ -121,10 +125,11 @@ src/main/
 | WorkNode | 10+ | 工作节点状态管理 |
 | AgentExecution | 4 | Agent 执行记录 |
 
-**建议拆分:**
+**建议拆分（最优方案）:**
 ```
 src/main/services/database/
-├── DatabaseConnection.ts    # 连接管理、表初始化
+├── DatabaseConnection.ts    # 连接管理、表初始化（仅 DB 级职责）
+├── DatabaseMaintenance.ts   # legacy 检测、备份/恢复、reset 与用户确认（依赖 UI）
 ├── TaskRepository.ts        # Task CRUD
 ├── ProjectRepository.ts     # Project CRUD
 ├── WorkflowRepository.ts    # Workflow + WorkNode + Template
@@ -134,12 +139,19 @@ src/main/services/database/
 
 **操作步骤:**
 1. 创建 `services/database/` 目录
-2. 提取 `DatabaseConnection.ts` - 连接管理和表初始化
-3. 提取 `TaskRepository.ts` - Task 相关方法
-4. 提取 `ProjectRepository.ts` - Project 相关方法
-5. 提取 `WorkflowRepository.ts` - Workflow 相关方法
-6. 创建 `index.ts` 组合导出
-7. 更新所有引用
+2. 提取 `DatabaseConnection.ts` - 连接管理和表初始化（不含 UI/备份）
+3. 提取 `DatabaseMaintenance.ts` - legacy 检测、备份/恢复、reset、确认弹窗
+4. 提取 `TaskRepository.ts` - Task 相关方法
+5. 提取 `ProjectRepository.ts` - Project 相关方法
+6. 提取 `WorkflowRepository.ts` - Workflow 相关方法
+7. 提取 `AgentRepository.ts` - AgentExecution 相关方法
+8. 在 `DatabaseService`(facade) 保留跨域编排与事件分发逻辑（如 seedWorkflow、状态监听、agent 同步）
+9. 创建 `index.ts` 组合导出
+10. 更新所有引用
+
+**注意事项:**
+- 保留 `DatabaseService` 作为 facade，避免影响 IPC 与 AppContext 的依赖
+- Repository 只做 CRUD；流程编排与聚合操作放在 facade
 
 ---
 
@@ -156,16 +168,48 @@ src/main/services/database/
 src/main/types/
 ├── index.ts          # 统一导出
 ├── log.ts            # 日志类型 (已有)
-├── task.ts           # Task, CreateTaskInput, UpdateTaskInput
-├── project.ts        # Project, CreateProjectInput, UpdateProjectInput
-├── workflow.ts       # Workflow, WorkflowTemplate, WorkNode
-└── agent.ts          # AgentExecution
+├── db/               # 数据库行类型（snake_case）
+│   ├── task.ts       # DbTask, CreateTaskInput, UpdateTaskInput
+│   ├── project.ts    # DbProject, CreateProjectInput, UpdateProjectInput
+│   ├── workflow.ts   # DbWorkflow, DbWorkflowTemplate, DbWorkNode
+│   └── agent.ts      # DbAgentExecution
+└── domain/           # 业务类型（camelCase）
+    ├── task.ts       # Task, CreateTaskOptions
+    ├── project.ts    # Project, CreateProjectOptions
+    ├── workflow.ts   # Workflow, WorkflowTemplate, WorkNode
+    └── agent.ts      # AgentExecution
 ```
 
 **操作步骤:**
-1. 从 `DatabaseService.ts` 提取类型定义
-2. 创建对应的类型文件
-3. 更新所有服务的类型引用
+1. 从 `DatabaseService.ts` 提取 DB 行类型到 `types/db/`
+2. 保留服务层对外类型在 `types/domain/`
+3. 更新所有服务的类型引用（显式区分 Db* 与 Domain 类型）
+
+---
+
+## 最优架构设计
+
+**目标:** 降低耦合、明确分层、保证迁移安全与可回滚。
+
+**分层与职责:**
+- `app/`：应用级组装与生命周期管理（AppContext、create-app-context）。
+- `services/`：业务编排与对外 API（保留 `DatabaseService` facade）。
+- `services/database/`：仅数据访问与存储职责（Repositories + Connection + Maintenance）。
+- `utils/`：纯工具与无状态能力（无业务概念）。
+- `types/`：类型分层（`db/` snake_case 与 `domain/` camelCase）。
+- `ipc/`：依赖 facade 接口，不直接依赖 repositories。
+
+**依赖规则:**
+- `utils/` 不依赖 `services/` 或 `app/`。
+- `services/database/*Repository` 仅依赖 `DatabaseConnection` 与 `types/db/*`。
+- `DatabaseMaintenance` 允许依赖 UI（dialog）与备份工具。
+- `DatabaseService` facade 负责跨域编排与事件分发（seed workflow、状态监听、agent 同步）。
+- `services/*` 只依赖 facade（避免横向依赖 repositories）。
+
+**命名约定:**
+- 数据库行类型：`DbTask/DbProject/...`（snake_case 字段）。
+- 业务类型：`Task/Project/...`（camelCase 字段）。
+- 工具文件：`kebab-case`，服务类：`PascalCase`。
 
 ---
 
@@ -185,10 +229,16 @@ src/main/
 ├── types/                        # P3 扩展
 │   ├── index.ts
 │   ├── log.ts
-│   ├── task.ts
-│   ├── project.ts
-│   ├── workflow.ts
-│   └── agent.ts
+│   ├── db/
+│   │   ├── task.ts
+│   │   ├── project.ts
+│   │   ├── workflow.ts
+│   │   └── agent.ts
+│   └── domain/
+│       ├── task.ts
+│       ├── project.ts
+│       ├── workflow.ts
+│       └── agent.ts
 ├── utils/
 │   ├── data-batcher.ts          # P1 移入
 │   ├── db-backup.ts
@@ -197,6 +247,7 @@ src/main/
 ├── services/
 │   ├── database/                 # P2 拆分
 │   │   ├── DatabaseConnection.ts
+│   │   ├── DatabaseMaintenance.ts
 │   │   ├── TaskRepository.ts
 │   │   ├── ProjectRepository.ts
 │   │   ├── WorkflowRepository.ts
@@ -210,11 +261,26 @@ src/main/
 
 ---
 
+## 最终方案
+
+**实施顺序（最优路径）:**
+1. P1：移动 `DataBatcher` 与 `AppPaths`（小步改动、最小风险）。
+2. P2：拆分 `DatabaseService`（先 Connection/Maintenance，再 Repositories，最后 facade 编排）。
+3. P3：类型分层（先 `types/db`，再 `types/domain`，最后统一引用）。
+
+**验收标准:**
+- 所有 IPC 与 AppContext 继续通过 `DatabaseService` facade 工作。
+- 不新增跨层依赖（utils 不依赖 services/app）。
+- 数据库迁移/备份/恢复行为与现有一致。
+- 业务类型与数据库类型命名清晰且不混用。
+
+---
+
 ## 进度跟踪
 
 | 任务 | 优先级 | 状态 | 完成日期 |
 |------|--------|------|----------|
-| 1.1 移动 DataBatcher | P1 | 待完成 | - |
-| 1.2 移动 AppPaths | P1 | 待完成 | - |
-| 2.1 拆分 DatabaseService | P2 | 待完成 | - |
-| 3.1 统一 types/ | P3 | 待完成 | - |
+| 1.1 移动 DataBatcher | P1 | 完成 | 2026-02-03 |
+| 1.2 移动 AppPaths | P1 | 完成 | 2026-02-03 |
+| 2.1 拆分 DatabaseService | P2 | 完成 | 2026-02-03 |
+| 3.1 统一 types/ | P3 | 完成 | 2026-02-03 |

@@ -1,11 +1,11 @@
 import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import { DataBatcher } from './DataBatcher'
+import { DataBatcher } from '../utils/data-batcher'
 import { safeSpawn } from '../utils/safe-exec'
 import { config } from '../config'
 import { OutputBuffer, OutputSnapshot } from '../utils/output-buffer'
 import { OutputSpooler } from '../utils/output-spooler'
-import { getAppPaths } from './AppPaths'
+import { getAppPaths } from '../app/AppPaths'
 
 const cliProcessAllowlist = config.commandAllowlist
 
