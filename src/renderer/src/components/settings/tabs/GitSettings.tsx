@@ -37,7 +37,11 @@ export function GitSettings({
       setLoading(true);
       try {
         const result = await window.api?.git?.checkInstalled?.();
-        const isInstalled = Boolean((result as { data?: boolean } | undefined)?.data);
+        const isInstalled =
+          typeof result === 'boolean'
+            ? result
+            : Boolean((result as { data?: boolean } | undefined)?.data);
+        console.info('[GitSettings] Git checkInstalled result:', result);
         if (mounted) setInstalled(isInstalled);
       } catch (error) {
         console.error('[GitSettings] Failed to check git install status:', error);

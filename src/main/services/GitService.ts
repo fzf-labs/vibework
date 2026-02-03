@@ -2,8 +2,38 @@ import { readFile } from 'fs/promises'
 import { isAbsolute, resolve } from 'path'
 import { safeExecFile } from '../utils/safe-exec'
 
-const gitAllowlist = new Set(['git'])
+const gitAllowlist = new Set(['git', 'git.exe'])
 const defaultTimeoutMs = 300000
+const resolveTimeoutMs = 5000
+
+const defaultPathEntries =
+  process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\Git\\bin',
+        'C:\\Program Files\\Git\\cmd',
+        'C:\\Program Files (x86)\\Git\\bin',
+        'C:\\Program Files (x86)\\Git\\cmd'
+      ]
+    : [
+        '/usr/local/bin',
+        '/opt/homebrew/bin',
+        '/opt/local/bin',
+        '/usr/bin',
+        '/bin',
+        '/usr/sbin',
+        '/sbin'
+      ]
+
+const defaultGitCandidates =
+  process.platform === 'win32'
+    ? [
+        'git',
+        'C:\\Program Files\\Git\\bin\\git.exe',
+        'C:\\Program Files\\Git\\cmd\\git.exe',
+        'C:\\Program Files (x86)\\Git\\bin\\git.exe',
+        'C:\\Program Files (x86)\\Git\\cmd\\git.exe'
+      ]
+    : ['git', '/usr/bin/git', '/usr/local/bin/git', '/opt/homebrew/bin/git', '/opt/local/bin/git']
 
 interface WorktreeInfo {
   path: string
@@ -38,13 +68,65 @@ export interface FileDiff {
 }
 
 export class GitService {
+  private gitCommand: string | null = null
+  private gitEnv: NodeJS.ProcessEnv | null = null
+
+  private buildGitEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env }
+    const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
+    const delimiter = process.platform === 'win32' ? ';' : ':'
+    const currentPath = env[pathKey] ?? ''
+    const merged = new Set([
+      ...currentPath.split(delimiter).filter(Boolean),
+      ...defaultPathEntries
+    ])
+    env[pathKey] = Array.from(merged).join(delimiter)
+    return env
+  }
+
+  private async resolveGitCommand(): Promise<string> {
+    if (this.gitCommand) return this.gitCommand
+
+    const env = this.buildGitEnv()
+    const candidates = [
+      ...(process.env.VIBEWORK_GIT_PATH ? [process.env.VIBEWORK_GIT_PATH] : []),
+      ...defaultGitCandidates
+    ].filter(Boolean)
+
+    let lastError: unknown
+    for (const candidate of candidates) {
+      try {
+        await safeExecFile(candidate, ['--version'], {
+          env,
+          timeoutMs: resolveTimeoutMs,
+          allowlist: gitAllowlist,
+          label: 'GitService'
+        })
+        console.log('[GitService] Detected git at:', candidate)
+        this.gitCommand = candidate
+        this.gitEnv = env
+        return candidate
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    console.warn('[GitService] Unable to detect git.', {
+      candidates,
+      error: lastError instanceof Error ? lastError.message : String(lastError)
+    })
+    throw lastError ?? new Error('Git not found')
+  }
+
   private async runGit(
     args: string[],
     cwd?: string,
     timeoutMs: number = defaultTimeoutMs
   ): Promise<string> {
-    const { stdout } = await safeExecFile('git', args, {
+    const command = await this.resolveGitCommand()
+    const { stdout } = await safeExecFile(command, args, {
       cwd,
+      env: this.gitEnv ?? this.buildGitEnv(),
       timeoutMs,
       allowlist: gitAllowlist,
       label: 'GitService'
@@ -54,7 +136,7 @@ export class GitService {
 
   async isInstalled(): Promise<boolean> {
     try {
-      await this.runGit(['--version'])
+      await this.resolveGitCommand()
       return true
     } catch {
       return false

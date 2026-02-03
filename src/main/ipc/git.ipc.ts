@@ -4,7 +4,11 @@ import { IPC_CHANNELS } from './channels'
 export const registerGitIpc = ({ handle, v, services }: IpcModuleContext): void => {
   const { gitService } = services
 
-  handle(IPC_CHANNELS.git.checkInstalled, [], async () => await gitService.isInstalled())
+  handle(IPC_CHANNELS.git.checkInstalled, [], async () => {
+    const installed = await gitService.isInstalled()
+    console.log('[IPC][git.checkInstalled] result:', installed)
+    return installed
+  })
 
   handle(IPC_CHANNELS.git.clone, [v.string(), v.string()], async (_, remoteUrl, targetPath) => {
     try {
