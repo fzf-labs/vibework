@@ -13,7 +13,7 @@ import { RightPanelSection } from './components/RightPanelSection';
 import { TaskCard } from './components/TaskCard';
 import { TaskDialogs } from './components/TaskDialogs';
 import { WorkflowCard } from './components/WorkflowCard';
-import { useTaskDetail } from './hooks/useTaskDetail';
+import { useTaskDetail } from './useTaskDetail';
 import type { LocationState } from './types';
 
 export function TaskDetailContainer() {

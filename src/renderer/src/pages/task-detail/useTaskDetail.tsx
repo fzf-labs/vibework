@@ -26,7 +26,7 @@ import { hasValidSearchResults, type Artifact } from '@/components/artifacts';
 import { getArtifactTypeFromExt } from '@/components/task';
 import type { CLISessionHandle } from '@/components/cli';
 
-import { statusConfig } from '../constants';
+import { statusConfig } from './constants';
 import {
   filterVisibleMetaRows,
   type CLIToolInfo,
@@ -39,7 +39,7 @@ import {
   type WorkflowNode,
   type WorkflowReviewNode,
   type LanguageStrings,
-} from '../types';
+} from './types';
 
 // ============================================================================
 // Utils
