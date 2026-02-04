@@ -19,6 +19,37 @@
   @apply mx-auto max-w-7xl px-4 md:px-8;
 }
 
+@layer utilities {
+  .logo-click-effect {
+    animation: logo-pulse 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-click-effect {
+    animation-duration: 1ms;
+  }
+}
+
+@keyframes logo-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 hsl(var(--sidebar-ring) / 0);
+  }
+  40% {
+    transform: scale(0.92);
+    box-shadow: 0 0 0 10px hsl(var(--sidebar-ring) / 0.35);
+  }
+  70% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 4px hsl(var(--sidebar-ring) / 0.18);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 hsl(var(--sidebar-ring) / 0);
+  }
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

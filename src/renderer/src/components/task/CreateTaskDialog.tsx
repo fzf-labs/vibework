@@ -108,10 +108,15 @@ export function CreateTaskDialog({
           window.api?.git?.getBranches?.(projectPath),
           window.api?.git?.getCurrentBranch?.(projectPath)
         ])
-        const branchList = Array.isArray((branchesResult as any)?.data)
-          ? ((branchesResult as any).data as string[])
-          : []
-        const currentBranch = (currentResult as any)?.data as string | undefined
+        const branchList = Array.isArray(branchesResult)
+          ? (branchesResult as string[])
+          : Array.isArray((branchesResult as any)?.data)
+            ? ((branchesResult as any).data as string[])
+            : []
+        const currentBranch =
+          typeof currentResult === 'string'
+            ? currentResult
+            : ((currentResult as any)?.data as string | undefined)
         setBranches(branchList)
         if (currentBranch && branchList.includes(currentBranch)) {
           setSelectedBaseBranch(currentBranch)

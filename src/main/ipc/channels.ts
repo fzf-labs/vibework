@@ -12,7 +12,9 @@ export const IPC_CHANNELS = {
     add: 'projects:add',
     update: 'projects:update',
     delete: 'projects:delete',
-    checkPath: 'projects:checkPath'
+    checkPath: 'projects:checkPath',
+    getSkillsSettings: 'projects:getSkillsSettings',
+    updateSkillsSettings: 'projects:updateSkillsSettings'
   },
   git: {
     checkInstalled: 'git:checkInstalled',
@@ -244,6 +246,8 @@ export interface IpcContracts {
     [string],
     { exists: boolean; projectType?: 'normal' | 'git'; updated: boolean }
   >
+  'projects:getSkillsSettings': IpcContract<[string], unknown>
+  'projects:updateSkillsSettings': IpcContract<[string, UnknownRecord], unknown>
 
   'git:checkInstalled': IpcContract<[], unknown>
   'git:clone': IpcContract<[string, string], unknown>

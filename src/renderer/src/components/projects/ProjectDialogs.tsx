@@ -19,6 +19,7 @@ export function CreateProjectDialog({
   onAddProject: (input: {
     name: string;
     path: string;
+    description?: string;
     type: 'local' | 'remote';
     remoteUrl?: string;
   }) => Promise<Project>;
@@ -27,6 +28,7 @@ export function CreateProjectDialog({
   const [mode, setMode] = useState<'local' | 'clone'>('local');
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
+  const [description, setDescription] = useState('');
   const [remoteUrl, setRemoteUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,7 @@ export function CreateProjectDialog({
     setMode('local');
     setName('');
     setPath('');
+    setDescription('');
     setRemoteUrl('');
     setError(null);
   };
@@ -96,6 +99,7 @@ export function CreateProjectDialog({
       const project = await onAddProject({
         name: name || projectPath.split('/').pop() || 'Untitled',
         path: projectPath,
+        description,
         type: mode === 'clone' ? 'remote' : 'local',
         remoteUrl: mode === 'clone' ? remoteUrl : undefined,
       });
@@ -169,6 +173,18 @@ export function CreateProjectDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="输入项目名称（可选）"
               className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">
+              描述
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="输入项目描述（可选）"
+              className="w-full px-3 py-2 rounded-lg border bg-background text-sm min-h-[80px]"
             />
           </div>
 

@@ -26,6 +26,8 @@ interface ProjectAPI {
   checkPath: (
     id: string
   ) => Promise<{ exists: boolean; projectType?: 'normal' | 'git'; updated: boolean }>
+  getSkillsSettings: (id: string) => Promise<unknown>
+  updateSkillsSettings: (id: string, settings: UnknownRecord) => Promise<unknown>
 }
 
 interface GitAPI {

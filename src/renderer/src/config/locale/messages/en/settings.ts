@@ -54,10 +54,12 @@ export default {
     'Unsupported audio format. Please choose a supported file.',
 
   // Notifications
-  notificationTaskTitle: 'Task completion notifications',
-  notificationTaskDescription: 'Show a desktop notification when a task completes.',
-  notificationWorkNodeTitle: 'Work node completion notifications',
-  notificationWorkNodeDescription: 'Show a desktop notification when a work node completes.',
+  notificationTaskTitle: 'Task notifications',
+  notificationTaskDescription:
+    'Show a desktop notification when a task needs a reminder.',
+  notificationWorkNodeTitle: 'Work node notifications',
+  notificationWorkNodeDescription:
+    'Show a desktop notification when a work node needs a reminder.',
   notificationPermissionLabel: 'Permission',
   notificationPermissionGranted: 'Granted',
   notificationPermissionDenied: 'Denied',
@@ -279,6 +281,30 @@ export default {
   mcpAddEnvVariable: 'Add environment variable',
   mcpCommandPlaceholder: 'e.g., python, node, ./script.sh',
   mcpSave: 'Save',
+  mcpProjectTitle: 'Project MCP',
+  mcpProjectDescription: 'Manage MCP servers for the active project',
+  mcpProjectNoProjectTitle: 'No project selected',
+  mcpProjectNoProjectDescription:
+    'Select a project from the sidebar to manage project MCP servers.',
+  mcpProjectConfigPath: 'Project MCP Config Path',
+  mcpProjectGlobalConfigPath: 'Global MCP Config Path',
+  mcpProjectConfigMissing: 'No project MCP config found yet.',
+  mcpProjectCreateConfig: 'Create config',
+  mcpProjectOpenConfig: 'Open config',
+  mcpProjectSourceProject: 'Project',
+  mcpProjectSourceGlobal: 'Global',
+  mcpProjectOverrideLabel: 'Overrides global',
+  mcpProjectEffectiveServers: 'Effective servers',
+  mcpProjectStatusConfigured: 'Configured',
+  mcpProjectStatusMissing: 'Not configured',
+  mcpProjectStatusServers: '{count} servers',
+  mcpExportToCli: 'Sync to CLI',
+  mcpExportTitle: 'Sync MCP to CLI',
+  mcpExportDescription: 'Select CLI configs to receive the installed MCP servers.',
+  mcpExportEmpty: 'No writable CLI configs found.',
+  mcpExportSelectAll: 'Select all',
+  mcpExportApply: 'Apply',
+  mcpExporting: 'Syncing...',
 
   // Connector
   connectorDescription:

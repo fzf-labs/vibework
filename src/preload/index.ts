@@ -32,7 +32,11 @@ const api = {
     update: (id: string, updates: Record<string, unknown>) =>
       invoke(IPC_CHANNELS.projects.update, id, updates),
     delete: (id: string) => invoke(IPC_CHANNELS.projects.delete, id),
-    checkPath: (id: string) => invoke(IPC_CHANNELS.projects.checkPath, id)
+    checkPath: (id: string) => invoke(IPC_CHANNELS.projects.checkPath, id),
+    getSkillsSettings: (id: string) =>
+      invoke(IPC_CHANNELS.projects.getSkillsSettings, id),
+    updateSkillsSettings: (id: string, settings: Record<string, unknown>) =>
+      invoke(IPC_CHANNELS.projects.updateSkillsSettings, id, settings)
   },
   git: {
     checkInstalled: () => invoke(IPC_CHANNELS.git.checkInstalled),

@@ -1,5 +1,4 @@
-import { useNavigate } from 'react-router-dom';
-import { PanelLeft } from 'lucide-react';
+import { useState } from 'react';
 import ImageLogo from '@/assets/logo.png';
 import { cn } from '@/lib/utils';
 import {
@@ -14,8 +13,13 @@ import { ProjectRail } from './project-rail';
 import { useSidebar } from './sidebar-context';
 
 export function AppSidebar() {
-  const navigate = useNavigate();
   const { leftOpen, toggleLeft } = useSidebar();
+  const [logoPulse, setLogoPulse] = useState(false);
+
+  const handleLogoClick = () => {
+    setLogoPulse(false);
+    window.requestAnimationFrame(() => setLogoPulse(true));
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -27,8 +31,14 @@ export function AppSidebar() {
       >
         <div className="border-sidebar-border flex h-12 items-stretch border-b">
           <button
-            onClick={() => navigate('/dashboard')}
-            className="border-sidebar-border hover:bg-sidebar-accent flex w-12 shrink-0 items-center justify-center border-r transition-colors"
+            type="button"
+            onClick={handleLogoClick}
+            onAnimationEnd={() => setLogoPulse(false)}
+            aria-label="VibeWork"
+            className={cn(
+              'border-sidebar-border flex w-12 shrink-0 items-center justify-center border-r',
+              logoPulse && 'logo-click-effect'
+            )}
           >
             <img src={ImageLogo} alt="VibeWork" className="size-7" />
           </button>
@@ -39,27 +49,22 @@ export function AppSidebar() {
             )}
           >
             {leftOpen ? (
-              <div className="relative flex w-full items-center justify-center pr-8">
-                <span className="text-sidebar-foreground font-mono text-base font-medium">
-                  VibeWork
-                </span>
-                <button
-                  onClick={toggleLeft}
-                  aria-label="折叠侧边栏"
-                  className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground absolute right-0 flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors"
-                >
-                  <PanelLeft className="size-4" />
-                </button>
-              </div>
+              <button
+                onClick={toggleLeft}
+                aria-label="折叠侧边栏"
+                className="text-sidebar-foreground hover:bg-sidebar-accent flex h-8 w-full items-center justify-center rounded-md px-2 font-mono text-base font-medium transition-colors"
+              >
+                <span className="truncate">VibeWork</span>
+              </button>
             ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={toggleLeft}
                     aria-label="展开侧边栏"
-                    className="text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors"
+                    className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground flex h-8 w-10 items-center justify-center rounded-md font-mono text-sm font-semibold tracking-wide transition-colors"
                   >
-                    <PanelLeft className="size-4" />
+                    VW
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">展开侧边栏</TooltipContent>

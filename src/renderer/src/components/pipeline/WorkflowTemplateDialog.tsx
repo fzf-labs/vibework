@@ -81,7 +81,7 @@ export function WorkflowTemplateDialog({
 
     const nodes = templateNodes
       .map((node, index) => ({
-        name: node.name.trim() || `${t.task.stageLabel} ${index + 1}`,
+        name: node.name.trim() || `${t.task.workflowNodeLabel} ${index + 1}`,
         prompt: node.prompt.trim(),
         requiresApproval: node.requiresApproval,
         continueOnError: node.continueOnError,
@@ -155,7 +155,7 @@ export function WorkflowTemplateDialog({
                 <div key={`node-${index}`} className="rounded-md border p-3">
                   <div className="flex items-center justify-between">
                     <div className="text-xs font-medium">
-                      {t.task.stageLabel} {index + 1}
+                      {t.task.workflowNodeLabel} {index + 1}
                     </div>
                     {templateNodes.length > 1 && (
                       <Button

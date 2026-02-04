@@ -91,6 +91,7 @@ export default {
   saveTemplate: 'Save template',
   globalTemplateTag: 'Global',
   stageLabel: 'Stage',
+  workflowNodeLabel: 'Node',
   createLoading: 'Creating...',
   createSubmit: 'Create Task',
   createTitleRequired: 'Task title is required.',

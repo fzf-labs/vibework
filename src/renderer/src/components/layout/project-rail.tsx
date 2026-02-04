@@ -134,17 +134,13 @@ function ProjectAvatar({
     <Tooltip>
       <TooltipTrigger asChild>
         <div className="relative flex items-center">
-          {/* Active indicator */}
-          {isActive && (
-            <div className="bg-primary absolute left-0 h-5 w-1 rounded-r-full" />
-          )}
           <button
             onClick={onClick}
             aria-label={project.name}
             className={cn(
               'flex size-8 cursor-pointer items-center justify-center rounded-lg text-xs font-semibold transition-all',
               isActive
-                ? 'bg-primary text-primary-foreground scale-110 shadow-md'
+                ? 'bg-primary text-primary-foreground scale-110'
                 : 'bg-primary/20 text-primary hover:bg-primary/40 hover:scale-105'
             )}
           >

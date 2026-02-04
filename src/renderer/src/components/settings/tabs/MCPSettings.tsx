@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { getMcpConfigPath } from '@/lib/paths';
+import { buildMcpServersFromConfig, extractMcpServers } from '@/lib/mcp';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
+import { Button } from '@/components/ui/button';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   DropdownMenu,
@@ -43,23 +45,6 @@ type MCPConfigSource = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
-
-const extractMcpServers = (
-  value: unknown
-): Record<
-  string,
-  MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-> => {
-  if (!isRecord(value)) return {};
-  const direct = value.mcpServers || value.mcp_servers;
-  if (isRecord(direct)) {
-    return direct as Record<
-      string,
-      MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-    >;
-  }
-  return {};
-};
 
 const stripTomlComment = (line: string): string => {
   let inSingle = false;
@@ -214,19 +199,27 @@ function MCPCard({
   server,
   onConfigure,
   onDelete,
+  onClick,
   readOnly = false,
 }: {
   server: MCPServerUI;
   onConfigure?: () => void;
   onDelete?: () => void;
+  onClick?: () => void;
   readOnly?: boolean;
 }) {
   const { t } = useLanguage();
   const [showMenu, setShowMenu] = useState(false);
   const showActions = !readOnly && onConfigure && onDelete;
+  const isClickable = !!onClick;
 
   return (
-    <div className="border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors">
+    <div
+      onClick={onClick}
+      className={`border-border bg-background hover:border-foreground/20 relative flex flex-col rounded-xl border p-4 transition-colors ${
+        isClickable ? 'cursor-pointer' : ''
+      }`}
+    >
       <div className="mb-2">
         <span className="text-foreground text-sm font-medium">
           {server.name}
@@ -242,7 +235,7 @@ function MCPCard({
       </p>
 
       {showActions && (
-        <div className="border-border flex items-center justify-end border-t pt-3">
+        <div className="border-border flex items-center justify-end border-t pt-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1">
             <button
               onClick={onConfigure}
@@ -304,7 +297,7 @@ type CliMcpGroup = {
 
 interface ConfigDialogState {
   open: boolean;
-  mode: 'add' | 'edit';
+  mode: 'add' | 'edit' | 'view';
   serverName: string;
   transportType: 'stdio' | 'http' | 'sse';
   command: string;
@@ -340,6 +333,9 @@ export function MCPSettings({ settings }: SettingsTabProps) {
   // Import by JSON dialog
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importJson, setImportJson] = useState('');
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [selectedCliTargets, setSelectedCliTargets] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   // Config dialog (for both add and edit)
   const [configDialog, setConfigDialog] =
@@ -347,6 +343,18 @@ export function MCPSettings({ settings }: SettingsTabProps) {
 
   const { t } = useLanguage();
   const mcpLoadError = t.settings.mcpLoadError;
+  const isViewMode = configDialog.mode === 'view';
+  const exportableCliGroups = useMemo(
+    () => cliGroups.filter((group) => group.path.endsWith('.json')),
+    [cliGroups]
+  );
+  const allCliSelected =
+    exportableCliGroups.length > 0 &&
+    selectedCliTargets.length === exportableCliGroups.length;
+
+  useEffect(() => {
+    setSelectedCliTargets([]);
+  }, [exportableCliGroups]);
 
   const resolvePath = useCallback(async (targetPath: string): Promise<string> => {
     if (!targetPath) return targetPath;
@@ -417,42 +425,16 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     return filePath.slice(0, lastSeparator);
   };
 
-  const buildServersFromConfig = useCallback((
-    servers: Record<
-      string,
-      MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
-    >,
-    sourceName: string
-  ): MCPServerUI[] => {
-    const serverList: MCPServerUI[] = [];
-    for (const [id, serverConfig] of Object.entries(servers)) {
-      const hasUrl = 'url' in serverConfig;
-      const cfg = serverConfig as {
-        type?: 'http' | 'sse';
-        url?: string;
-        headers?: Record<string, string>;
-      };
-      // Determine type: use explicit type if provided, otherwise default based on config
-      let serverType: 'stdio' | 'http' | 'sse' = 'stdio';
-      if (hasUrl) {
-        serverType = cfg.type || 'http';
-      }
-      serverList.push({
-        id: `${sourceName}-${id}`,
-        name: id,
-        type: serverType,
-        enabled: true,
-        command: hasUrl ? undefined : (serverConfig as MCPServerStdio).command,
-        args: hasUrl ? undefined : (serverConfig as MCPServerStdio).args,
-        env: hasUrl ? undefined : (serverConfig as MCPServerStdio).env,
-        url: hasUrl ? cfg.url : undefined,
-        headers: hasUrl ? cfg.headers : undefined,
-        autoExecute: true,
-        source: sourceName,
-      });
-    }
-    return serverList;
-  }, []);
+  const buildServersFromConfig = useCallback(
+    (
+      servers: Record<
+        string,
+        MCPServerStdio | { url: string; headers?: Record<string, string>; type?: 'http' | 'sse' }
+      >,
+      sourceName: string
+    ): MCPServerUI[] => buildMcpServersFromConfig(servers, sourceName),
+    []
+  );
 
   const isAppConfigName = useCallback(
     (name: string) => name.toLowerCase() === 'vibework',
@@ -743,10 +725,9 @@ export function MCPSettings({ settings }: SettingsTabProps) {
   ]);
 
   // Save MCP config via API
-  const saveMCPConfig = async (serverList: MCPServerUI[]) => {
+  const buildMcpConfig = (serverList: MCPServerUI[]): MCPConfig => {
     const mcpServers: Record<string, unknown> = {};
     for (const server of serverList) {
-      if (server.source && server.source !== 'VibeWork') continue;
       if (server.type === 'http' || server.type === 'sse') {
         const serverConfig: Record<string, unknown> = {
           url: server.url || '',
@@ -773,9 +754,15 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       }
     }
 
-    const config: MCPConfig = {
+    return {
       mcpServers: mcpServers as MCPConfig['mcpServers'],
     };
+  };
+
+  const saveMCPConfig = async (serverList: MCPServerUI[]) => {
+    const config = buildMcpConfig(
+      serverList.filter((server) => !server.source || server.source === 'VibeWork')
+    );
 
     let fileSaved = false;
     if (window.api?.fs?.writeTextFile) {
@@ -809,6 +796,50 @@ export function MCPSettings({ settings }: SettingsTabProps) {
       if (!fileSaved) {
         console.error('[MCP] Failed to save MCP config via API:', err);
       }
+    }
+  };
+
+  const handleExportToCli = async () => {
+    if (!window.api?.fs?.writeTextFile) return;
+    if (selectedCliTargets.length === 0) return;
+
+    setExporting(true);
+    try {
+      const config = buildMcpConfig(
+        appServers.filter((server) => !server.source || server.source === 'VibeWork')
+      );
+
+      for (const targetId of selectedCliTargets) {
+        const group = exportableCliGroups.find((item) => item.id === targetId);
+        if (!group) continue;
+        const resolvedPath = await resolvePath(group.path);
+        await ensureParentDir(resolvedPath);
+
+        let payload: Record<string, unknown> = {};
+        if (window.api?.fs?.exists && window.api?.fs?.readTextFile) {
+          try {
+            const exists = await window.api.fs.exists(resolvedPath);
+            if (exists) {
+              const content = await window.api.fs.readTextFile(resolvedPath);
+              payload = JSON.parse(content) as Record<string, unknown>;
+            }
+          } catch (error) {
+            console.warn('[MCP] Failed to read CLI config, overwriting:', error);
+          }
+        }
+
+        payload.mcpServers = config.mcpServers;
+        await window.api.fs.writeTextFile(
+          resolvedPath,
+          JSON.stringify(payload, null, 2)
+        );
+      }
+    } catch (error) {
+      console.error('[MCP] Failed to export MCP config to CLI:', error);
+    } finally {
+      setExporting(false);
+      setShowExportDialog(false);
+      setSelectedCliTargets([]);
     }
   };
 
@@ -906,6 +937,12 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     }
   };
 
+  const toggleCliTarget = (id: string) => {
+    setSelectedCliTargets((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   // Helper to convert object to KeyValuePair array
   const objectToKeyValuePairs = (
     obj: Record<string, string> | undefined
@@ -947,8 +984,24 @@ export function MCPSettings({ settings }: SettingsTabProps) {
     });
   };
 
+  const handleViewServer = (server: MCPServerUI) => {
+    setConfigDialog({
+      open: true,
+      mode: 'view',
+      serverName: server.name,
+      transportType: server.type,
+      command: server.command || '',
+      args: server.args || [],
+      env: objectToKeyValuePairs(server.env),
+      url: server.url || '',
+      headers: objectToKeyValuePairs(server.headers),
+      editServerId: server.id,
+    });
+  };
+
   // Handle save config dialog
   const handleSaveConfigDialog = () => {
+    if (configDialog.mode === 'view') return;
     if (!configDialog.serverName) return;
 
     const newServers = [...appServers];
@@ -1195,44 +1248,53 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                     </div>
                   </div>
 
-                  {/* Add Button with Dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
-                      >
-                        <Plus className="size-4" />
-                        {t.common.add}
-                        <ChevronDown className="size-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[180px] rounded-xl p-1">
-                      <DropdownMenuItem
-                        onSelect={() => setShowImportDialog(true)}
-                        className="gap-3 px-3 py-2"
-                      >
-                        <FileJson className="text-muted-foreground size-4 shrink-0" />
-                        <span className="text-foreground text-sm">
-                          {t.settings.mcpImportByJson}
-                        </span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          setConfigDialog({
-                            ...initialConfigDialog,
-                            open: true,
-                          })
-                        }
-                        className="gap-3 px-3 py-2"
-                      >
-                        <Settings2 className="text-muted-foreground size-4 shrink-0" />
-                        <span className="text-foreground text-sm">
-                          {t.settings.mcpDirectConfig}
-                        </span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowExportDialog(true)}
+                      disabled={exportableCliGroups.length === 0}
+                    >
+                      {t.settings.mcpExportToCli}
+                    </Button>
+                    {/* Add Button with Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="bg-foreground text-background hover:bg-foreground/90 flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors"
+                        >
+                          <Plus className="size-4" />
+                          {t.common.add}
+                          <ChevronDown className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[180px] rounded-xl p-1">
+                        <DropdownMenuItem
+                          onSelect={() => setShowImportDialog(true)}
+                          className="gap-3 px-3 py-2"
+                        >
+                          <FileJson className="text-muted-foreground size-4 shrink-0" />
+                          <span className="text-foreground text-sm">
+                            {t.settings.mcpImportByJson}
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            setConfigDialog({
+                              ...initialConfigDialog,
+                              open: true,
+                            })
+                          }
+                          className="gap-3 px-3 py-2"
+                        >
+                          <Settings2 className="text-muted-foreground size-4 shrink-0" />
+                          <span className="text-foreground text-sm">
+                            {t.settings.mcpDirectConfig}
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
 
                 {/* MCP Grid */}
@@ -1321,6 +1383,7 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                                 key={server.id}
                                 server={server}
                                 readOnly
+                                onClick={() => handleViewServer(server)}
                               />
                             ))}
                           </div>
@@ -1334,6 +1397,82 @@ export function MCPSettings({ settings }: SettingsTabProps) {
           )}
         </div>
       </div>
+
+      {/* Export Dialog - Using Radix Dialog */}
+      <DialogPrimitive.Root
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+      >
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60" />
+          <DialogPrimitive.Content className="bg-background border-border fixed top-1/2 left-1/2 z-[100] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-6 shadow-2xl focus:outline-none">
+            <DialogPrimitive.Title className="text-foreground text-lg font-semibold">
+              {t.settings.mcpExportTitle}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description className="text-muted-foreground mt-2 text-sm">
+              {t.settings.mcpExportDescription}
+            </DialogPrimitive.Description>
+
+            {exportableCliGroups.length === 0 ? (
+              <div className="text-muted-foreground mt-4 text-sm">
+                {t.settings.mcpExportEmpty}
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedCliTargets(
+                      allCliSelected
+                        ? []
+                        : exportableCliGroups.map((group) => group.id)
+                    )
+                  }
+                  className="text-primary mt-4 text-sm"
+                >
+                  {t.settings.mcpExportSelectAll}
+                </button>
+
+                <div className="border-border mt-3 max-h-56 overflow-y-auto rounded-lg border p-2">
+                  {exportableCliGroups.map((group) => (
+                    <label
+                      key={group.id}
+                      className="hover:bg-accent flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCliTargets.includes(group.id)}
+                        onChange={() => toggleCliTarget(group.id)}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-foreground font-medium">
+                          {group.label}
+                        </div>
+                        <div className="text-muted-foreground truncate text-xs">
+                          {group.path}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleExportToCli}
+                  disabled={selectedCliTargets.length === 0 || exporting}
+                  className="bg-foreground text-background hover:bg-foreground/90 mt-4 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {exporting ? t.settings.mcpExporting : t.settings.mcpExportApply}
+                </button>
+              </>
+            )}
+
+            <DialogPrimitive.Close className="text-muted-foreground hover:text-foreground absolute top-4 right-4 rounded-sm transition-opacity focus:outline-none">
+              <X className="size-5" />
+            </DialogPrimitive.Close>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
 
       {/* Import Dialog - Using Radix Dialog */}
       <DialogPrimitive.Root
@@ -1410,7 +1549,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                       })
                     }
                     placeholder={t.settings.mcpServerNamePlaceholder}
-                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                    disabled={isViewMode}
+                    className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                   />
                 </div>
 
@@ -1427,7 +1567,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                         transportType: e.target.value as 'stdio' | 'http' | 'sse',
                       })
                     }
-                    className="border-input bg-background text-foreground focus:ring-ring h-10 w-full cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                    disabled={isViewMode}
+                    className="border-input bg-background text-foreground focus:ring-ring h-10 w-full cursor-pointer rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <option value="stdio">stdio</option>
                     <option value="http">http</option>
@@ -1453,7 +1594,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                           })
                         }
                         placeholder={t.settings.mcpCommandPlaceholder}
-                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                        disabled={isViewMode}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                       />
                     </div>
 
@@ -1472,23 +1614,28 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                                 handleUpdateArg(index, e.target.value)
                               }
                               placeholder={t.settings.mcpArgumentPlaceholder}
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              disabled={isViewMode}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
-                            <button
-                              onClick={() => handleRemoveArg(index)}
-                              className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
+                            {!isViewMode && (
+                              <button
+                                onClick={() => handleRemoveArg(index)}
+                                className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            )}
                           </div>
                         ))}
-                        <button
-                          onClick={handleAddArg}
-                          className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
-                        >
-                          <Plus className="size-4" />
-                          {t.settings.mcpAddArgument}
-                        </button>
+                        {!isViewMode && (
+                          <button
+                            onClick={handleAddArg}
+                            className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
+                          >
+                            <Plus className="size-4" />
+                            {t.settings.mcpAddArgument}
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1514,7 +1661,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                                 )
                               }
                               placeholder={t.settings.mcpEnvVariableName}
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-32 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              disabled={isViewMode}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-32 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
                             <span className="text-muted-foreground">=</span>
                             <input
@@ -1528,23 +1676,28 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                                 )
                               }
                               placeholder={t.settings.mcpEnvVariableValue}
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              disabled={isViewMode}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
-                            <button
-                              onClick={() => handleRemoveEnv(item.id)}
-                              className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
+                            {!isViewMode && (
+                              <button
+                                onClick={() => handleRemoveEnv(item.id)}
+                                className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            )}
                           </div>
                         ))}
-                        <button
-                          onClick={handleAddEnv}
-                          className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
-                        >
-                          <Plus className="size-4" />
-                          {t.settings.mcpAddEnvVariable}
-                        </button>
+                        {!isViewMode && (
+                          <button
+                            onClick={handleAddEnv}
+                            className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
+                          >
+                            <Plus className="size-4" />
+                            {t.settings.mcpAddEnvVariable}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </>
@@ -1565,7 +1718,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                           })
                         }
                         placeholder={configDialog.transportType === 'sse' ? t.settings.mcpServerUrlPlaceholderSse : t.settings.mcpServerUrlPlaceholder}
-                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                        disabled={isViewMode}
+                        className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-full rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                       />
                     </div>
 
@@ -1594,7 +1748,8 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                                 )
                               }
                               placeholder="Header Name"
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-32 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              disabled={isViewMode}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 w-32 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
                             <span className="text-muted-foreground">=</span>
                             <input
@@ -1608,23 +1763,28 @@ export function MCPSettings({ settings }: SettingsTabProps) {
                                 )
                               }
                               placeholder="Value"
-                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none"
+                              disabled={isViewMode}
+                              className="border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring h-10 flex-1 rounded-lg border px-3 text-sm focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                             />
-                            <button
-                              onClick={() => handleRemoveHeader(item.id)}
-                              className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
+                            {!isViewMode && (
+                              <button
+                                onClick={() => handleRemoveHeader(item.id)}
+                                className="text-muted-foreground hover:text-destructive flex size-10 items-center justify-center rounded-lg transition-colors"
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
+                            )}
                           </div>
                         ))}
-                        <button
-                          onClick={handleAddHeader}
-                          className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
-                        >
-                          <Plus className="size-4" />
-                          {t.settings.mcpAddCustomHeader}
-                        </button>
+                        {!isViewMode && (
+                          <button
+                            onClick={handleAddHeader}
+                            className="text-primary hover:text-primary/80 flex items-center gap-1 text-sm"
+                          >
+                            <Plus className="size-4" />
+                            {t.settings.mcpAddCustomHeader}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </>
@@ -1634,13 +1794,19 @@ export function MCPSettings({ settings }: SettingsTabProps) {
 
             {/* Footer */}
             <div className="border-border shrink-0 border-t px-6 py-4">
-              <button
-                onClick={handleSaveConfigDialog}
-                disabled={!configDialog.serverName}
-                className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t.settings.mcpSave}
-              </button>
+              {isViewMode ? (
+                <DialogPrimitive.Close className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors">
+                  {t.common.close || 'Close'}
+                </DialogPrimitive.Close>
+              ) : (
+                <button
+                  onClick={handleSaveConfigDialog}
+                  disabled={!configDialog.serverName}
+                  className="bg-foreground text-background hover:bg-foreground/90 flex h-11 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t.settings.mcpSave}
+                </button>
+              )}
             </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>

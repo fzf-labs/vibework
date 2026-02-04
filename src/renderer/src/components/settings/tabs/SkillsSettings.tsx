@@ -2,6 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
+  CLI_SKILL_DIRECTORIES,
+  loadSkillsFromDirectory,
+  openFolderInSystem,
+  resolvePath,
+} from '@/lib/skills';
+import {
   ArrowLeftRight,
   FolderOpen,
   Github,
@@ -14,68 +20,7 @@ import {
 } from 'lucide-react';
 
 import { API_BASE_URL } from '../constants';
-import type { SettingsTabProps, SkillInfo, SkillFile } from '../types';
-
-// Parse YAML frontmatter from SKILL.md
-function parseSkillMdFrontmatter(content: string): {
-  name?: string;
-  description?: string;
-} {
-  const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-  if (!frontmatterMatch) return {};
-
-  const frontmatter = frontmatterMatch[1];
-  const result: { name?: string; description?: string } = {};
-
-  // Parse name
-  const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-  if (nameMatch) {
-    result.name = nameMatch[1].trim();
-  }
-
-  // Parse description
-  const descMatch = frontmatter.match(/^description:\s*(.+)$/m);
-  if (descMatch) {
-    result.description = descMatch[1].trim();
-  }
-
-  return result;
-}
-
-// Helper function to open folder in system file manager
-const openFolderInSystem = async (folderPath: string) => {
-  try {
-    let resolvedPath = folderPath;
-    if (resolvedPath.startsWith('~') && window.api?.path?.homeDir) {
-      const homeDir = await window.api.path.homeDir();
-      resolvedPath = resolvedPath.replace(/^~(?=\/|\\)/, homeDir);
-    }
-
-    if (window.api?.fs?.exists && window.api?.fs?.mkdir) {
-      const exists = await window.api.fs.exists(resolvedPath);
-      if (!exists) {
-        await window.api.fs.mkdir(resolvedPath);
-      }
-    }
-
-    if (window.api?.shell?.openPath) {
-      await window.api.shell.openPath(resolvedPath);
-      return;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/files/open`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: resolvedPath, expandHome: true }),
-    });
-    const data = await response.json();
-    if (!data.success) {
-      console.error('[Skills] Failed to open folder:', data.error);
-    }
-  } catch (err) {
-    console.error('[Skills] Error opening folder:', err);
-  }
-};
+import type { SettingsTabProps, SkillInfo } from '../types';
 
 // Skill card component
 function SkillCard({
@@ -158,14 +103,6 @@ type CliSkillGroup = {
   skills: SkillInfo[];
 };
 
-const CLI_SKILL_DIRECTORIES: Record<string, string> = {
-  'claude-code': '.claude/skills',
-  codex: '.codex/skills',
-  'gemini-cli': '.gemini/skills',
-  opencode: '.opencode/skills',
-  'cursor-agent': '.cursor/skills',
-};
-
 export function SkillsSettings({
   settings,
 }: SettingsTabProps) {
@@ -210,15 +147,6 @@ export function SkillsSettings({
       .join(' ');
   }, [settings.agentRuntimes]);
 
-  const resolvePath = useCallback(async (targetPath: string) => {
-    if (!targetPath) return targetPath;
-    if (targetPath.startsWith('~') && window.api?.path?.homeDir) {
-      const homeDir = await window.api.path.homeDir();
-      return targetPath.replace(/^~(?=\/|\\)/, homeDir);
-    }
-    return targetPath;
-  }, []);
-
   const formatDisplayPath = useCallback((targetPath: string) => {
     if (!targetPath || targetPath.startsWith('~') || !homeDir) return targetPath;
     const normalizedHome = homeDir.replace(/\/$/, '');
@@ -244,138 +172,6 @@ export function SkillsSettings({
       cancelled = true;
     };
   }, []);
-
-  const readDirectoryEntries = useCallback(async (
-    directoryPath: string
-  ): Promise<SkillFile[]> => {
-    if (!directoryPath) return [];
-    try {
-      const resolvedPath = await resolvePath(directoryPath);
-      if (window.api?.fs?.exists) {
-        const exists = await window.api.fs.exists(resolvedPath);
-        if (!exists) return [];
-      }
-      if (window.api?.fs?.readDir) {
-        return (await window.api.fs.readDir(resolvedPath, {
-          maxDepth: 3,
-        })) as SkillFile[];
-      }
-    } catch (err) {
-      console.error('[Skills] Failed to read directory:', err);
-      return [];
-    }
-
-    try {
-      const resolvedPath = await resolvePath(directoryPath);
-      const filesResponse = await fetch(`${API_BASE_URL}/files/readdir`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: resolvedPath, maxDepth: 3 }),
-      });
-      const filesData = await filesResponse.json();
-      if (filesData.success && filesData.files) {
-        return filesData.files as SkillFile[];
-      }
-    } catch (err) {
-      console.error('[Skills] Failed to read directory via API:', err);
-    }
-
-    return [];
-  }, [resolvePath]);
-
-  const readSkillMarkdown = useCallback(async (skillMdPath: string): Promise<string> => {
-    try {
-      const resolvedPath = await resolvePath(skillMdPath);
-      if (window.api?.fs?.exists) {
-        const exists = await window.api.fs.exists(resolvedPath);
-        if (!exists) return '';
-      }
-      if (window.api?.fs?.readTextFile) {
-        return await window.api.fs.readTextFile(resolvedPath);
-      }
-    } catch (err) {
-      console.error('[Skills] Failed to read skill file:', err);
-      return '';
-    }
-
-    try {
-      const resolvedPath = await resolvePath(skillMdPath);
-      const mdResponse = await fetch(`${API_BASE_URL}/files/read`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: resolvedPath }),
-      });
-      const mdData = await mdResponse.json();
-      if (mdData.success && mdData.content) {
-        return mdData.content as string;
-      }
-    } catch (err) {
-      console.error('[Skills] Failed to read skill file via API:', err);
-    }
-
-    return '';
-  }, [resolvePath]);
-
-  const loadSkillsFromDirectory = useCallback(async (
-    directoryPath: string,
-    source: string
-  ): Promise<SkillInfo[]> => {
-    try {
-      const filesData = await readDirectoryEntries(directoryPath);
-      if (!filesData.length) return [];
-
-      const skillsFromDir: SkillInfo[] = [];
-      for (const folder of filesData) {
-        if (!folder.isDir) continue;
-
-        let skillName = folder.name;
-        let description = '';
-        try {
-          const skillMdCandidates = ['SKILL.md', 'skill.md'];
-          let content = '';
-
-          for (const candidate of skillMdCandidates) {
-            const skillMdPath = `${folder.path}/${candidate}`;
-            content = await readSkillMarkdown(skillMdPath);
-            if (content) break;
-          }
-
-          if (!content) {
-            continue;
-          }
-
-          const frontmatter = parseSkillMdFrontmatter(content);
-          if (frontmatter.name) {
-            skillName = frontmatter.name;
-          }
-          if (frontmatter.description) {
-            description = frontmatter.description;
-          }
-        } catch {
-          // Ignore errors reading SKILL.md
-          continue;
-        }
-
-        skillsFromDir.push({
-          id: `${source}-${folder.name}`,
-          name: skillName,
-          source,
-          path: folder.path,
-          files: folder.children || [],
-          enabled: true,
-          description,
-        });
-      }
-
-      return skillsFromDir;
-    } catch (err) {
-      console.error(
-        `[Skills] Failed to load skills from ${directoryPath}:`,
-        err
-      );
-      return [];
-    }
-  }, [readDirectoryEntries, readSkillMarkdown]);
 
   const loadSkillsFromPath = useCallback(async (skillsPath: string) => {
     setLoading(true);

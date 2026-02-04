@@ -12,6 +12,7 @@ import {
 } from '@/lib/background-tasks';
 import { newUlid, newUuid } from '@/lib/ids';
 import { getSessionsDir, getVibeworkDataDir } from '@/lib/paths';
+import { getProjectMcpConfigPath } from '@/lib/mcp';
 
 // Import from agent modules
 import {
@@ -572,6 +573,24 @@ export function useAgent(): UseAgentReturn {
     []
   );
 
+  const resolveProjectMcpConfigPath = useCallback(
+    async (taskIdValue?: string | null, task?: Task | null): Promise<string | undefined> => {
+      try {
+        const taskRecord = task || (taskIdValue ? await db.getTask(taskIdValue) : null);
+        const projectId = taskRecord?.project_id;
+        if (!projectId || !window.api?.projects?.get) return undefined;
+        const project = await window.api.projects.get(projectId) as { path?: string } | null;
+        if (!project?.path) return undefined;
+        const cliToolId = taskRecord?.cli_tool_id || getSettings().defaultCliToolId;
+        return getProjectMcpConfigPath(project.path, cliToolId || undefined);
+      } catch (error) {
+        console.warn('[useAgent] Failed to resolve project MCP config path:', error);
+        return undefined;
+      }
+    },
+    []
+  );
+
   // Phase 1: Planning - get a plan from the agent
   const runAgent = useCallback(
     async (
@@ -685,6 +704,18 @@ export function useAgent(): UseAgentReturn {
       let executionId: string | null = null;
       try {
         const modelConfig = getModelConfig();
+        const projectMcpConfigPath = await resolveProjectMcpConfigPath(
+          currentTaskId,
+          existingTask
+        );
+        const mcpConfig = getMcpConfig(
+          projectMcpConfigPath
+            ? {
+                projectConfigPath: projectMcpConfigPath,
+                mergeStrategy: 'project_over_global',
+              }
+            : undefined
+        );
 
         // If images are attached, use direct execution (skip planning)
         // because images need to be processed during execution, not planning
@@ -707,9 +738,7 @@ export function useAgent(): UseAgentReturn {
             workDirOverride
           );
           const sandboxConfig = getSandboxConfig();
-          const skillsConfig = getSkillsConfig();
-
-          const mcpConfig = getMcpConfig();
+          const skillsConfig = await getSkillsConfig();
 
           executionId = await startAgentExecutionForTask(currentTaskId);
           // Use direct execution endpoint with images
@@ -906,8 +935,16 @@ export function useAgent(): UseAgentReturn {
       const workDir = await resolveTaskWorkDir(taskId, sessionFolder);
       const modelConfig = getModelConfig();
       const sandboxConfig = getSandboxConfig();
-      const skillsConfig = getSkillsConfig();
-      const mcpConfig = getMcpConfig();
+      const skillsConfig = await getSkillsConfig();
+      const projectMcpConfigPath = await resolveProjectMcpConfigPath(taskId);
+      const mcpConfig = getMcpConfig(
+        projectMcpConfigPath
+          ? {
+              projectConfigPath: projectMcpConfigPath,
+              mergeStrategy: 'project_over_global',
+            }
+          : undefined
+      );
 
       executionId = await startAgentExecutionForTask(taskId);
       const response = await fetchWithRetry(
@@ -1019,8 +1056,16 @@ export function useAgent(): UseAgentReturn {
         );
         const modelConfig = getModelConfig();
         const sandboxConfig = getSandboxConfig();
-        const skillsConfig = getSkillsConfig();
-        const mcpConfig = getMcpConfig();
+        const skillsConfig = await getSkillsConfig();
+        const projectMcpConfigPath = await resolveProjectMcpConfigPath(taskId);
+        const mcpConfig = getMcpConfig(
+          projectMcpConfigPath
+            ? {
+                projectConfigPath: projectMcpConfigPath,
+                mergeStrategy: 'project_over_global',
+              }
+            : undefined
+        );
 
         // Prepare images for API (only send image attachments with actual data)
         const images = attachments

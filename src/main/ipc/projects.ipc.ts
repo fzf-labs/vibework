@@ -46,4 +46,33 @@ export const registerProjectsIpc = ({ handle, v, services }: IpcModuleContext): 
   handle(IPC_CHANNELS.projects.checkPath, [v.string()], (_, id) =>
     projectService.checkProjectPath(id)
   )
+
+  handle(IPC_CHANNELS.projects.getSkillsSettings, [v.string()], (_, id) => {
+    try {
+      const result = projectService.getProjectSkillsSettings(id)
+      return { success: true, data: result }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  handle(
+    IPC_CHANNELS.projects.updateSkillsSettings,
+    [
+      v.string(),
+      v.shape({
+        enabled: v.boolean(),
+        includeDefaultDirectories: v.boolean(),
+        customDirectories: v.optional(v.array(v.string()))
+      })
+    ],
+    (_, id, settings) => {
+      try {
+        const result = projectService.updateProjectSkillsSettings(id, settings as any)
+        return { success: true, data: result }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
 }

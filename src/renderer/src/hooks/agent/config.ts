@@ -2,7 +2,13 @@
 
 import { API_BASE_URL } from '@/config';
 import { translations, type Language } from '@/config/locale';
+import { getCurrentProjectId } from '@/data/projects';
 import { getSettings } from '@/data/settings';
+import {
+  DEFAULT_PROJECT_SKILLS_SETTINGS,
+  resolveProjectSkillDirectories,
+  type ProjectSkillsSettings,
+} from '@/lib/skills';
 
 export const AGENT_SERVER_URL = API_BASE_URL;
 
@@ -136,12 +142,19 @@ export function getSandboxConfig():
 }
 
 // Helper to get skills configuration from settings
-export function getSkillsConfig(): {
-  enabled: boolean;
-  userDirEnabled: boolean;
-  appDirEnabled: boolean;
-  skillsPath?: string;
-} | undefined {
+export async function getSkillsConfig(): Promise<
+  | {
+      enabled: boolean;
+      userDirEnabled: boolean;
+      appDirEnabled: boolean;
+      skillsPath?: string;
+      projectSkills?: {
+        enabled: boolean;
+        paths: string[];
+      };
+    }
+  | undefined
+> {
   try {
     const settings = getSettings();
 
@@ -152,6 +165,50 @@ export function getSkillsConfig(): {
       skillsPath: settings.skillsPath || undefined,
     };
 
+    const projectId = getCurrentProjectId?.();
+    if (!projectId || !window.api?.projects?.getSkillsSettings || !window.api?.projects?.get) {
+      console.log('[useAgent] Skills config:', config);
+      return config;
+    }
+
+    try {
+      const [project, projectSettings, cliTools] = await Promise.all([
+        window.api.projects.get(projectId) as Promise<{ id?: string; path?: string } | undefined>,
+        window.api.projects.getSkillsSettings(projectId) as Promise<ProjectSkillsSettings | undefined>,
+        window.api?.cliTools?.getAll?.() as Promise<Array<{ id: string; displayName?: string }> | undefined>,
+      ]);
+
+      if (project?.path) {
+        const mergedSettings: ProjectSkillsSettings = {
+          ...DEFAULT_PROJECT_SKILLS_SETTINGS,
+          ...(projectSettings || {}),
+          customDirectories: Array.isArray(projectSettings?.customDirectories)
+            ? projectSettings!.customDirectories
+            : DEFAULT_PROJECT_SKILLS_SETTINGS.customDirectories,
+        };
+        const directories = await resolveProjectSkillDirectories(
+          project.path,
+          mergedSettings,
+          cliTools ?? []
+        );
+
+        const projectSkills = {
+          enabled: mergedSettings.enabled,
+          paths: directories.map((dir) => dir.path),
+        };
+
+        const enrichedConfig = {
+          ...config,
+          projectSkills,
+        };
+
+        console.log('[useAgent] Skills config:', enrichedConfig);
+        return enrichedConfig;
+      }
+    } catch (error) {
+      console.error('[useAgent] Failed to load project skills settings:', error);
+    }
+
     console.log('[useAgent] Skills config:', config);
     return config;
   } catch {
@@ -160,10 +217,15 @@ export function getSkillsConfig(): {
 }
 
 // Helper to get MCP configuration from settings
-export function getMcpConfig(): {
+export function getMcpConfig(options?: {
+  projectConfigPath?: string;
+  mergeStrategy?: 'project_over_global';
+}): {
   userDirEnabled: boolean;
   appDirEnabled: boolean;
   mcpConfigPath?: string;
+  projectConfigPath?: string;
+  mergeStrategy?: 'project_over_global';
 } | undefined {
   try {
     const settings = getSettings();
@@ -172,6 +234,8 @@ export function getMcpConfig(): {
       userDirEnabled: settings.mcpUserDirEnabled !== false,
       appDirEnabled: settings.mcpAppDirEnabled !== false,
       mcpConfigPath: settings.mcpConfigPath || undefined,
+      projectConfigPath: options?.projectConfigPath,
+      mergeStrategy: options?.mergeStrategy,
     };
 
     console.log('[useAgent] MCP config:', config);
