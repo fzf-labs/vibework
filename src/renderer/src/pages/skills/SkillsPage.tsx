@@ -378,15 +378,10 @@ export function SkillsPage() {
     <div className="flex h-full flex-col overflow-hidden p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">项目 Skills</h1>
+          <h1 className="text-2xl font-semibold">Skill</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            管理当前项目的 Skills，并在任务执行时优先加载。
+            {currentProject ? currentProject.name : '未选择项目'}
           </p>
-          {currentProject && (
-            <div className="text-muted-foreground mt-2 text-xs">
-              当前项目：{currentProject.name}
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -489,7 +484,7 @@ export function SkillsPage() {
                       <div className="border-border rounded-lg border p-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="text-foreground text-sm font-medium">
-                            项目 Skills
+                            Skill
                           </div>
                           <div className="flex items-center gap-2">
                             <button

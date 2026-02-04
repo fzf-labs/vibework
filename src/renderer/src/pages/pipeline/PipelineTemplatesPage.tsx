@@ -161,11 +161,8 @@ export function PipelineTemplatesPage() {
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
             {currentProject
-              ? t.task.pipelineTemplatePageDescription.replace(
-                  '{project}',
-                  currentProject.name
-                )
-              : t.task.pipelineTemplateNoProject}
+              ? currentProject.name
+              : t.task.pipelineTemplateNoProjectTitle}
           </p>
         </div>
         <Button onClick={handleCreate} disabled={!projectId}>

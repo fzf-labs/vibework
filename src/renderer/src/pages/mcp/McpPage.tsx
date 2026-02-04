@@ -240,13 +240,10 @@ export function McpPage() {
         <div>
           <h1 className="text-2xl font-semibold">MCP</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            {t.settings.mcpProjectDescription}
+            {currentProject
+              ? currentProject.name
+              : t.settings.mcpProjectNoProjectTitle}
           </p>
-          {currentProject && (
-            <div className="text-muted-foreground mt-2 text-xs">
-              {currentProject.name}
-            </div>
-          )}
         </div>
         <Button
           variant="outline"

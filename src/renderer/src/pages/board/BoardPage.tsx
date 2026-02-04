@@ -179,11 +179,9 @@ export function BoardPage() {
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div>
           <h1 className="text-xl font-semibold">任务看板</h1>
-          {currentProject && (
-            <p className="text-muted-foreground text-sm">
-              {currentProject.name}
-            </p>
-          )}
+          <p className="text-muted-foreground text-sm">
+            {currentProject ? currentProject.name : '全部项目'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {currentProject?.path && (
