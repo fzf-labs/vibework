@@ -10,7 +10,11 @@ export function buildConversationHistory(
   const history: ConversationMessage[] = [];
 
   // Add initial user prompt
-  if (initialPrompt) {
+  const firstUserMessage = messages.find((msg) => msg.type === 'user');
+  const shouldAddInitialPrompt =
+    initialPrompt &&
+    (!firstUserMessage || (firstUserMessage.content || '') !== initialPrompt);
+  if (shouldAddInitialPrompt) {
     history.push({ role: 'user', content: initialPrompt });
   }
 

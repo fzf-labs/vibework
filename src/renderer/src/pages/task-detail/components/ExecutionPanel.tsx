@@ -13,7 +13,6 @@ interface ExecutionPanelProps {
   isLoading: boolean;
   pipelineBanner: string | null;
   useCliSession: boolean;
-  cliStatus: 'idle' | 'running' | 'stopped' | 'error';
   cliStatusInfo: { label: string; color: string };
   cliToolLabel: string;
   messages: AgentMessage[];
@@ -36,7 +35,6 @@ export function ExecutionPanel({
   isLoading,
   pipelineBanner,
   useCliSession,
-  cliStatus,
   cliStatusInfo,
   cliToolLabel,
   messages,
@@ -95,12 +93,6 @@ export function ExecutionPanel({
 
             {useCliSession ? (
               <>
-                {cliStatus === 'stopped' && (
-                  <div className="border-emerald-500/30 bg-emerald-50/40 text-emerald-700 mb-3 rounded-lg border px-3 py-2 text-xs">
-                    {t.task.executionCompleted || 'Execution completed'}
-                  </div>
-                )}
-
                 <div className="flex min-h-0 flex-1">
                   <CLISession
                     ref={cliSessionRef}
@@ -111,6 +103,7 @@ export function ExecutionPanel({
                     className="h-full w-full"
                     compact
                     allowStart={false}
+                    allowStop={false}
                     onStatusChange={onCliStatusChange}
                   />
                 </div>

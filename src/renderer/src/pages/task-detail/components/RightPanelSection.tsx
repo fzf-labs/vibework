@@ -1,36 +1,29 @@
-import type { PreviewStatus } from '@/hooks/useVitePreview';
 import { ArtifactPreview, type Artifact } from '@/components/artifacts';
 import { RightPanel } from '@/components/task';
 
 interface RightPanelSectionProps {
   isVisible: boolean;
+  taskId: string | null;
   workingDir: string | null;
   branchName: string | null;
   baseBranch: string | null;
   selectedArtifact: Artifact | null;
   artifacts: Artifact[];
   onSelectArtifact: (artifact: Artifact | null) => void;
-  livePreviewUrl: string | null;
-  livePreviewStatus: PreviewStatus;
-  livePreviewError: string | null;
-  onStartLivePreview?: () => void;
-  onStopLivePreview: () => void;
+  workspaceRefreshToken?: number;
   onClosePreview: () => void;
 }
 
 export function RightPanelSection({
   isVisible,
+  taskId,
   workingDir,
   branchName,
   baseBranch,
   selectedArtifact,
   artifacts,
   onSelectArtifact,
-  livePreviewUrl,
-  livePreviewStatus,
-  livePreviewError,
-  onStartLivePreview,
-  onStopLivePreview,
+  workspaceRefreshToken,
   onClosePreview,
 }: RightPanelSectionProps) {
   if (!isVisible) return null;
@@ -38,26 +31,18 @@ export function RightPanelSection({
   return (
     <div className="bg-muted/10 flex min-w-0 flex-1 flex-col overflow-hidden">
       <RightPanel
+        taskId={taskId}
         workingDir={workingDir}
         branchName={branchName}
         baseBranch={baseBranch}
         selectedArtifact={selectedArtifact}
         onSelectArtifact={onSelectArtifact}
-        livePreviewUrl={livePreviewUrl}
-        livePreviewStatus={livePreviewStatus}
-        livePreviewError={livePreviewError}
-        onStartLivePreview={onStartLivePreview}
-        onStopLivePreview={onStopLivePreview}
+        workspaceRefreshToken={workspaceRefreshToken}
         renderFilePreview={() => (
           <ArtifactPreview
             artifact={selectedArtifact}
             onClose={onClosePreview}
             allArtifacts={artifacts}
-            livePreviewUrl={livePreviewUrl}
-            livePreviewStatus={livePreviewStatus}
-            livePreviewError={livePreviewError}
-            onStartLivePreview={onStartLivePreview}
-            onStopLivePreview={onStopLivePreview}
           />
         )}
       />

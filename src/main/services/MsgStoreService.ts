@@ -311,8 +311,6 @@ export class MsgStoreService extends EventEmitter {
       }
     }
 
-    candidatePaths.push(appPaths.getLegacySessionMessagesFile(sessionId))
-
     const logFilePath = candidatePaths.find((path) => existsSync(path))
     if (!logFilePath) {
       return []

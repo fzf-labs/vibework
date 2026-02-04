@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -31,6 +31,7 @@ interface FileListPanelProps {
   branchName?: string | null;
   selectedArtifact: Artifact | null;
   onSelectArtifact: (artifact: Artifact) => void;
+  refreshToken?: number;
 }
 
 const sortEntries = (entries: WorkspaceEntry[]) =>
@@ -92,6 +93,7 @@ export function FileListPanel({
   branchName,
   selectedArtifact,
   onSelectArtifact,
+  refreshToken,
 }: FileListPanelProps) {
   const { t } = useLanguage();
   const [workspaceEntries, setWorkspaceEntries] = useState<WorkspaceEntry[]>([]);
@@ -99,22 +101,51 @@ export function FileListPanel({
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
+  const refreshInFlightRef = useRef(false);
+  const expandedPathsRef = useRef<Set<string>>(new Set());
 
   const hasWorkspace = Boolean(workingDir);
 
-  const loadWorkspaceRoot = useCallback(async () => {
+  useEffect(() => {
+    setExpandedPaths(new Set());
+    setLoadingPaths(new Set());
+  }, [workingDir]);
+
+  useEffect(() => {
+    expandedPathsRef.current = expandedPaths;
+  }, [expandedPaths]);
+
+  const loadWorkspaceRoot = useCallback(async (options?: { preserveExpanded?: boolean }) => {
     if (!workingDir) {
       setWorkspaceEntries([]);
       setWorkspaceError(null);
       return;
     }
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
     setWorkspaceLoading(true);
     setWorkspaceError(null);
     try {
       const entries = (await fs.readDir(workingDir, {
         maxDepth: 1,
       })) as WorkspaceEntry[];
-      setWorkspaceEntries(sortEntries(entries));
+      let nextEntries = sortEntries(entries);
+
+      const expandedSnapshot = expandedPathsRef.current;
+      if (options?.preserveExpanded && expandedSnapshot.size > 0) {
+        for (const path of expandedSnapshot) {
+          try {
+            const children = (await fs.readDir(path, {
+              maxDepth: 1,
+            })) as WorkspaceEntry[];
+            nextEntries = updateChildren(nextEntries, path, children);
+          } catch (error) {
+            console.warn('[FileListPanel] Failed to refresh directory:', path, error);
+          }
+        }
+      }
+
+      setWorkspaceEntries(nextEntries);
     } catch (error) {
       console.error('[FileListPanel] Failed to load workspace:', error);
       setWorkspaceEntries([]);
@@ -123,12 +154,18 @@ export function FileListPanel({
       );
     } finally {
       setWorkspaceLoading(false);
+      refreshInFlightRef.current = false;
     }
   }, [workingDir]);
 
   useEffect(() => {
     void loadWorkspaceRoot();
   }, [loadWorkspaceRoot]);
+
+  useEffect(() => {
+    if (refreshToken === undefined) return;
+    void loadWorkspaceRoot({ preserveExpanded: true });
+  }, [refreshToken, loadWorkspaceRoot]);
 
   const handleToggleDir = useCallback(
     async (entry: WorkspaceEntry) => {
@@ -270,7 +307,7 @@ export function FileListPanel({
           <Button
             variant="ghost"
             size="sm"
-            onClick={loadWorkspaceRoot}
+            onClick={() => void loadWorkspaceRoot({ preserveExpanded: true })}
             disabled={!hasWorkspace || workspaceLoading}
             className="h-7 px-2"
             title={t.preview.refresh}

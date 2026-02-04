@@ -222,7 +222,7 @@ export function SkillsSettings({
     } finally {
       setLoading(false);
     }
-  }, [defaultAppSkillsPath, formatCliLabel, loadSkillsFromDirectory]);
+  }, [defaultAppSkillsPath, formatCliLabel]);
 
   useEffect(() => {
     loadSkillsFromPath(appSkillsPath);

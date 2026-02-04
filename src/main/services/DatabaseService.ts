@@ -5,11 +5,9 @@ import { DatabaseConnection } from './database/DatabaseConnection'
 import { DatabaseMaintenance } from './database/DatabaseMaintenance'
 import { TaskRepository } from './database/TaskRepository'
 import { ProjectRepository } from './database/ProjectRepository'
-import { ProjectSettingsRepository } from './database/ProjectSettingsRepository'
 import { WorkflowRepository } from './database/WorkflowRepository'
 import { AgentRepository } from './database/AgentRepository'
 import type { CreateProjectInput, Project, UpdateProjectInput } from '../types/project'
-import type { ProjectSkillsSettings } from '../types/project-settings'
 import type { CreateTaskInput, Task, UpdateTaskInput } from '../types/task'
 import type { AgentExecution } from '../types/agent'
 import type {
@@ -27,7 +25,6 @@ export class DatabaseService {
   private maintenance: DatabaseMaintenance
   private taskRepo: TaskRepository
   private projectRepo: ProjectRepository
-  private projectSettingsRepo: ProjectSettingsRepository
   private workflowRepo: WorkflowRepository
   private agentRepo: AgentRepository
   private workNodeStatusListeners: Array<(node: WorkNode) => void> = []
@@ -71,7 +68,6 @@ export class DatabaseService {
 
     this.taskRepo = new TaskRepository(this.db)
     this.projectRepo = new ProjectRepository(this.db)
-    this.projectSettingsRepo = new ProjectSettingsRepository(this.db)
     this.workflowRepo = new WorkflowRepository(this.db)
     this.agentRepo = new AgentRepository(this.db)
   }
@@ -282,17 +278,6 @@ export class DatabaseService {
     this.workflowRepo.deleteWorkflowTemplatesByProject(id)
 
     return this.projectRepo.deleteProject(id)
-  }
-
-  getProjectSkillsSettings(projectId: string): ProjectSkillsSettings {
-    return this.projectSettingsRepo.getProjectSkillsSettings(projectId)
-  }
-
-  updateProjectSkillsSettings(
-    projectId: string,
-    settings: ProjectSkillsSettings
-  ): ProjectSkillsSettings {
-    return this.projectSettingsRepo.upsertProjectSkillsSettings(projectId, settings)
   }
 
   // ============ Workflow Template 操作 ============

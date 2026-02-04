@@ -26,8 +26,6 @@ interface ProjectAPI {
   checkPath: (
     id: string
   ) => Promise<{ exists: boolean; projectType?: 'normal' | 'git'; updated: boolean }>
-  getSkillsSettings: (id: string) => Promise<unknown>
-  updateSkillsSettings: (id: string, settings: UnknownRecord) => Promise<unknown>
 }
 
 interface GitAPI {
@@ -54,8 +52,15 @@ interface GitAPI {
     baseBranch: string,
     compareBranch?: string
   ) => Promise<unknown>
+  getBranchDiff: (
+    repoPath: string,
+    baseBranch: string,
+    compareBranch?: string,
+    filePath?: string
+  ) => Promise<unknown>
   stageFiles: (repoPath: string, filePaths: string[]) => Promise<unknown>
   unstageFiles: (repoPath: string, filePaths: string[]) => Promise<unknown>
+  commit: (repoPath: string, message: string) => Promise<unknown>
   mergeBranch: (repoPath: string, branchName: string) => Promise<unknown>
   getConflictFiles: (repoPath: string) => Promise<unknown>
   abortMerge: (repoPath: string) => Promise<unknown>
@@ -97,6 +102,27 @@ interface CLIAPI {
     byteLength: number
     entryCount: number
   }>
+}
+
+interface TerminalAPI {
+  startSession: (
+    paneId: string,
+    cwd: string,
+    cols?: number,
+    rows?: number,
+    workspaceId?: string
+  ) => Promise<{ paneId: string; isNew: boolean }>
+  write: (paneId: string, data: string) => Promise<unknown>
+  resize: (paneId: string, cols: number, rows: number) => Promise<unknown>
+  signal: (paneId: string, signal?: string) => Promise<unknown>
+  kill: (paneId: string) => Promise<unknown>
+  detach: (paneId: string) => Promise<unknown>
+  killByWorkspaceId: (workspaceId: string) => Promise<{ killed: number; failed: number }>
+  onData: (callback: (data: { paneId: string; data: string }) => void) => () => void
+  onExit: (
+    callback: (data: { paneId: string; exitCode: number; signal?: number }) => void
+  ) => () => void
+  onError: (callback: (data: { paneId: string; error: string }) => void) => () => void
 }
 
 interface ClaudeCodeAPI {
@@ -365,13 +391,14 @@ interface TaskAPI {
   getAll: () => Promise<TaskWithWorktree[]>
   getByProject: (projectId: string) => Promise<TaskWithWorktree[]>
   updateStatus: (id: string, status: string) => Promise<TaskWithWorktree | null>
-  delete: (id: string, removeWorktree?: boolean) => Promise<{ success: boolean; error?: string }>
+  delete: (id: string, removeWorktree?: boolean) => Promise<boolean>
 }
 
 interface API {
   projects: ProjectAPI
   git: GitAPI
   cli: CLIAPI
+  terminal: TerminalAPI
   claudeCode: ClaudeCodeAPI
   cliSession: CliSessionAPI
   logStream: LogStreamAPI

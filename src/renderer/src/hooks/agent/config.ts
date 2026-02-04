@@ -7,7 +7,6 @@ import { getSettings } from '@/data/settings';
 import {
   DEFAULT_PROJECT_SKILLS_SETTINGS,
   resolveProjectSkillDirectories,
-  type ProjectSkillsSettings,
 } from '@/lib/skills';
 
 export const AGENT_SERVER_URL = API_BASE_URL;
@@ -166,34 +165,26 @@ export async function getSkillsConfig(): Promise<
     };
 
     const projectId = getCurrentProjectId?.();
-    if (!projectId || !window.api?.projects?.getSkillsSettings || !window.api?.projects?.get) {
+    if (!projectId || !window.api?.projects?.get) {
       console.log('[useAgent] Skills config:', config);
       return config;
     }
 
     try {
-      const [project, projectSettings, cliTools] = await Promise.all([
+      const [project, cliTools] = await Promise.all([
         window.api.projects.get(projectId) as Promise<{ id?: string; path?: string } | undefined>,
-        window.api.projects.getSkillsSettings(projectId) as Promise<ProjectSkillsSettings | undefined>,
         window.api?.cliTools?.getAll?.() as Promise<Array<{ id: string; displayName?: string }> | undefined>,
       ]);
 
       if (project?.path) {
-        const mergedSettings: ProjectSkillsSettings = {
-          ...DEFAULT_PROJECT_SKILLS_SETTINGS,
-          ...(projectSettings || {}),
-          customDirectories: Array.isArray(projectSettings?.customDirectories)
-            ? projectSettings!.customDirectories
-            : DEFAULT_PROJECT_SKILLS_SETTINGS.customDirectories,
-        };
         const directories = await resolveProjectSkillDirectories(
           project.path,
-          mergedSettings,
+          DEFAULT_PROJECT_SKILLS_SETTINGS,
           cliTools ?? []
         );
 
         const projectSkills = {
-          enabled: mergedSettings.enabled,
+          enabled: true,
           paths: directories.map((dir) => dir.path),
         };
 
@@ -206,7 +197,7 @@ export async function getSkillsConfig(): Promise<
         return enrichedConfig;
       }
     } catch (error) {
-      console.error('[useAgent] Failed to load project skills settings:', error);
+      console.error('[useAgent] Failed to load project skills directories:', error);
     }
 
     console.log('[useAgent] Skills config:', config);

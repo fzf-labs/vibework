@@ -13,6 +13,9 @@ export type MergedMcpServer = MCPServerUI & {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+const isMcpServerStdio = (value: unknown): value is MCPServerStdio =>
+  isRecord(value) && typeof value.command === 'string';
+
 export const extractMcpServers = (value: unknown): MCPServerRecord => {
   if (!isRecord(value)) return {};
   const direct = (value as { mcpServers?: unknown; mcp_servers?: unknown }).mcpServers
@@ -178,15 +181,16 @@ export const buildMcpServersFromConfig = (
     const serverType: 'stdio' | 'http' | 'sse' = hasUrl
       ? ((cfg.type as 'http' | 'sse') || 'http')
       : 'stdio';
+    const stdioConfig = !hasUrl && isMcpServerStdio(config) ? config : undefined;
 
     serverList.push({
       id: `${sourceName}-${id}`,
       name: id,
       type: serverType,
       enabled: true,
-      command: hasUrl ? undefined : (config as MCPServerStdio).command,
-      args: hasUrl ? undefined : (config as MCPServerStdio).args,
-      env: hasUrl ? undefined : (config as MCPServerStdio).env,
+      command: stdioConfig?.command,
+      args: stdioConfig?.args,
+      env: stdioConfig?.env,
       url: hasUrl ? (cfg.url as string) : undefined,
       headers: hasUrl ? (cfg.headers as Record<string, string> | undefined) : undefined,
       autoExecute: true,

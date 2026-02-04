@@ -119,6 +119,7 @@ export class ClaudeCodeService extends EventEmitter {
     args.push('--output-format=stream-json')
     args.push('--input-format=stream-json')
     args.push('--dangerously-skip-permissions')
+    args.push('--session-id', sessionId)
 
     // 添加模型参数
     if (options?.model || this.config.defaultModel) {

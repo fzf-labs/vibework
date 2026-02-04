@@ -12,9 +12,7 @@ export const IPC_CHANNELS = {
     add: 'projects:add',
     update: 'projects:update',
     delete: 'projects:delete',
-    checkPath: 'projects:checkPath',
-    getSkillsSettings: 'projects:getSkillsSettings',
-    updateSkillsSettings: 'projects:updateSkillsSettings'
+    checkPath: 'projects:checkPath'
   },
   git: {
     checkInstalled: 'git:checkInstalled',
@@ -30,8 +28,10 @@ export const IPC_CHANNELS = {
     getCurrentBranch: 'git:getCurrentBranch',
     getChangedFiles: 'git:getChangedFiles',
     getBranchDiffFiles: 'git:getBranchDiffFiles',
+    getBranchDiff: 'git:getBranchDiff',
     stageFiles: 'git:stageFiles',
     unstageFiles: 'git:unstageFiles',
+    commit: 'git:commit',
     mergeBranch: 'git:mergeBranch',
     getConflictFiles: 'git:getConflictFiles',
     abortMerge: 'git:abortMerge',
@@ -53,6 +53,15 @@ export const IPC_CHANNELS = {
     startSession: 'cli:startSession',
     stopSession: 'cli:stopSession',
     getOutput: 'cli:getOutput'
+  },
+  terminal: {
+    startSession: 'terminal:startSession',
+    write: 'terminal:write',
+    resize: 'terminal:resize',
+    signal: 'terminal:signal',
+    kill: 'terminal:kill',
+    detach: 'terminal:detach',
+    killByWorkspaceId: 'terminal:killByWorkspaceId'
   },
   claudeCode: {
     getConfig: 'claudeCode:getConfig',
@@ -208,6 +217,11 @@ export const IPC_EVENTS = {
     close: 'cliSession:close',
     error: 'cliSession:error'
   },
+  terminal: {
+    data: 'terminal:data',
+    exit: 'terminal:exit',
+    error: 'terminal:error'
+  },
   logStream: {
     message: 'logStream:message'
   },
@@ -246,8 +260,6 @@ export interface IpcContracts {
     [string],
     { exists: boolean; projectType?: 'normal' | 'git'; updated: boolean }
   >
-  'projects:getSkillsSettings': IpcContract<[string], unknown>
-  'projects:updateSkillsSettings': IpcContract<[string, UnknownRecord], unknown>
 
   'git:checkInstalled': IpcContract<[], unknown>
   'git:clone': IpcContract<[string, string], unknown>
@@ -262,8 +274,10 @@ export interface IpcContracts {
   'git:getCurrentBranch': IpcContract<[string], unknown>
   'git:getChangedFiles': IpcContract<[string], unknown>
   'git:getBranchDiffFiles': IpcContract<[string, string, string?], unknown>
+  'git:getBranchDiff': IpcContract<[string, string, string?, string?], unknown>
   'git:stageFiles': IpcContract<[string, string[]], unknown>
   'git:unstageFiles': IpcContract<[string, string[]], unknown>
+  'git:commit': IpcContract<[string, string], unknown>
   'git:mergeBranch': IpcContract<[string, string], unknown>
   'git:getConflictFiles': IpcContract<[string], unknown>
   'git:abortMerge': IpcContract<[string], unknown>
@@ -284,6 +298,14 @@ export interface IpcContracts {
   'cli:startSession': IpcContract<[string, string, string[], string?], unknown>
   'cli:stopSession': IpcContract<[string], unknown>
   'cli:getOutput': IpcContract<[string], OutputSnapshot>
+
+  'terminal:startSession': IpcContract<[string, string, number?, number?, string?], { paneId: string; isNew: boolean }>
+  'terminal:write': IpcContract<[string, string], unknown>
+  'terminal:resize': IpcContract<[string, number, number], unknown>
+  'terminal:signal': IpcContract<[string, string?], unknown>
+  'terminal:kill': IpcContract<[string], unknown>
+  'terminal:detach': IpcContract<[string], unknown>
+  'terminal:killByWorkspaceId': IpcContract<[string], { killed: number; failed: number }>
 
   'claudeCode:getConfig': IpcContract<[], UnknownRecord>
   'claudeCode:saveConfig': IpcContract<[UnknownRecord], unknown>

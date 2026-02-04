@@ -87,7 +87,7 @@ app.whenReady().then(async () => {
   await appContext.init()
 
   const { services, appPaths } = appContext
-  const { databaseService, claudeCodeService, cliSessionService } = services
+  const { databaseService, claudeCodeService, cliSessionService, terminalService } = services
 
   try {
     await addAllowedRoot(process.resourcesPath)
@@ -162,6 +162,24 @@ app.whenReady().then(async () => {
   appContext.trackEvent(cliSessionService, 'error', (data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_EVENTS.cliSession.error, data)
+    }
+  })
+
+  appContext.trackEvent(terminalService, 'data', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_EVENTS.terminal.data, data)
+    }
+  })
+
+  appContext.trackEvent(terminalService, 'exit', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_EVENTS.terminal.exit, data)
+    }
+  })
+
+  appContext.trackEvent(terminalService, 'error', (data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_EVENTS.terminal.error, data)
     }
   })
 

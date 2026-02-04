@@ -26,7 +26,6 @@ export type {
   DocxParagraph,
   ExcelSheet,
   PreviewComponentProps,
-  PreviewMode,
   PptxSlide,
   ViewMode,
 } from './types';

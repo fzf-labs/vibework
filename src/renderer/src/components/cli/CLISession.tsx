@@ -13,6 +13,7 @@ interface CLISessionProps {
   className?: string
   compact?: boolean
   allowStart?: boolean
+  allowStop?: boolean
   onStatusChange?: (status: CLISessionStatus) => void
 }
 
@@ -32,6 +33,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
   className,
   compact = false,
   allowStart = true,
+  allowStop = true,
   onStatusChange
 }: CLISessionProps, ref) {
   const [status, setStatus] = useState<CLISessionStatus>('idle')
@@ -182,12 +184,14 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
   }, [normalizedLogs.length])
 
   const showStartButton = allowStart && status !== 'running'
-  const showStopButton = status === 'running'
+  const showStopButton = allowStop && status === 'running'
+  const showControls = showStartButton || showStopButton
+  const showHeader = compact ? status !== 'idle' || showControls : showControls
   const hasLogs = normalizedLogs.length > 0
 
   return (
     <div className={cn('flex flex-col', !compact && 'gap-3', className)}>
-      {!compact && (showStartButton || showStopButton) && (
+      {!compact && showHeader && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div
@@ -231,7 +235,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
           hasLogs ? 'bg-muted/50 p-2' : 'bg-transparent p-0'
         )}
       >
-        {compact && (showStartButton || showStopButton) && (
+        {compact && showHeader && (
           <div className="sticky top-0 z-10 flex items-center justify-between mb-2 pb-2 border-b border-border/50 bg-muted/50">
             <div className="flex items-center gap-2">
               <div

@@ -56,21 +56,7 @@ export async function readSessionLogs(
   const logPath = await getSessionLogPath(sessionId, projectId)
   const exists = await fs.exists(logPath)
   if (!exists) {
-    const root = await getVibeworkDataDir()
-    const legacyPath = `${root}/data/sessions/${sessionId}/messages.jsonl`
-    const legacyExists = await fs.exists(legacyPath)
-    if (!legacyExists) return []
-    const legacyContent = await fs.readTextFile(legacyPath)
-    const legacyLines = legacyContent.split('\n').filter(Boolean)
-    const legacyEntries: SessionLogEntry[] = []
-    for (const line of legacyLines) {
-      try {
-        legacyEntries.push(JSON.parse(line) as SessionLogEntry)
-      } catch {
-        // ignore malformed lines
-      }
-    }
-    return legacyEntries
+    return []
   }
   const content = await fs.readTextFile(logPath)
   const lines = content.split('\n').filter(Boolean)

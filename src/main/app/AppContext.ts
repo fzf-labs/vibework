@@ -15,6 +15,7 @@ import type { DatabaseService } from '../services/DatabaseService'
 import type { SettingsService } from '../services/SettingsService'
 import type { TaskService } from '../services/TaskService'
 import type { CliSessionService } from '../services/cli/CliSessionService'
+import type { TerminalService } from '../services/terminal/TerminalService'
 
 export interface LifecycleService {
   init?: () => void | Promise<void>
@@ -37,6 +38,7 @@ export interface AppServices {
   settingsService: SettingsService
   taskService: TaskService
   cliSessionService: CliSessionService
+  terminalService: TerminalService
 }
 
 type Disposable = () => void | Promise<void>

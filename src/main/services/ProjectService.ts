@@ -2,7 +2,6 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { DatabaseService } from './DatabaseService'
 import type { CreateProjectInput, Project as DbProject, UpdateProjectInput } from '../types/project'
-import type { ProjectSkillsSettings } from '../types/project-settings'
 import type { CreateProjectOptions, Project } from '../types/domain/project'
 
 export type { CreateProjectOptions, Project } from '../types/domain/project'
@@ -74,25 +73,6 @@ export class ProjectService {
 
   deleteProject(id: string): boolean {
     return this.db.deleteProject(id)
-  }
-
-  getProjectSkillsSettings(projectId: string): ProjectSkillsSettings {
-    const project = this.db.getProject(projectId)
-    if (!project) {
-      throw new Error(`项目不存在: ${projectId}`)
-    }
-    return this.db.getProjectSkillsSettings(projectId)
-  }
-
-  updateProjectSkillsSettings(
-    projectId: string,
-    settings: ProjectSkillsSettings
-  ): ProjectSkillsSettings {
-    const project = this.db.getProject(projectId)
-    if (!project) {
-      throw new Error(`项目不存在: ${projectId}`)
-    }
-    return this.db.updateProjectSkillsSettings(projectId, settings)
   }
 
   checkProjectPath(id: string): {

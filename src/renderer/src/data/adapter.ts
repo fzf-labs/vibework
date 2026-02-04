@@ -37,8 +37,8 @@ export const db = {
     return updatedTask
   },
 
-  deleteTask: (id: string): Promise<boolean> => {
-    return window.api.database.deleteTask(id)
+  deleteTask: (id: string, removeWorktree: boolean = true): Promise<boolean> => {
+    return window.api.task.delete(id, removeWorktree)
   },
 
   // ============ Workflow Template 操作 ============

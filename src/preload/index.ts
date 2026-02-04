@@ -32,11 +32,7 @@ const api = {
     update: (id: string, updates: Record<string, unknown>) =>
       invoke(IPC_CHANNELS.projects.update, id, updates),
     delete: (id: string) => invoke(IPC_CHANNELS.projects.delete, id),
-    checkPath: (id: string) => invoke(IPC_CHANNELS.projects.checkPath, id),
-    getSkillsSettings: (id: string) =>
-      invoke(IPC_CHANNELS.projects.getSkillsSettings, id),
-    updateSkillsSettings: (id: string, settings: Record<string, unknown>) =>
-      invoke(IPC_CHANNELS.projects.updateSkillsSettings, id, settings)
+    checkPath: (id: string) => invoke(IPC_CHANNELS.projects.checkPath, id)
   },
   git: {
     checkInstalled: () => invoke(IPC_CHANNELS.git.checkInstalled),
@@ -74,10 +70,18 @@ const api = {
       baseBranch: string,
       compareBranch?: string
     ) => invoke(IPC_CHANNELS.git.getBranchDiffFiles, repoPath, baseBranch, compareBranch),
+    getBranchDiff: (
+      repoPath: string,
+      baseBranch: string,
+      compareBranch?: string,
+      filePath?: string
+    ) => invoke(IPC_CHANNELS.git.getBranchDiff, repoPath, baseBranch, compareBranch, filePath),
     stageFiles: (repoPath: string, filePaths: string[]) =>
       invoke(IPC_CHANNELS.git.stageFiles, repoPath, filePaths),
     unstageFiles: (repoPath: string, filePaths: string[]) =>
       invoke(IPC_CHANNELS.git.unstageFiles, repoPath, filePaths),
+    commit: (repoPath: string, message: string) =>
+      invoke(IPC_CHANNELS.git.commit, repoPath, message),
     mergeBranch: (repoPath: string, branchName: string) =>
       invoke(IPC_CHANNELS.git.mergeBranch, repoPath, branchName),
     getConflictFiles: (repoPath: string) => invoke(IPC_CHANNELS.git.getConflictFiles, repoPath),
@@ -111,6 +115,42 @@ const api = {
       invoke(IPC_CHANNELS.cli.startSession, sessionId, command, args, cwd),
     stopSession: (sessionId: string) => invoke(IPC_CHANNELS.cli.stopSession, sessionId),
     getOutput: (sessionId: string) => invoke(IPC_CHANNELS.cli.getOutput, sessionId)
+  },
+  terminal: {
+    startSession: (
+      paneId: string,
+      cwd: string,
+      cols?: number,
+      rows?: number,
+      workspaceId?: string
+    ) => invoke(IPC_CHANNELS.terminal.startSession, paneId, cwd, cols, rows, workspaceId),
+    write: (paneId: string, data: string) => invoke(IPC_CHANNELS.terminal.write, paneId, data),
+    resize: (paneId: string, cols: number, rows: number) =>
+      invoke(IPC_CHANNELS.terminal.resize, paneId, cols, rows),
+    signal: (paneId: string, signal?: string) =>
+      invoke(IPC_CHANNELS.terminal.signal, paneId, signal),
+    kill: (paneId: string) => invoke(IPC_CHANNELS.terminal.kill, paneId),
+    detach: (paneId: string) => invoke(IPC_CHANNELS.terminal.detach, paneId),
+    killByWorkspaceId: (workspaceId: string) =>
+      invoke(IPC_CHANNELS.terminal.killByWorkspaceId, workspaceId),
+    onData: (callback: (data: { paneId: string; data: string }) => void) => {
+      const listener = (_: unknown, data: { paneId: string; data: string }) => callback(data)
+      ipcRenderer.on(IPC_EVENTS.terminal.data, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.terminal.data, listener)
+    },
+    onExit: (callback: (data: { paneId: string; exitCode: number; signal?: number }) => void) => {
+      const listener = (
+        _: unknown,
+        data: { paneId: string; exitCode: number; signal?: number }
+      ) => callback(data)
+      ipcRenderer.on(IPC_EVENTS.terminal.exit, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.terminal.exit, listener)
+    },
+    onError: (callback: (data: { paneId: string; error: string }) => void) => {
+      const listener = (_: unknown, data: { paneId: string; error: string }) => callback(data)
+      ipcRenderer.on(IPC_EVENTS.terminal.error, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.terminal.error, listener)
+    }
   },
   claudeCode: {
     getConfig: () => invoke(IPC_CHANNELS.claudeCode.getConfig),

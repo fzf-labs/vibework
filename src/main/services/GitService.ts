@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readFile, realpath } from 'fs/promises'
 import { isAbsolute, resolve } from 'path'
 import { safeExecFile } from '../utils/safe-exec'
 
@@ -171,10 +171,34 @@ export class GitService {
   async getBranches(path: string): Promise<string[]> {
     try {
       const output = await this.runGit(['branch', '--list'], path)
-      return output
-        .split('\n')
-        .filter((b) => b.trim())
-        .map((b) => b.replace('*', '').trim())
+      const branches: string[] = []
+      for (const line of output.split('\n')) {
+        if (!line.trim()) continue
+        if (line.startsWith('+')) continue
+        const branchName = line.replace(/^[* ]+/, '').trim()
+        if (branchName) branches.push(branchName)
+      }
+      const worktrees = await this.listWorktrees(path)
+      let repoPath = path
+      try {
+        const rootOutput = await this.runGit(['rev-parse', '--show-toplevel'], path)
+        const root = rootOutput.trim()
+        if (root) repoPath = root
+      } catch {
+        // Ignore and fall back to the provided path.
+      }
+      const repoPathResolved = await realpath(repoPath).catch(() => resolve(repoPath))
+      const worktreeBranches = new Set<string>()
+      for (const worktree of worktrees) {
+        if (!worktree.branch || !worktree.branch.startsWith('refs/heads/')) continue
+        const worktreePath = isAbsolute(worktree.path)
+          ? worktree.path
+          : resolve(repoPathResolved, worktree.path)
+        const worktreePathResolved = await realpath(worktreePath).catch(() => resolve(worktreePath))
+        if (worktreePathResolved === repoPathResolved) continue
+        worktreeBranches.add(worktree.branch.substring('refs/heads/'.length))
+      }
+      return branches.filter((branch) => !worktreeBranches.has(branch))
     } catch (error) {
       throw new Error(`Failed to get branches: ${error}`)
     }
@@ -398,6 +422,28 @@ export class GitService {
   }
 
   /**
+   * 获取分支之间的文件差异内容
+   */
+  async getBranchDiff(
+    repoPath: string,
+    baseBranch: string,
+    compareBranch?: string,
+    filePath?: string
+  ): Promise<string> {
+    try {
+      const compare = compareBranch?.trim() || 'HEAD'
+      const range = `${baseBranch}...${compare}`
+      const args = ['diff', range]
+      if (filePath) {
+        args.push('--', filePath)
+      }
+      return await this.runGit(args, repoPath)
+    } catch (error) {
+      throw new Error(`Failed to get branch diff: ${error}`)
+    }
+  }
+
+  /**
    * 暂存文件
    */
   async stageFiles(repoPath: string, filePaths: string[]): Promise<void> {
@@ -418,6 +464,25 @@ export class GitService {
       await this.runGit(['reset', 'HEAD', '--', ...filePaths], repoPath)
     } catch (error) {
       throw new Error(`Failed to unstage files: ${error}`)
+    }
+  }
+
+  /**
+   * 提交已暂存的变更
+   */
+  async commit(repoPath: string, message: string): Promise<void> {
+    const trimmed = message.trim()
+    if (!trimmed) {
+      throw new Error('提交信息不能为空')
+    }
+    try {
+      const staged = await this.runGit(['diff', '--staged', '--name-only'], repoPath)
+      if (!staged.trim()) {
+        throw new Error('没有已暂存的变更')
+      }
+      await this.runGit(['commit', '-m', trimmed], repoPath)
+    } catch (error) {
+      throw new Error(`Failed to commit: ${error}`)
     }
   }
 

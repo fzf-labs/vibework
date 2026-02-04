@@ -1,6 +1,6 @@
 import * as path from 'path'
 import { mkdirSync } from 'fs'
-import { rm } from 'fs/promises'
+import { realpath, rm } from 'fs/promises'
 import { homedir } from 'os'
 import { DatabaseService } from './DatabaseService'
 import { GitService } from './GitService'
@@ -126,27 +126,85 @@ export class TaskService {
     const task = this.db.getTask(id)
     if (!task) return false
 
-    if (removeWorktree && task.worktree_path) {
+    if (removeWorktree && (task.worktree_path || task.branch_name)) {
       try {
+        const normalizePath = async (value: string): Promise<string> => {
+          const resolved = path.resolve(value)
+          try {
+            return await realpath(resolved)
+          } catch {
+            return resolved
+          }
+        }
         let projectPath: string | null = null
         if (task.project_id) {
           const project = this.db.getProject(task.project_id)
           projectPath = project?.path ?? null
         }
-        if (!projectPath) {
+        if (!projectPath && task.worktree_path) {
           projectPath = await this.git.inferRepoPathFromWorktree(task.worktree_path)
         }
         if (!projectPath) {
-          throw new Error('Failed to determine repository path for worktree removal')
-        }
-        await this.git.removeWorktree(projectPath, task.worktree_path, true)
+          if (task.worktree_path) {
+            try {
+              await rm(task.worktree_path, { recursive: true, force: true })
+            } catch (fsError) {
+              console.error('Failed to remove worktree directory:', fsError)
+            }
+          }
+        } else {
+          const repoPath = await normalizePath(projectPath)
+          const worktrees = await this.git.listWorktrees(projectPath).catch((error) => {
+            console.error('Failed to list worktrees:', error)
+            return []
+          })
+          const branchRef = task.branch_name ? `refs/heads/${task.branch_name}` : null
+          const pathsToRemove = new Set<string>()
 
-        // 删除分支
-        if (task.branch_name) {
+          if (task.worktree_path) {
+            pathsToRemove.add(task.worktree_path)
+          }
+          if (branchRef) {
+            for (const worktree of worktrees) {
+              if (worktree.branch === branchRef && worktree.path) {
+                pathsToRemove.add(worktree.path)
+              }
+            }
+          }
+
+          for (const candidatePath of pathsToRemove) {
+            const resolvedPath = path.isAbsolute(candidatePath)
+              ? candidatePath
+              : path.resolve(projectPath, candidatePath)
+            const normalizedPath = await normalizePath(resolvedPath)
+            if (normalizedPath === repoPath) {
+              continue
+            }
+            try {
+              await this.git.removeWorktree(projectPath, resolvedPath, true)
+            } catch (error) {
+              console.error('Failed to remove worktree:', error)
+              try {
+                await rm(resolvedPath, { recursive: true, force: true })
+              } catch (fsError) {
+                console.error('Failed to remove worktree directory:', fsError)
+              }
+            }
+          }
+
           try {
-            await this.git.deleteBranch(projectPath, task.branch_name, true)
-          } catch (branchError) {
-            console.error('Failed to delete branch:', branchError)
+            await this.git.pruneWorktrees(projectPath)
+          } catch (error) {
+            console.error('Failed to prune worktrees:', error)
+          }
+
+          // 删除分支
+          if (task.branch_name) {
+            try {
+              await this.git.deleteBranch(projectPath, task.branch_name, true)
+            } catch (branchError) {
+              console.error('Failed to delete branch:', branchError)
+            }
           }
         }
       } catch (error) {

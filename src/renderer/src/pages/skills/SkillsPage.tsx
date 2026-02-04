@@ -13,12 +13,10 @@ import {
 } from 'lucide-react';
 import {
   CLI_SKILL_DIRECTORIES,
-  DEFAULT_PROJECT_SKILLS_SETTINGS,
   formatCliLabel,
   loadSkillsFromDirectory,
   openFolderInSystem,
   resolvePath,
-  type ProjectSkillsSettings,
 } from '@/lib/skills';
 import type { SkillInfo } from '@/components/settings/types';
 
@@ -172,26 +170,6 @@ export function SkillsPage() {
 
     setLoading(true);
     try {
-      const settings = (await window.api?.projects?.getSkillsSettings?.(
-        currentProject.id
-      )) as ProjectSkillsSettings | undefined;
-      const mergedSettings: ProjectSkillsSettings = {
-        ...DEFAULT_PROJECT_SKILLS_SETTINGS,
-        ...(settings || {}),
-        customDirectories: Array.isArray(settings?.customDirectories)
-          ? settings!.customDirectories
-          : DEFAULT_PROJECT_SKILLS_SETTINGS.customDirectories,
-      };
-      const normalizedSettings = mergedSettings.enabled
-        ? mergedSettings
-        : { ...mergedSettings, enabled: true };
-      if (!mergedSettings.enabled) {
-        await window.api?.projects?.updateSkillsSettings?.(
-          currentProject.id,
-          normalizedSettings
-        );
-      }
-
       const cliTools =
         (await window.api?.cliTools?.getAll?.())?.filter(Boolean) ?? [];
       const fallbackTools = cliTools.length

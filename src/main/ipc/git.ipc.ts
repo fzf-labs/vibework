@@ -79,6 +79,14 @@ export const registerGitIpc = ({ handle, v, services }: IpcModuleContext): void 
     }
   )
 
+  handle(
+    IPC_CHANNELS.git.getBranchDiff,
+    [v.string(), v.string(), v.optional(v.string()), v.optional(v.string())],
+    async (_, repoPath, baseBranch, compareBranch, filePath) => {
+      return await gitService.getBranchDiff(repoPath, baseBranch, compareBranch, filePath)
+    }
+  )
+
   handle(IPC_CHANNELS.git.stageFiles, [v.string(), v.array(v.string())], async (_, repoPath, filePaths) => {
     await gitService.stageFiles(repoPath, filePaths)
   })
@@ -90,6 +98,10 @@ export const registerGitIpc = ({ handle, v, services }: IpcModuleContext): void 
       await gitService.unstageFiles(repoPath, filePaths)
     }
   )
+
+  handle(IPC_CHANNELS.git.commit, [v.string(), v.string()], async (_, repoPath, message) => {
+    await gitService.commit(repoPath, message)
+  })
 
   handle(IPC_CHANNELS.git.mergeBranch, [v.string(), v.string()], async (_, repoPath, branchName) => {
     return await gitService.mergeBranch(repoPath, branchName)

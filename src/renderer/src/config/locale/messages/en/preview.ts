@@ -3,6 +3,8 @@ export default {
   filesTab: 'Files',
   serverTab: 'Dev',
   gitTab: 'Git',
+  terminalTab: 'Terminal',
+  terminalCreateHint: 'Click + to create a terminal',
   fileList: 'File List',
   artifactsSection: 'Artifacts',
   workspaceSection: 'Workspace',

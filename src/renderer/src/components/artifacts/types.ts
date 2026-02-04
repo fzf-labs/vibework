@@ -1,5 +1,3 @@
-import type { PreviewStatus } from '@/hooks/useVitePreview';
-
 export type ArtifactType =
   | 'html'
   | 'jsx'
@@ -40,15 +38,7 @@ export interface ArtifactPreviewProps {
   onClose?: () => void;
   // All artifacts for resolving relative imports
   allArtifacts?: Artifact[];
-  // Live preview props
-  livePreviewUrl?: string | null;
-  livePreviewStatus?: PreviewStatus;
-  livePreviewError?: string | null;
-  onStartLivePreview?: () => void;
-  onStopLivePreview?: () => void;
 }
-
-export type PreviewMode = 'static' | 'live';
 
 export type ViewMode = 'preview' | 'code';
 

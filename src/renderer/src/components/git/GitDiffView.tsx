@@ -16,6 +16,10 @@ export interface GitDiffViewProps {
   stagedDiffText?: string;
   loading?: boolean;
   error?: string | null;
+  groupLabels?: {
+    unstaged?: string;
+    staged?: string;
+  };
   className?: string;
 }
 
@@ -247,6 +251,7 @@ export function GitDiffView({
   stagedDiffText,
   loading,
   error,
+  groupLabels,
   className,
 }: GitDiffViewProps) {
   const { resolvedTheme } = useTheme();
@@ -271,13 +276,13 @@ export function GitDiffView({
     const unstaged = parseUnifiedDiff(diffText);
     const staged = parseUnifiedDiff(stagedDiffText || '');
     if (unstaged.length) {
-      result.push({ title: '未暂存变更', files: unstaged });
+      result.push({ title: groupLabels?.unstaged ?? '未暂存变更', files: unstaged });
     }
     if (staged.length) {
-      result.push({ title: '已暂存变更', files: staged });
+      result.push({ title: groupLabels?.staged ?? '已暂存变更', files: staged });
     }
     return result;
-  }, [diffText, stagedDiffText]);
+  }, [diffText, stagedDiffText, groupLabels]);
 
   if (loading) {
     return (

@@ -3,6 +3,8 @@ export default {
   filesTab: '文件',
   serverTab: '开发',
   gitTab: 'Git',
+  terminalTab: '终端',
+  terminalCreateHint: '点击 + 创建终端',
   fileList: '文件列表',
   artifactsSection: '产物文件',
   workspaceSection: '工作目录',

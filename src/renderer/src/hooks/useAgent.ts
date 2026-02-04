@@ -618,7 +618,16 @@ export function useAgent(): UseAgentReturn {
       }
 
       setIsRunning(true);
-      setMessages([]);
+      const initialUserMessage: AgentMessage | null =
+        prompt.trim() || (attachments && attachments.length > 0)
+          ? {
+              type: 'user',
+              content: prompt,
+              attachments:
+                attachments && attachments.length > 0 ? attachments : undefined,
+            }
+          : null;
+      setMessages(initialUserMessage ? [initialUserMessage] : []);
       setInitialPrompt(prompt);
       setPhase('planning');
       setPlan(null);
@@ -722,14 +731,6 @@ export function useAgent(): UseAgentReturn {
         if (hasImages) {
           console.log('[useAgent] Images attached, using direct execution');
           setPhase('executing');
-
-          // Add user message with attachments to UI
-          const userMessage: AgentMessage = {
-            type: 'user',
-            content: prompt,
-            attachments: attachments,
-          };
-          setMessages([userMessage]);
 
           // Use session folder as workDir
           const taskWorkDir = await resolveTaskWorkDir(
@@ -904,6 +905,7 @@ export function useAgent(): UseAgentReturn {
       initialPrompt,
       isRunning,
       processStream,
+      resolveProjectMcpConfigPath,
       resolveTaskWorkDir,
       startAgentExecutionForTask,
       taskId,
@@ -1005,6 +1007,7 @@ export function useAgent(): UseAgentReturn {
     initialPrompt,
     processStream,
     sessionFolder,
+    resolveProjectMcpConfigPath,
     resolveTaskWorkDir,
     startAgentExecutionForTask,
     completeAgentExecution,
@@ -1148,6 +1151,7 @@ export function useAgent(): UseAgentReturn {
       initialPrompt,
       processStream,
       sessionFolder,
+      resolveProjectMcpConfigPath,
       resolveTaskWorkDir,
       startAgentExecutionForTask,
       completeAgentExecution,

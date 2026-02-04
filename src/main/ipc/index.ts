@@ -22,6 +22,7 @@ import { registerFilesystemIpc } from './filesystem.ipc'
 import { registerSettingsIpc } from './settings.ipc'
 import { registerTaskIpc } from './task.ipc'
 import { registerAppIpc } from './app.ipc'
+import { registerTerminalIpc } from './terminal.ipc'
 
 export const registerIpcHandlers = (deps: IpcDependencies): void => {
   const handle = <C extends IpcContractChannel>(
@@ -127,4 +128,5 @@ export const registerIpcHandlers = (deps: IpcDependencies): void => {
   registerSettingsIpc(context)
   registerTaskIpc(context)
   registerAppIpc(context)
+  registerTerminalIpc(context)
 }

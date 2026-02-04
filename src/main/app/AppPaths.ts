@@ -80,20 +80,6 @@ export class AppPaths {
   }
 
   /**
-   * 获取 legacy session 目录路径 ~/.vibework/data/sessions/<sessionId>/
-   */
-  getLegacySessionDataDir(sessionId: string): string {
-    return join(this.getSessionsDir(), sessionId)
-  }
-
-  /**
-   * 获取 legacy messages.jsonl 路径 ~/.vibework/data/sessions/<sessionId>/messages.jsonl
-   */
-  getLegacySessionMessagesFile(sessionId: string): string {
-    return join(this.getLegacySessionDataDir(sessionId), 'messages.jsonl')
-  }
-
-  /**
    * 获取缓存目录路径 ~/.vibework/cache/
    */
   getCacheDir(): string {

@@ -14,6 +14,7 @@ import { DatabaseService } from '../services/DatabaseService'
 import { SettingsService } from '../services/SettingsService'
 import { TaskService } from '../services/TaskService'
 import { CliSessionService } from '../services/cli/CliSessionService'
+import { TerminalService } from '../services/terminal/TerminalService'
 import { AppContext, AppServices } from './AppContext'
 
 export const createAppContext = (): AppContext => {
@@ -27,6 +28,7 @@ export const createAppContext = (): AppContext => {
   const cliToolDetectorService = new CLIToolDetectorService()
   const cliToolConfigService = new CLIToolConfigService()
   const cliSessionService = new CliSessionService(claudeCodeService, cliToolConfigService)
+  const terminalService = new TerminalService()
   const editorService = new EditorService()
   const pipelineService = new PipelineService()
   const previewConfigService = new PreviewConfigService()
@@ -50,7 +52,8 @@ export const createAppContext = (): AppContext => {
     databaseService,
     settingsService,
     taskService,
-    cliSessionService
+    cliSessionService,
+    terminalService
   }
 
   const serviceOrder = [
@@ -68,7 +71,8 @@ export const createAppContext = (): AppContext => {
     previewService,
     notificationService,
     settingsService,
-    taskService
+    taskService,
+    terminalService
   ]
 
   return new AppContext(appPaths, services, serviceOrder)

@@ -34,15 +34,9 @@ export class DatabaseConnection {
       )
     `)
 
-    // 创建 project_settings 表
+    // 移除废弃的 project_settings 表
     db.exec(`
-      CREATE TABLE IF NOT EXISTS project_settings (
-        project_id TEXT PRIMARY KEY,
-        skills_config TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-      )
+      DROP TABLE IF EXISTS project_settings
     `)
 
     // 创建 tasks 表
