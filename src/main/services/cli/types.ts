@@ -13,6 +13,7 @@ export interface CliStartOptions {
   executablePath?: string
   toolConfig?: Record<string, unknown>
   model?: string
+  msgStore?: MsgStoreService
 }
 
 export interface CliCompletionSignal {

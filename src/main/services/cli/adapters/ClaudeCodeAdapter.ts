@@ -138,7 +138,8 @@ export class ClaudeCodeAdapter implements CliAdapter {
     this.service.startSession(options.sessionId, options.workdir, {
       prompt: options.prompt,
       model,
-      projectId: options.projectId
+      projectId: options.projectId,
+      msgStore: options.msgStore
     })
     return new ClaudeSessionHandle(this.service, options)
   }

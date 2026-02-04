@@ -167,7 +167,7 @@ export function CreateTaskDialog({
       const trimmedPrompt = prompt.trim()
       const trimmedTitle = title.trim()
       const settings = getSettings()
-      const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'vw-'
+      const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'VW-'
       const worktreeRootPath = settings.gitWorktreeDir || '~/.vibework/worktrees'
       const workflowTemplateId = selectedTemplateId || undefined
 

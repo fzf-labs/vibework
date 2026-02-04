@@ -102,7 +102,7 @@ export class ClaudeCodeService extends EventEmitter {
   startSession(
     sessionId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string; projectId?: string | null }
+    options?: { model?: string; prompt?: string; projectId?: string | null; msgStore?: MsgStoreService }
   ): void {
     console.log('[ClaudeCodeService] Starting session:', sessionId, 'workdir:', workdir)
 
@@ -171,7 +171,7 @@ export class ClaudeCodeService extends EventEmitter {
     console.log('[ClaudeCodeService] stdout available:', !!childProcess.stdout)
     console.log('[ClaudeCodeService] stderr available:', !!childProcess.stderr)
 
-    const msgStore = new MsgStoreService(undefined, sessionId, options?.projectId)
+    const msgStore = options?.msgStore ?? new MsgStoreService(undefined, sessionId, options?.projectId)
 
     // 创建 stdout 批处理器
     const stdoutBatcher = new DataBatcher((data) => {

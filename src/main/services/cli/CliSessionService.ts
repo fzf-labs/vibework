@@ -24,6 +24,7 @@ interface SessionRecord {
 
 export class CliSessionService extends EventEmitter {
   private sessions: Map<string, SessionRecord> = new Map()
+  private pendingMsgStores: Map<string, MsgStoreService> = new Map()
   private adapters: Map<string, CliAdapter> = new Map()
   private normalizer: LogNormalizerService
   private configService: CLIToolConfigService
@@ -69,6 +70,7 @@ export class CliSessionService extends EventEmitter {
     const toolConfig = this.configService.getConfig(toolId)
     const executablePath = typeof toolConfig.executablePath === 'string' ? toolConfig.executablePath : undefined
 
+    const pendingMsgStore = this.pendingMsgStores.get(sessionId)
     const handle = await adapter.startSession({
       sessionId,
       toolId,
@@ -78,7 +80,8 @@ export class CliSessionService extends EventEmitter {
       env,
       executablePath,
       toolConfig,
-      model
+      model,
+      msgStore: pendingMsgStore
     } as CliStartOptions)
 
     this.sessions.set(sessionId, {
@@ -87,6 +90,9 @@ export class CliSessionService extends EventEmitter {
       workdir,
       startTime: new Date()
     })
+    if (pendingMsgStore) {
+      this.pendingMsgStores.delete(sessionId)
+    }
 
     handle.on('status', (data: { sessionId: string; status: CliSessionStatus; forced?: boolean }) => {
       this.emit('status', data)
@@ -151,7 +157,7 @@ export class CliSessionService extends EventEmitter {
   }
 
   getSessionMsgStore(sessionId: string): MsgStoreService | undefined {
-    return this.sessions.get(sessionId)?.handle.msgStore
+    return this.sessions.get(sessionId)?.handle.msgStore ?? this.pendingMsgStores.get(sessionId)
   }
 
   subscribeToSession(sessionId: string, callback: (msg: LogMsg) => void): (() => void) | undefined {
@@ -174,8 +180,9 @@ export class CliSessionService extends EventEmitter {
       msgStore.push(msg)
       return
     }
-    const fallbackStore = new MsgStoreService(undefined, sessionId, projectId)
-    fallbackStore.push(msg)
+    const pendingStore = new MsgStoreService(undefined, sessionId, projectId)
+    this.pendingMsgStores.set(sessionId, pendingStore)
+    pendingStore.push(msg)
   }
 
   dispose(): void {
@@ -187,5 +194,6 @@ export class CliSessionService extends EventEmitter {
       }
       this.sessions.delete(sessionId)
     }
+    this.pendingMsgStores.clear()
   }
 }

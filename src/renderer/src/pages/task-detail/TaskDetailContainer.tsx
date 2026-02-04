@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useAgent, type MessageAttachment } from '@/hooks/useAgent';
@@ -13,19 +13,7 @@ import { RightPanelSection } from './components/RightPanelSection';
 import { TaskCard } from './components/TaskCard';
 import { TaskDialogs } from './components/TaskDialogs';
 import { WorkflowCard } from './components/WorkflowCard';
-import { useTaskDetailActions } from './hooks/useTaskDetailActions';
-import { useTaskDetailArtifacts } from './hooks/useTaskDetailArtifacts';
-import { useTaskDetailCli } from './hooks/useTaskDetailCli';
-import { useTaskDetailCliTools } from './hooks/useTaskDetailCliTools';
-import { useTaskDetailDialogs } from './hooks/useTaskDetailDialogs';
-import { useTaskDetailInit } from './hooks/useTaskDetailInit';
-import { useTaskDetailPipeline } from './hooks/useTaskDetailPipeline';
-import { useTaskDetailPrompt } from './hooks/useTaskDetailPrompt';
-import { useTaskDetailScroll } from './hooks/useTaskDetailScroll';
-import { useTaskDetailToolSelection } from './hooks/useTaskDetailToolSelection';
-import { useTaskDetailViewState } from './hooks/useTaskDetailViewState';
-import { useTaskDetailWorkflow } from './hooks/useTaskDetailWorkflow';
-import { useTaskDetailWorkingDir } from './hooks/useTaskDetailWorkingDir';
+import { useTaskDetail } from './hooks/useTaskDetail';
 import type { LocationState } from './types';
 
 export function TaskDetailContainer() {
@@ -64,229 +52,34 @@ export function TaskDetailContainer() {
     initialAttachmentsRef.current = initialAttachments;
   }, [initialAttachments]);
 
-  const {
-    task,
-    setTask,
-    isLoading,
-  } = useTaskDetailInit({
+  // Single consolidated hook for all task detail logic
+  const detail = useTaskDetail({
     taskId,
     initialPrompt,
     initialSessionId,
+    initialAttachmentsRef,
+    navigate,
+    activeTaskId,
+    messages,
+    setMessages,
+    isRunning,
+    stopAgent,
+    runAgent,
+    continueConversation,
     loadTask,
     loadMessages,
-    setMessages,
-  });
-
-  const useCliSession = Boolean(task?.cli_tool_id);
-
-  const { cliTools } = useTaskDetailCliTools();
-
-  const {
-    isEditOpen,
-    setIsEditOpen,
-    editPrompt,
-    setEditPrompt,
-    editCliToolId,
-    setEditCliToolId,
-    editPipelineTemplateId,
-    setEditPipelineTemplateId,
-    pipelineTemplates,
-    isDeleteOpen,
-    setIsDeleteOpen,
-    handleOpenEdit,
-    handleSaveEdit,
-    handleDeleteTask,
-  } = useTaskDetailDialogs({
-    task,
-    taskId,
-    navigate,
-    setTask,
-  });
-
-  const { taskPrompt, buildCliPrompt } = useTaskDetailPrompt({
-    task,
-    initialPrompt,
-  });
-
-  const loadWorkflowStatusRef = useRef<() => void>(() => {});
-  const resolveWorkNodePromptRef = useRef<
-    (workNodeId?: string | null, nodeIndex?: number | null, templateId?: string | null) => Promise<string>
-  >(async () => '');
-
-  const {
-    cliStatus,
-    cliSessionRef,
-    runCliPrompt,
-    appendCliUserLog,
-    appendCliSystemLog,
-    handleCliStatusChange,
-    stopCli,
-  } = useTaskDetailCli({
-    taskId,
-    task,
-    setTask,
-    onExecutionStopped: () => loadWorkflowStatusRef.current?.(),
-  });
-
-  const {
-    artifacts,
-    selectedArtifact,
-    isPreviewVisible,
-    workspaceRefreshToken,
-    handleSelectArtifact,
-    handleClosePreview,
-  } = useTaskDetailArtifacts({
-    taskId,
-    messages,
-    isRunning,
-    cliStatus,
-  });
-
-  const { workingDir } = useTaskDetailWorkingDir({
-    task,
-    artifacts,
     sessionFolder,
-  });
-
-  const [pipelineStageIndex, setPipelineStageIndex] = useState(0);
-
-  const {
-    pipelineTemplate,
-    pipelineStatus,
-    pipelineBanner,
-    startPipelineStage,
-    startNextPipelineStage,
-  } = useTaskDetailPipeline({
-    taskId,
-    task,
-    messages,
-    setMessages,
-    isRunning,
-    cliStatus,
-    useCliSession,
-    runAgent,
-    continueConversation,
-    workingDir,
-    buildCliPrompt,
-    resolveWorkNodePrompt: (workNodeId, nodeIndex, templateId) =>
-      resolveWorkNodePromptRef.current(workNodeId, nodeIndex, templateId),
-    runCliPrompt,
-    appendCliUserLog,
-    t,
-    pipelineStageIndex,
-    setPipelineStageIndex,
-  });
-
-  const {
-    currentWorkNode,
-    workflowNodes,
-    workflowCurrentNode,
-    loadWorkflowStatus,
-    resolveWorkNodePrompt,
-    handleApproveWorkNode,
-  } = useTaskDetailWorkflow({
-    taskId,
-    taskSessionId: task?.session_id ?? null,
-    pipelineTemplate,
-    useCliSession,
-    isRunning,
-    cliStatus,
-    t,
-    setPipelineStageIndex,
-    setTask,
-    buildCliPrompt,
-    runCliPrompt,
-    appendCliUserLog,
-  });
-
-  resolveWorkNodePromptRef.current = resolveWorkNodePrompt;
-  loadWorkflowStatusRef.current = loadWorkflowStatus;
-
-  const { toolSelectionValue } = useTaskDetailToolSelection({
-    taskId,
-    messages,
-    isRunning,
-  });
-
-  const { messagesContainerRef, messagesEndRef } = useTaskDetailScroll({
-    taskId,
-    messages,
-    isLoading,
-  });
-
-  const {
-    displayTitle,
-    cliToolLabel,
-    cliStatusInfo,
-    showActionButton,
-    actionDisabled,
-    actionLabel,
-    isCliTaskReviewPending,
-    showWorkflowCard,
-    workflowTemplateNodeMap,
-    workflowNodesForDisplay,
-    visibleMetaRows,
-    markStartedOnce,
-  } = useTaskDetailViewState({
-    taskId,
-    task,
-    initialPrompt,
-    messages,
-    isRunning,
-    cliStatus,
-    useCliSession,
-    pipelineTemplate,
-    pipelineStatus,
-    cliTools,
-    workflowNodes,
-    currentWorkNode,
     t,
   });
 
-  const {
-    handleReply,
-    handleStartTask,
-    handleApproveCliTask,
-    handleStopExecution,
-    replyIsRunning,
-  } = useTaskDetailActions({
-    taskId,
-    task,
-    setTask,
-    initialPrompt,
-    initialAttachmentsRef,
-    activeTaskId,
-    setMessages,
-    loadMessages,
-    runAgent,
-    continueConversation,
-    isRunning,
-    useCliSession,
-    cliStatus,
-    cliSessionRef,
-    runCliPrompt,
-    appendCliUserLog,
-    appendCliSystemLog,
-    pipelineTemplate,
-    pipelineStatus,
-    startPipelineStage,
-    startNextPipelineStage,
-    workingDir,
-    t,
-    workflowCurrentNode,
-    resolveWorkNodePrompt,
-    buildCliPrompt,
-    stopAgent,
-    stopCli,
-    markStartedOnce,
-  });
-
-  const handleAction = isCliTaskReviewPending ? handleApproveCliTask : handleStartTask;
-  const cliSessionId = task?.session_id || '';
-  const cliToolId = task?.cli_tool_id || '';
+  const handleAction = detail.isCliTaskReviewPending
+    ? detail.handleApproveCliTask
+    : detail.handleStartTask;
+  const cliSessionId = detail.task?.session_id || '';
+  const cliToolId = detail.task?.cli_tool_id || '';
 
   return (
-    <ToolSelectionContext.Provider value={toolSelectionValue}>
+    <ToolSelectionContext.Provider value={detail.toolSelectionValue}>
       <div className="bg-sidebar flex h-screen overflow-hidden">
         <AppSidebar />
 
@@ -297,48 +90,48 @@ export function TaskDetailContainer() {
           <div
             className={cn(
               'bg-background flex min-w-0 flex-col overflow-hidden transition-all duration-200',
-              !isPreviewVisible && 'rounded-2xl',
-              isPreviewVisible && 'rounded-l-2xl'
+              !detail.isPreviewVisible && 'rounded-2xl',
+              detail.isPreviewVisible && 'rounded-l-2xl'
             )}
             style={{
-              flex: isPreviewVisible ? '0 0 auto' : '1 1 0%',
-              width: isPreviewVisible ? 'clamp(320px, 40%, 500px)' : undefined,
+              flex: detail.isPreviewVisible ? '0 0 auto' : '1 1 0%',
+              width: detail.isPreviewVisible ? 'clamp(320px, 40%, 500px)' : undefined,
               minWidth: '320px',
-              maxWidth: isPreviewVisible ? '500px' : undefined,
+              maxWidth: detail.isPreviewVisible ? '500px' : undefined,
             }}
           >
             <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
               <TaskCard
                 t={t}
-                title={displayTitle || `Task ${taskId}`}
-                metaRows={visibleMetaRows}
-                showActionButton={showActionButton}
-                actionDisabled={actionDisabled}
-                actionLabel={actionLabel}
+                title={detail.displayTitle || `Task ${taskId}`}
+                metaRows={detail.visibleMetaRows}
+                showActionButton={detail.showActionButton}
+                actionDisabled={detail.actionDisabled}
+                actionLabel={detail.actionLabel}
                 onAction={handleAction}
                 onToggleSidebar={toggleLeft}
-                onEdit={handleOpenEdit}
-                onDelete={() => setIsDeleteOpen(true)}
-                canEdit={task?.status === 'todo'}
+                onEdit={detail.handleOpenEdit}
+                onDelete={() => detail.setIsDeleteOpen(true)}
+                canEdit={detail.task?.status === 'todo'}
               />
 
-              {showWorkflowCard && (
+              {detail.showWorkflowCard && (
                 <WorkflowCard
                   t={t}
-                  nodes={workflowNodesForDisplay}
-                  templateNodeMap={workflowTemplateNodeMap}
-                  currentWorkNode={currentWorkNode}
-                  onApproveCurrent={handleApproveWorkNode}
+                  nodes={detail.workflowNodesForDisplay}
+                  templateNodeMap={detail.workflowTemplateNodeMap}
+                  currentWorkNode={detail.currentWorkNode}
+                  onApproveCurrent={detail.handleApproveWorkNode}
                 />
               )}
 
               <ExecutionPanel
                 t={t}
-                isLoading={isLoading}
-                pipelineBanner={pipelineBanner}
-                useCliSession={useCliSession}
-                cliStatusInfo={cliStatusInfo}
-                cliToolLabel={cliToolLabel}
+                isLoading={detail.isLoading}
+                pipelineBanner={detail.pipelineBanner}
+                useCliSession={detail.useCliSession}
+                cliStatusInfo={detail.cliStatusInfo}
+                cliToolLabel={detail.cliToolLabel}
                 messages={messages}
                 phase={phase}
                 onApprovePlan={approvePlan}
@@ -346,56 +139,56 @@ export function TaskDetailContainer() {
                 isRunning={isRunning}
                 sessionId={cliSessionId}
                 toolId={cliToolId}
-                workingDir={workingDir}
-                prompt={taskPrompt}
-                cliSessionRef={cliSessionRef}
-                onCliStatusChange={handleCliStatusChange}
-                messagesContainerRef={messagesContainerRef}
-                messagesEndRef={messagesEndRef}
+                workingDir={detail.workingDir}
+                prompt={detail.taskPrompt}
+                cliSessionRef={detail.cliSessionRef}
+                onCliStatusChange={detail.handleCliStatusChange}
+                messagesContainerRef={detail.messagesContainerRef}
+                messagesEndRef={detail.messagesEndRef}
               />
 
               <ReplyCard
                 t={t}
-                isRunning={replyIsRunning}
-                onStop={handleStopExecution}
-                onSubmit={handleReply}
+                isRunning={detail.replyIsRunning}
+                onStop={detail.handleStopExecution}
+                onSubmit={detail.handleReply}
               />
             </div>
           </div>
 
-          {isPreviewVisible && <div className="bg-border/50 w-px shrink-0" />}
+          {detail.isPreviewVisible && <div className="bg-border/50 w-px shrink-0" />}
 
           <RightPanelSection
-            isVisible={isPreviewVisible}
+            isVisible={detail.isPreviewVisible}
             taskId={taskId ?? null}
-            workingDir={workingDir}
-            branchName={task?.branch_name || null}
-            baseBranch={task?.base_branch || null}
-            selectedArtifact={selectedArtifact}
-            artifacts={artifacts}
-            onSelectArtifact={handleSelectArtifact}
-            workspaceRefreshToken={workspaceRefreshToken}
-            onClosePreview={handleClosePreview}
+            workingDir={detail.workingDir}
+            branchName={detail.task?.branch_name || null}
+            baseBranch={detail.task?.base_branch || null}
+            selectedArtifact={detail.selectedArtifact}
+            artifacts={detail.artifacts}
+            onSelectArtifact={detail.handleSelectArtifact}
+            workspaceRefreshToken={detail.workspaceRefreshToken}
+            onClosePreview={detail.handleClosePreview}
           />
         </div>
       </div>
 
       <TaskDialogs
         t={t}
-        isEditOpen={isEditOpen}
-        setIsEditOpen={setIsEditOpen}
-        editPrompt={editPrompt}
-        setEditPrompt={setEditPrompt}
-        editCliToolId={editCliToolId}
-        setEditCliToolId={setEditCliToolId}
-        editPipelineTemplateId={editPipelineTemplateId}
-        setEditPipelineTemplateId={setEditPipelineTemplateId}
-        cliTools={cliTools}
-        pipelineTemplates={pipelineTemplates}
-        onSaveEdit={handleSaveEdit}
-        isDeleteOpen={isDeleteOpen}
-        setIsDeleteOpen={setIsDeleteOpen}
-        onDelete={handleDeleteTask}
+        isEditOpen={detail.isEditOpen}
+        setIsEditOpen={detail.setIsEditOpen}
+        editPrompt={detail.editPrompt}
+        setEditPrompt={detail.setEditPrompt}
+        editCliToolId={detail.editCliToolId}
+        setEditCliToolId={detail.setEditCliToolId}
+        editPipelineTemplateId={detail.editPipelineTemplateId}
+        setEditPipelineTemplateId={detail.setEditPipelineTemplateId}
+        cliTools={detail.cliTools}
+        pipelineTemplates={detail.pipelineTemplates}
+        onSaveEdit={detail.handleSaveEdit}
+        isDeleteOpen={detail.isDeleteOpen}
+        setIsDeleteOpen={detail.setIsDeleteOpen}
+        onDelete={detail.handleDeleteTask}
       />
     </ToolSelectionContext.Provider>
   );

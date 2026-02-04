@@ -45,7 +45,8 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     normalizer?: LogNormalizerService,
     detectStderrCompletion?: CompletionDetector,
     stderrNormalizer?: StderrNormalizer,
-    projectId?: string | null
+    projectId?: string | null,
+    msgStore?: MsgStoreService
   ) {
     super()
     this.sessionId = sessionId
@@ -54,7 +55,7 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     this.normalizer = normalizer
     this.detectStderrCompletion = detectStderrCompletion
     this.stderrNormalizer = stderrNormalizer
-    this.msgStore = new MsgStoreService(undefined, sessionId, projectId)
+    this.msgStore = msgStore ?? new MsgStoreService(undefined, sessionId, projectId)
 
     this.process = safeSpawn(commandSpec.command, commandSpec.args, {
       cwd: commandSpec.cwd,
