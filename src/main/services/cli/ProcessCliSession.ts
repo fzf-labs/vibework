@@ -8,6 +8,11 @@ import { LogMsgInput, NormalizedEntry } from '../../types/log'
 import { safeSpawn } from '../../utils/safe-exec'
 import { config } from '../../config'
 
+export interface InitSequenceStep {
+  message: string | (() => string)
+  delay?: number  // milliseconds
+}
+
 export interface ProcessCommandSpec {
   command: string
   args: string[]
@@ -15,6 +20,8 @@ export interface ProcessCommandSpec {
   env?: NodeJS.ProcessEnv
   shell?: boolean
   initialInput?: string
+  initSequence?: InitSequenceStep[]
+  closeStdinAfterInput?: boolean
 }
 
 export type CompletionDetector = (line: string) => CliCompletionSignal | null
@@ -115,8 +122,37 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
       this.emit('error', { sessionId, error })
     })
 
-    if (commandSpec.initialInput) {
+    if (commandSpec.initialInput !== undefined) {
       this.sendInput(commandSpec.initialInput)
+    }
+
+    if (commandSpec.initSequence?.length) {
+      const initPromise = this.runInitSequence(commandSpec.initSequence)
+      if (commandSpec.closeStdinAfterInput) {
+        void initPromise.finally(() => {
+          try {
+            this.process.stdin?.end()
+          } catch {
+            // ignore
+          }
+        })
+      }
+    } else if (commandSpec.closeStdinAfterInput) {
+      try {
+        this.process.stdin?.end()
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  private async runInitSequence(sequence: InitSequenceStep[]): Promise<void> {
+    for (const step of sequence) {
+      if (step.delay) {
+        await new Promise(resolve => setTimeout(resolve, step.delay))
+      }
+      const msg = typeof step.message === 'function' ? step.message() : step.message
+      this.process.stdin?.write(msg + '\n')
     }
   }
 

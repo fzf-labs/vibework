@@ -1,117 +1,13 @@
-import { EventEmitter } from 'events'
-import { ClaudeCodeService } from '../../ClaudeCodeService'
-import { MsgStoreService } from '../../MsgStoreService'
-import { CliAdapter, CliCompletionSignal, CliSessionHandle, CliSessionStatus, CliStartOptions } from '../types'
+import * as os from 'os'
+import * as path from 'path'
+import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
+import { ProcessCliSession, InitSequenceStep } from '../ProcessCliSession'
+import { LogNormalizerService } from '../../LogNormalizerService'
+import { ClaudeCodeNormalizer } from '../../normalizers/ClaudeCodeNormalizer'
+import { CLIToolConfigService } from '../../CLIToolConfigService'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
 
-class ClaudeSessionHandle extends EventEmitter implements CliSessionHandle {
-  sessionId: string
-  toolId: string
-  status: CliSessionStatus = 'running'
-  msgStore: MsgStoreService
-
-  private service: ClaudeCodeService
-  private completionOverride: CliCompletionSignal | null = null
-  private stdoutBuffer = ''
-  private onOutputBound: (data: { sessionId: string; type: string; content: string }) => void
-  private onCloseBound: (data: { sessionId: string; code: number }) => void
-  private onErrorBound: (data: { sessionId: string; error: string }) => void
-
-  constructor(service: ClaudeCodeService, options: CliStartOptions) {
-    super()
-    this.service = service
-    this.sessionId = options.sessionId
-    this.toolId = options.toolId
-    this.msgStore =
-      service.getSessionMsgStore(options.sessionId) ||
-      new MsgStoreService(undefined, options.sessionId, options.projectId)
-
-    this.onOutputBound = (data) => {
-      if (data.sessionId !== this.sessionId) return
-      this.emit('output', data)
-      this.handleOutputChunk(data.content)
-    }
-
-    this.onCloseBound = (data) => {
-      if (data.sessionId !== this.sessionId) return
-      if (!this.completionOverride) {
-        this.status = data.code === 0 ? 'stopped' : 'error'
-      }
-      const forcedStatus = this.completionOverride
-        ? (this.status as CliSessionStatus)
-        : undefined
-      this.emit('status', { sessionId: this.sessionId, status: this.status })
-      this.emit('close', { sessionId: this.sessionId, code: data.code, forcedStatus })
-      this.cleanup()
-    }
-
-    this.onErrorBound = (data) => {
-      if (data.sessionId !== this.sessionId) return
-      this.status = 'error'
-      this.emit('status', { sessionId: this.sessionId, status: this.status })
-      this.emit('error', { sessionId: this.sessionId, error: data.error })
-    }
-
-    this.service.on('output', this.onOutputBound)
-    this.service.on('close', this.onCloseBound)
-    this.service.on('error', this.onErrorBound)
-  }
-
-  stop(): void {
-    try {
-      this.service.stopSession(this.sessionId)
-    } catch {
-      // ignore
-    }
-  }
-
-  sendInput(input: string): void {
-    const trimmed = input.trim()
-    if (!trimmed) return
-    this.completionOverride = null
-    if (this.status !== 'running') {
-      this.status = 'running'
-      this.emit('status', { sessionId: this.sessionId, status: this.status })
-    }
-    const parsed = parseJsonLine(trimmed)
-    const payload = parsed && typeof parsed.type === 'string'
-      ? trimmed
-      : JSON.stringify({
-          type: 'user',
-          message: {
-            role: 'user',
-            content: input
-          }
-        })
-    this.service.sendInput(this.sessionId, payload)
-  }
-
-  private handleOutputChunk(chunk: string): void {
-    this.stdoutBuffer += chunk
-    const lines = this.stdoutBuffer.split('\n')
-    this.stdoutBuffer = lines.pop() ?? ''
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim()
-      if (!line) continue
-
-      const completion = detectClaudeCompletion(line)
-      if (completion && !this.completionOverride) {
-        this.completionOverride = completion
-        this.status = completion.status === 'success' ? 'stopped' : 'error'
-        this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
-      }
-    }
-  }
-
-  private cleanup(): void {
-    this.service.off('output', this.onOutputBound)
-    this.service.off('close', this.onCloseBound)
-    this.service.off('error', this.onErrorBound)
-  }
-}
-
-function detectClaudeCompletion(line: string): CliCompletionSignal | null {
+function detectClaudeCompletion(line: string) {
   const msg = parseJsonLine(line)
   if (!msg) return null
   if (msg.type === 'error') return failureSignal('error')
@@ -126,21 +22,81 @@ function detectClaudeCompletion(line: string): CliCompletionSignal | null {
 
 export class ClaudeCodeAdapter implements CliAdapter {
   id = 'claude-code'
-  private service: ClaudeCodeService
+  private configService: CLIToolConfigService
+  private normalizer: LogNormalizerService
 
-  constructor(service: ClaudeCodeService) {
-    this.service = service
+  constructor(configService: CLIToolConfigService) {
+    this.configService = configService
+    this.normalizer = new LogNormalizerService()
+    this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
+  }
+
+  private getExecutablePath(): string {
+    const config = this.configService.getConfig('claude-code')
+    const cmd = config.executablePath || 'claude'
+    if (cmd === 'claude') {
+      return path.join(os.homedir(), '.local/bin/claude')
+    }
+    return cmd
   }
 
   async startSession(options: CliStartOptions): Promise<CliSessionHandle> {
-    const model =
-      options.model || (options.toolConfig?.model as string | undefined)
-    this.service.startSession(options.sessionId, options.workdir, {
-      prompt: options.prompt,
-      model,
-      projectId: options.projectId,
-      msgStore: options.msgStore
-    })
-    return new ClaudeSessionHandle(this.service, options)
+    const config = this.configService.getConfig('claude-code')
+    const model = options.model || (options.toolConfig?.model as string) || config.defaultModel
+    const homeDir = os.homedir()
+
+    const args = [
+      '-p',
+      '--verbose',
+      '--output-format=stream-json',
+      '--input-format=stream-json',
+      '--dangerously-skip-permissions',
+      '--session-id', options.sessionId
+    ]
+
+    if (model) {
+      args.push('--model', model)
+    }
+
+    const initSequence: InitSequenceStep[] = [
+      {
+        message: JSON.stringify({
+          type: 'control_request',
+          request_id: `init-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          request: { subtype: 'initialize' }
+        })
+      }
+    ]
+
+    if (options.prompt) {
+      initSequence.push({
+        delay: 100,
+        message: JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: options.prompt }
+        })
+      })
+    }
+
+    return new ProcessCliSession(
+      options.sessionId,
+      options.toolId,
+      {
+        command: this.getExecutablePath(),
+        args,
+        cwd: options.workdir,
+        env: {
+          ...process.env,
+          PATH: `${homeDir}/.local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`
+        },
+        initSequence
+      },
+      detectClaudeCompletion,
+      this.normalizer,
+      undefined,
+      undefined,
+      options.projectId,
+      options.msgStore
+    )
   }
 }

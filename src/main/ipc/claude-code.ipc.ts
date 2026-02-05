@@ -1,5 +1,4 @@
 import type { IpcModuleContext } from './types'
-import type { ClaudeCodeService } from '../services/ClaudeCodeService'
 import { IPC_CHANNELS } from './channels'
 
 export const registerClaudeCodeIpc = ({
@@ -8,14 +7,14 @@ export const registerClaudeCodeIpc = ({
   services,
   resolveProjectIdForSession
 }: IpcModuleContext): void => {
-  const { claudeCodeService, cliSessionService } = services
+  const { cliSessionService } = services
 
   handle(IPC_CHANNELS.claudeCode.getConfig, [], () =>
-    claudeCodeService.getConfig() as Record<string, unknown>
+    cliSessionService.getToolConfig('claude-code')
   )
 
   handle(IPC_CHANNELS.claudeCode.saveConfig, [v.object()], (_, configValue) => {
-    claudeCodeService.saveConfig(configValue as Parameters<ClaudeCodeService['saveConfig']>[0])
+    cliSessionService.saveToolConfig('claude-code', configValue as Record<string, unknown>)
   })
 
   handle(
@@ -63,7 +62,7 @@ export const registerClaudeCodeIpc = ({
   })
 
   handle(IPC_CHANNELS.claudeCode.getOutput, [v.string()], (_, sessionId) => {
-    return claudeCodeService.getSessionOutput(sessionId)
+    return cliSessionService.getSessionOutput(sessionId)
   })
 
   handle(IPC_CHANNELS.claudeCode.getSessions, [], () => {

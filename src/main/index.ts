@@ -1,4 +1,5 @@
 import { app, shell, BrowserWindow } from 'electron'
+import { EventEmitter } from 'events'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -87,7 +88,8 @@ app.whenReady().then(async () => {
   await appContext.init()
 
   const { services, appPaths } = appContext
-  const { databaseService, claudeCodeService, cliSessionService, terminalService } = services
+  const { databaseService, cliSessionService, terminalService } = services
+  const claudeCodeService = (services as { claudeCodeService?: EventEmitter }).claudeCodeService
 
   try {
     await addAllowedRoot(process.resourcesPath)
@@ -121,24 +123,28 @@ app.whenReady().then(async () => {
     })
   )
 
-  // Forward ClaudeCode events to renderer
-  appContext.trackEvent(claudeCodeService, 'output', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_EVENTS.claudeCode.output, data)
-    }
-  })
+  // Forward ClaudeCode events to renderer (if available)
+  if (claudeCodeService) {
+    appContext.trackEvent(claudeCodeService, 'output', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_EVENTS.claudeCode.output, data)
+      }
+    })
 
-  appContext.trackEvent(claudeCodeService, 'close', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_EVENTS.claudeCode.close, data)
-    }
-  })
+    appContext.trackEvent(claudeCodeService, 'close', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_EVENTS.claudeCode.close, data)
+      }
+    })
 
-  appContext.trackEvent(claudeCodeService, 'error', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_EVENTS.claudeCode.error, data)
-    }
-  })
+    appContext.trackEvent(claudeCodeService, 'error', (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_EVENTS.claudeCode.error, data)
+      }
+    })
+  } else {
+    console.warn('[main] ClaudeCodeService not available; skipping Claude Code IPC wiring')
+  }
 
   // Forward unified CLI session events to renderer
   appContext.trackEvent(cliSessionService, 'output', (data) => {

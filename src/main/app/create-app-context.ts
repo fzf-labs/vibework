@@ -2,7 +2,6 @@ import { getAppPaths } from './AppPaths'
 import { ProjectService } from '../services/ProjectService'
 import { GitService } from '../services/GitService'
 import { CLIProcessService } from '../services/CLIProcessService'
-import { ClaudeCodeService } from '../services/ClaudeCodeService'
 import { CLIToolDetectorService } from '../services/CLIToolDetectorService'
 import { CLIToolConfigService } from '../services/CLIToolConfigService'
 import { EditorService } from '../services/EditorService'
@@ -24,10 +23,9 @@ export const createAppContext = (): AppContext => {
   const projectService = new ProjectService(databaseService)
   const gitService = new GitService()
   const cliProcessService = new CLIProcessService()
-  const claudeCodeService = new ClaudeCodeService()
   const cliToolDetectorService = new CLIToolDetectorService()
   const cliToolConfigService = new CLIToolConfigService()
-  const cliSessionService = new CliSessionService(claudeCodeService, cliToolConfigService)
+  const cliSessionService = new CliSessionService(cliToolConfigService)
   const terminalService = new TerminalService()
   const editorService = new EditorService()
   const pipelineService = new PipelineService()
@@ -41,7 +39,6 @@ export const createAppContext = (): AppContext => {
     projectService,
     gitService,
     cliProcessService,
-    claudeCodeService,
     cliToolDetectorService,
     cliToolConfigService,
     editorService,
@@ -61,7 +58,6 @@ export const createAppContext = (): AppContext => {
     projectService,
     gitService,
     cliProcessService,
-    claudeCodeService,
     cliToolDetectorService,
     cliToolConfigService,
     cliSessionService,

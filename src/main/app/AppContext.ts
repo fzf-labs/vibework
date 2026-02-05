@@ -3,7 +3,6 @@ import type { AppPaths } from './AppPaths'
 import type { ProjectService } from '../services/ProjectService'
 import type { GitService } from '../services/GitService'
 import type { CLIProcessService } from '../services/CLIProcessService'
-import type { ClaudeCodeService } from '../services/ClaudeCodeService'
 import type { CLIToolDetectorService } from '../services/CLIToolDetectorService'
 import type { CLIToolConfigService } from '../services/CLIToolConfigService'
 import type { EditorService } from '../services/EditorService'
@@ -26,7 +25,6 @@ export interface AppServices {
   projectService: ProjectService
   gitService: GitService
   cliProcessService: CLIProcessService
-  claudeCodeService: ClaudeCodeService
   cliToolDetectorService: CLIToolDetectorService
   cliToolConfigService: CLIToolConfigService
   editorService: EditorService

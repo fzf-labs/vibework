@@ -11,7 +11,6 @@ import { CodexNormalizer } from '../normalizers/CodexNormalizer'
 import { GeminiNormalizer } from '../normalizers/GeminiNormalizer'
 import { MsgStoreService } from '../MsgStoreService'
 import { CLIToolConfigService } from '../CLIToolConfigService'
-import { ClaudeCodeService } from '../ClaudeCodeService'
 import { LogMsg } from '../../types/log'
 import type { LogMsgInput } from '../../types/log'
 
@@ -29,7 +28,7 @@ export class CliSessionService extends EventEmitter {
   private normalizer: LogNormalizerService
   private configService: CLIToolConfigService
 
-  constructor(claudeCodeService: ClaudeCodeService, configService: CLIToolConfigService) {
+  constructor(configService: CLIToolConfigService) {
     super()
     this.configService = configService
 
@@ -38,7 +37,7 @@ export class CliSessionService extends EventEmitter {
     this.normalizer.registerAdapter(new CodexNormalizer())
     this.normalizer.registerAdapter(new GeminiNormalizer())
 
-    this.registerAdapter(new ClaudeCodeAdapter(claudeCodeService))
+    this.registerAdapter(new ClaudeCodeAdapter(configService))
     this.registerAdapter(new CursorAgentAdapter(this.normalizer))
     this.registerAdapter(new GeminiCliAdapter(this.normalizer))
     this.registerAdapter(new CodexCliAdapter(this.normalizer))
@@ -183,6 +182,22 @@ export class CliSessionService extends EventEmitter {
     const pendingStore = new MsgStoreService(undefined, sessionId, projectId)
     this.pendingMsgStores.set(sessionId, pendingStore)
     pendingStore.push(msg)
+  }
+
+  getToolConfig(toolId: string): Record<string, unknown> {
+    return this.configService.getConfig(toolId)
+  }
+
+  saveToolConfig(toolId: string, updates: Record<string, unknown>): void {
+    const current = this.configService.getConfig(toolId)
+    this.configService.saveConfig(toolId, { ...current, ...updates })
+  }
+
+  getSessionOutput(sessionId: string): string[] {
+    const history = this.getSessionLogHistory(sessionId)
+    return history
+      .filter(msg => msg.type === 'stdout')
+      .map(msg => (msg as { content: string }).content)
   }
 
   dispose(): void {
