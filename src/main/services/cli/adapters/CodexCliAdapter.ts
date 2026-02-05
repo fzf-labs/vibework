@@ -1,9 +1,6 @@
-import { nanoid } from 'nanoid'
 import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
-import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { parseJsonLine, successSignal } from './completion'
-import { NormalizedEntry } from '../../../types/log'
 import { asBoolean, asString, asStringArray, pushFlag, pushFlagWithValue, pushRepeatableFlag } from './config-utils'
 
 type RecordLike = Record<string, unknown>
@@ -21,15 +18,6 @@ function detectCodexCompletion(line: string) {
   return null
 }
 
-function buildStderrEntry(line: string): NormalizedEntry {
-  return {
-    id: nanoid(),
-    type: 'system_message',
-    timestamp: Date.now(),
-    content: line
-  }
-}
-
 export class CodexCliAdapter implements CliAdapter {
   id = 'codex'
   private adapter: ProcessCliAdapter
@@ -44,7 +32,7 @@ export class CodexCliAdapter implements CliAdapter {
     }
   }
 
-  constructor(normalizer?: LogNormalizerService) {
+  constructor() {
     this.adapter = new ProcessCliAdapter(
       {
         id: this.id,
@@ -113,10 +101,8 @@ export class CodexCliAdapter implements CliAdapter {
             closeStdinAfterInput: true
           }
         },
-        detectCompletion: detectCodexCompletion,
-        normalizeStderr: (line) => buildStderrEntry(line)
-      },
-      normalizer
+        detectCompletion: detectCodexCompletion
+      }
     )
   }
 

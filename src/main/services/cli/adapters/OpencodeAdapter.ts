@@ -1,5 +1,4 @@
 import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
-import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
 import { asBoolean, asStringArray, pushFlag, pushFlagWithValue, pushRepeatableFlag } from './config-utils'
@@ -8,7 +7,7 @@ export class OpencodeAdapter implements CliAdapter {
   id = 'opencode'
   private adapter: ProcessCliAdapter
 
-  constructor(normalizer?: LogNormalizerService) {
+  constructor() {
     this.adapter = new ProcessCliAdapter(
       {
         id: this.id,
@@ -57,8 +56,7 @@ export class OpencodeAdapter implements CliAdapter {
 
           return null
         }
-      },
-      normalizer
+      }
     )
   }
 

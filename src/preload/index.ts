@@ -152,38 +152,6 @@ const api = {
       return () => ipcRenderer.removeListener(IPC_EVENTS.terminal.error, listener)
     }
   },
-  claudeCode: {
-    getConfig: () => invoke(IPC_CHANNELS.claudeCode.getConfig),
-    saveConfig: (config: Record<string, unknown>) =>
-      invoke(IPC_CHANNELS.claudeCode.saveConfig, config),
-    startSession: (
-      sessionId: string,
-      workdir: string,
-      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
-    ) => invoke(IPC_CHANNELS.claudeCode.startSession, sessionId, workdir, options),
-    stopSession: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.stopSession, sessionId),
-    sendInput: (sessionId: string, input: string) =>
-      invoke(IPC_CHANNELS.claudeCode.sendInput, sessionId, input),
-    getOutput: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.getOutput, sessionId),
-    getSessions: () => invoke(IPC_CHANNELS.claudeCode.getSessions),
-    getSession: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.getSession, sessionId),
-    onOutput: (callback: (data: { sessionId: string; type: string; content: string }) => void) => {
-      const listener = (_: unknown, data: { sessionId: string; type: string; content: string }) =>
-        callback(data)
-      ipcRenderer.on(IPC_EVENTS.claudeCode.output, listener)
-      return () => ipcRenderer.removeListener(IPC_EVENTS.claudeCode.output, listener)
-    },
-    onClose: (callback: (data: { sessionId: string; code: number }) => void) => {
-      const listener = (_: unknown, data: { sessionId: string; code: number }) => callback(data)
-      ipcRenderer.on(IPC_EVENTS.claudeCode.close, listener)
-      return () => ipcRenderer.removeListener(IPC_EVENTS.claudeCode.close, listener)
-    },
-    onError: (callback: (data: { sessionId: string; error: string }) => void) => {
-      const listener = (_: unknown, data: { sessionId: string; error: string }) => callback(data)
-      ipcRenderer.on(IPC_EVENTS.claudeCode.error, listener)
-      return () => ipcRenderer.removeListener(IPC_EVENTS.claudeCode.error, listener)
-    }
-  },
   cliSession: {
     startSession: (
       sessionId: string,

@@ -1,5 +1,4 @@
 import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
-import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
 import { asBoolean, asStringArray, pushFlag, pushFlagWithValue, pushRepeatableFlag } from './config-utils'
@@ -8,7 +7,7 @@ export class GeminiCliAdapter implements CliAdapter {
   id = 'gemini-cli'
   private adapter: ProcessCliAdapter
 
-  constructor(normalizer?: LogNormalizerService) {
+  constructor() {
     this.adapter = new ProcessCliAdapter(
       {
         id: this.id,
@@ -63,8 +62,7 @@ export class GeminiCliAdapter implements CliAdapter {
           if (msg.type === 'error') return failureSignal('error')
           return null
         }
-      },
-      normalizer
+      }
     )
   }
 

@@ -1,9 +1,6 @@
-import { nanoid } from 'nanoid'
 import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
-import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
-import { NormalizedEntry } from '../../../types/log'
 import { asBoolean, asString, asStringArray, pushFlag, pushFlagWithValue } from './config-utils'
 
 const AUTH_REQUIRED_PATTERNS = [
@@ -15,19 +12,6 @@ const AUTH_REQUIRED_PATTERNS = [
 
 function isAuthRequired(line: string): boolean {
   return AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(line))
-}
-
-function buildAuthRequiredEntry(line: string): NormalizedEntry {
-  return {
-    id: nanoid(),
-    type: 'error',
-    timestamp: Date.now(),
-    content: [
-      'Cursor authentication required.',
-      'Run `cursor-agent login` or set CURSOR_API_KEY, then retry.',
-      `Details: ${line}`
-    ].join('\n')
-  }
 }
 
 export class CursorAgentAdapter implements CliAdapter {
@@ -75,7 +59,7 @@ export class CursorAgentAdapter implements CliAdapter {
     return redacted
   }
 
-  constructor(normalizer?: LogNormalizerService) {
+  constructor() {
     this.adapter = new ProcessCliAdapter(
       {
         id: this.id,
@@ -171,15 +155,8 @@ export class CursorAgentAdapter implements CliAdapter {
             return failureSignal('auth-required')
           }
           return null
-        },
-        normalizeStderr: (line) => {
-          if (isAuthRequired(line)) {
-            return buildAuthRequiredEntry(line)
-          }
-          return null
         }
-      },
-      normalizer
+      }
     )
   }
 

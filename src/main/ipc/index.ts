@@ -9,7 +9,6 @@ import type { IpcArgs, IpcContractChannel, IpcResult } from './channels'
 import { registerProjectsIpc } from './projects.ipc'
 import { registerGitIpc } from './git.ipc'
 import { registerCliIpc } from './cli.ipc'
-import { registerClaudeCodeIpc } from './claude-code.ipc'
 import { registerCliSessionIpc } from './cli-session.ipc'
 import { registerCliToolsIpc } from './cli-tools.ipc'
 import { registerEditorIpc } from './editor.ipc'
@@ -115,7 +114,6 @@ export const registerIpcHandlers = (deps: IpcDependencies): void => {
   registerProjectsIpc(context)
   registerGitIpc(context)
   registerCliIpc(context)
-  registerClaudeCodeIpc(context)
   registerCliSessionIpc(context)
   registerCliToolsIpc(context)
   registerEditorIpc(context)

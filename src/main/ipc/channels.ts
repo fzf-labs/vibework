@@ -63,16 +63,6 @@ export const IPC_CHANNELS = {
     detach: 'terminal:detach',
     killByWorkspaceId: 'terminal:killByWorkspaceId'
   },
-  claudeCode: {
-    getConfig: 'claudeCode:getConfig',
-    saveConfig: 'claudeCode:saveConfig',
-    startSession: 'claudeCode:startSession',
-    stopSession: 'claudeCode:stopSession',
-    sendInput: 'claudeCode:sendInput',
-    getOutput: 'claudeCode:getOutput',
-    getSessions: 'claudeCode:getSessions',
-    getSession: 'claudeCode:getSession'
-  },
   cliSession: {
     startSession: 'cliSession:startSession',
     stopSession: 'cliSession:stopSession',
@@ -212,11 +202,6 @@ export const IPC_CHANNELS = {
 } as const
 
 export const IPC_EVENTS = {
-  claudeCode: {
-    output: 'claudeCode:output',
-    close: 'claudeCode:close',
-    error: 'claudeCode:error'
-  },
   cliSession: {
     status: 'cliSession:status',
     output: 'cliSession:output',
@@ -312,18 +297,6 @@ export interface IpcContracts {
   'terminal:kill': IpcContract<[string], unknown>
   'terminal:detach': IpcContract<[string], unknown>
   'terminal:killByWorkspaceId': IpcContract<[string], { killed: number; failed: number }>
-
-  'claudeCode:getConfig': IpcContract<[], UnknownRecord>
-  'claudeCode:saveConfig': IpcContract<[UnknownRecord], unknown>
-  'claudeCode:startSession': IpcContract<
-    [string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string }?],
-    unknown
-  >
-  'claudeCode:stopSession': IpcContract<[string], unknown>
-  'claudeCode:sendInput': IpcContract<[string, string], unknown>
-  'claudeCode:getOutput': IpcContract<[string], unknown>
-  'claudeCode:getSessions': IpcContract<[], unknown[]>
-  'claudeCode:getSession': IpcContract<[string], unknown>
 
   'cliSession:startSession': IpcContract<
     [string, string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }?],

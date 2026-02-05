@@ -5,12 +5,6 @@ import { CursorAgentAdapter } from './adapters/CursorAgentAdapter'
 import { GeminiCliAdapter } from './adapters/GeminiCliAdapter'
 import { CodexCliAdapter } from './adapters/CodexCliAdapter'
 import { OpencodeAdapter } from './adapters/OpencodeAdapter'
-import { LogNormalizerService } from '../LogNormalizerService'
-import { ClaudeCodeNormalizer } from '../normalizers/ClaudeCodeNormalizer'
-import { CodexNormalizer } from '../normalizers/CodexNormalizer'
-import { GeminiNormalizer } from '../normalizers/GeminiNormalizer'
-import { CursorAgentNormalizer } from '../normalizers/CursorAgentNormalizer'
-import { OpencodeNormalizer } from '../normalizers/OpencodeNormalizer'
 import { MsgStoreService } from '../MsgStoreService'
 import { CLIToolConfigService } from '../CLIToolConfigService'
 import { DatabaseService } from '../DatabaseService'
@@ -28,7 +22,6 @@ export class CliSessionService extends EventEmitter {
   private sessions: Map<string, SessionRecord> = new Map()
   private pendingMsgStores: Map<string, MsgStoreService> = new Map()
   private adapters: Map<string, CliAdapter> = new Map()
-  private normalizer: LogNormalizerService
   private configService: CLIToolConfigService
   private databaseService: DatabaseService
 
@@ -37,18 +30,11 @@ export class CliSessionService extends EventEmitter {
     this.configService = configService
     this.databaseService = databaseService
 
-    this.normalizer = new LogNormalizerService()
-    this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
-    this.normalizer.registerAdapter(new CodexNormalizer())
-    this.normalizer.registerAdapter(new GeminiNormalizer())
-    this.normalizer.registerAdapter(new CursorAgentNormalizer())
-    this.normalizer.registerAdapter(new OpencodeNormalizer())
-
     this.registerAdapter(new ClaudeCodeAdapter(configService))
-    this.registerAdapter(new CursorAgentAdapter(this.normalizer))
-    this.registerAdapter(new GeminiCliAdapter(this.normalizer))
-    this.registerAdapter(new CodexCliAdapter(this.normalizer))
-    this.registerAdapter(new OpencodeAdapter(this.normalizer))
+    this.registerAdapter(new CursorAgentAdapter())
+    this.registerAdapter(new GeminiCliAdapter())
+    this.registerAdapter(new CodexCliAdapter())
+    this.registerAdapter(new OpencodeAdapter())
   }
 
   registerAdapter(adapter: CliAdapter): void {

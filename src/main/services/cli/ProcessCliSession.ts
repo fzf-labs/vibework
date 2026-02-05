@@ -1,10 +1,9 @@
 import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { DataBatcher } from '../../utils/data-batcher'
-import { LogNormalizerService } from '../LogNormalizerService'
 import { MsgStoreService } from '../MsgStoreService'
 import { CliCompletionSignal, CliSessionHandle, CliSessionStatus } from './types'
-import { LogMsgInput, NormalizedEntry } from '../../types/log'
+import { LogMsgInput } from '../../types/log'
 import { safeSpawn } from '../../utils/safe-exec'
 import { config } from '../../config'
 
@@ -25,7 +24,6 @@ export interface ProcessCommandSpec {
 }
 
 export type CompletionDetector = (line: string) => CliCompletionSignal | null
-export type StderrNormalizer = (line: string) => NormalizedEntry | NormalizedEntry[] | null
 
 export class ProcessCliSession extends EventEmitter implements CliSessionHandle {
   sessionId: string
@@ -41,8 +39,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
   private completionOverride: CliCompletionSignal | null = null
   private detectCompletion: CompletionDetector
   private detectStderrCompletion?: CompletionDetector
-  private stderrNormalizer?: StderrNormalizer
-  private normalizer?: LogNormalizerService
   private hasStdout = false
   private hasStderr = false
   private noOutputTimer?: NodeJS.Timeout
@@ -53,9 +49,7 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     toolId: string,
     commandSpec: ProcessCommandSpec,
     detectCompletion: CompletionDetector,
-    normalizer?: LogNormalizerService,
     detectStderrCompletion?: CompletionDetector,
-    stderrNormalizer?: StderrNormalizer,
     taskId?: string,
     projectId?: string | null,
     msgStore?: MsgStoreService
@@ -64,9 +58,7 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     this.sessionId = sessionId
     this.toolId = toolId
     this.detectCompletion = detectCompletion
-    this.normalizer = normalizer
     this.detectStderrCompletion = detectStderrCompletion
-    this.stderrNormalizer = stderrNormalizer
     this.msgStore = msgStore ?? new MsgStoreService(undefined, taskId, sessionId, projectId)
 
     try {
@@ -299,15 +291,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
       }
 
-      if (this.normalizer) {
-        const normalized = this.normalizer.normalize(this.toolId, line)
-        if (normalized) {
-          const entries = Array.isArray(normalized) ? normalized : [normalized]
-          for (const entry of entries) {
-            this.msgStore.push({ type: 'normalized', entry, timestamp: Date.now() })
-          }
-        }
-      }
     }
   }
 
@@ -329,15 +312,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
       }
 
-      if (this.stderrNormalizer) {
-        const normalized = this.stderrNormalizer(line)
-        if (normalized) {
-          const entries = Array.isArray(normalized) ? normalized : [normalized]
-          for (const entry of entries) {
-            this.msgStore.push({ type: 'normalized', entry, timestamp: Date.now() })
-          }
-        }
-      }
     }
   }
 }

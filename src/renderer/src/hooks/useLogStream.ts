@@ -62,6 +62,30 @@ function normalizeLogEntry(entry: NormalizedEntry): NormalizedEntry {
   }
 }
 
+function getLogPreview(msg: LogMsg): string | undefined {
+  if (typeof msg.content === 'string') {
+    return msg.content.replace(/\s+/g, ' ').slice(0, 160)
+  }
+  if (msg.entry?.content) {
+    return String(msg.entry.content).replace(/\s+/g, ' ').slice(0, 160)
+  }
+  return undefined
+}
+
+function logMessageDebug(label: string, seq: number, msg: LogMsg, extra?: Record<string, unknown>) {
+  console.log(`[useLogStream] ${label}`, {
+    seq,
+    type: msg.type,
+    id: msg.id,
+    sessionId: msg.session_id,
+    taskId: msg.task_id,
+    timestamp: msg.timestamp,
+    createdAt: msg.created_at,
+    preview: getLogPreview(msg),
+    ...extra
+  })
+}
+
 /**
  * 日志消息类型
  */
@@ -112,6 +136,9 @@ export function useLogStream(
   const sessionIdRef = useRef<string | null>(sessionId)
   const taskIdRef = useRef<string | null>(taskId ?? null)
   const seenIdsRef = useRef<Set<string>>(new Set())
+  const messageSeqRef = useRef(0)
+  const historyLoadedRef = useRef(false)
+  const pendingMessagesRef = useRef<LogMsg[]>([])
 
   // 保持 sessionId ref 同步
   useEffect(() => {
@@ -126,6 +153,9 @@ export function useLogStream(
     setRawLogs([])
     setNormalizedLogs([])
     seenIdsRef.current = new Set()
+    messageSeqRef.current = 0
+    historyLoadedRef.current = false
+    pendingMessagesRef.current = []
   }, [])
 
   const processMessages = useCallback((messages: LogMsg[]) => {
@@ -134,6 +164,8 @@ export function useLogStream(
     const currentSessionId = sessionIdRef.current
 
     for (const msg of messages) {
+      const seq = ++messageSeqRef.current
+      logMessageDebug('processMessages', seq, msg)
       if (source !== 'file' && currentSessionId && msg.session_id && msg.session_id !== currentSessionId) {
         continue
       }
@@ -159,6 +191,8 @@ export function useLogStream(
     const normalized: NormalizedEntry[] = []
 
     for (const msg of messages) {
+      const seq = ++messageSeqRef.current
+      logMessageDebug('history', seq, msg)
       if (msg.type === 'stdout' || msg.type === 'stderr') {
         raw.push(msg)
       } else if (msg.type === 'normalized' && msg.entry) {
@@ -180,6 +214,8 @@ export function useLogStream(
     }
 
     try {
+      historyLoadedRef.current = false
+      pendingMessagesRef.current = []
       // 获取历史日志
       const includeHistory = options?.includeHistory ?? true
       if (includeHistory && currentTaskId) {
@@ -189,12 +225,14 @@ export function useLogStream(
         console.log('[useLogStream] History received:', history?.length || 0, 'messages')
         if (Array.isArray(history) && history.length > 0) {
           console.log('[useLogStream] History sample:', history[history.length - 1])
-          if (source === 'file') {
-            setLogsFromHistory(history as LogMsg[])
-          } else {
-            processMessages(history as LogMsg[])
-          }
+          setLogsFromHistory(history as LogMsg[])
         }
+      }
+
+      historyLoadedRef.current = true
+      if (pendingMessagesRef.current.length > 0) {
+        processMessages(pendingMessagesRef.current)
+        pendingMessagesRef.current = []
       }
 
       if (source === 'file' || !currentSessionId) {
@@ -245,10 +283,16 @@ export function useLogStream(
       return
     }
 
-    if (source === 'session' && sessionId) {
+      if (source === 'session' && sessionId) {
       // 监听实时消息
       const removeListener = window.api.logStream.onMessage((sid, msg) => {
         if (sid === sessionId) {
+          const seq = ++messageSeqRef.current
+          logMessageDebug('onMessage', seq, msg as LogMsg, { buffered: !historyLoadedRef.current })
+          if (!historyLoadedRef.current) {
+            pendingMessagesRef.current.push(msg as LogMsg)
+            return
+          }
           processMessages([msg as LogMsg])
         }
       })

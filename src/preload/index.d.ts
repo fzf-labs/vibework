@@ -125,31 +125,6 @@ interface TerminalAPI {
   onError: (callback: (data: { paneId: string; error: string }) => void) => () => void
 }
 
-interface ClaudeCodeAPI {
-  getConfig: () => Promise<UnknownRecord>
-  saveConfig: (config: UnknownRecord) => Promise<unknown>
-  startSession: (
-    sessionId: string,
-    workdir: string,
-    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
-  ) => Promise<unknown>
-  stopSession: (sessionId: string) => Promise<unknown>
-  sendInput: (sessionId: string, input: string) => Promise<unknown>
-  getOutput: (sessionId: string) => Promise<string[]>
-  getSessions: () => Promise<CliSessionInfo[]>
-  getSession: (sessionId: string) => Promise<unknown>
-  onStatus: (
-    callback: (data: { sessionId: string; status: string; forced?: boolean }) => void
-  ) => () => void
-  onOutput: (
-    callback: (data: { sessionId: string; type: string; content: string }) => void
-  ) => () => void
-  onClose: (
-    callback: (data: { sessionId: string; code: number; forcedStatus?: string }) => void
-  ) => () => void
-  onError: (callback: (data: { sessionId: string; error: string }) => void) => () => void
-}
-
 interface CliSessionAPI {
   startSession: (
     sessionId: string,
@@ -410,7 +385,6 @@ interface API {
   git: GitAPI
   cli: CLIAPI
   terminal: TerminalAPI
-  claudeCode: ClaudeCodeAPI
   cliSession: CliSessionAPI
   logStream: LogStreamAPI
   workNode: WorkNodeAPI

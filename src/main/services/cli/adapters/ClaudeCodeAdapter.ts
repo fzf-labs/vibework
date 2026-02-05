@@ -2,8 +2,6 @@ import * as os from 'os'
 import * as path from 'path'
 import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
 import { ProcessCliSession, InitSequenceStep } from '../ProcessCliSession'
-import { LogNormalizerService } from '../../LogNormalizerService'
-import { ClaudeCodeNormalizer } from '../../normalizers/ClaudeCodeNormalizer'
 import { CLIToolConfigService } from '../../CLIToolConfigService'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
 import {
@@ -31,12 +29,9 @@ function detectClaudeCompletion(line: string) {
 export class ClaudeCodeAdapter implements CliAdapter {
   id = 'claude-code'
   private configService: CLIToolConfigService
-  private normalizer: LogNormalizerService
 
   constructor(configService: CLIToolConfigService) {
     this.configService = configService
-    this.normalizer = new LogNormalizerService()
-    this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
   }
 
   private getExecutablePath(override?: string): string {
@@ -170,8 +165,6 @@ export class ClaudeCodeAdapter implements CliAdapter {
         initSequence
       },
       detectClaudeCompletion,
-      this.normalizer,
-      undefined,
       undefined,
       options.taskId,
       options.projectId,
