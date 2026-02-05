@@ -47,7 +47,8 @@ export const registerClaudeCodeIpc = ({
         undefined,
         options?.model,
         projectId,
-        options?.taskId
+        options?.taskId,
+        null
       )
       console.log('[IPC] claudeCode:startSession success')
     }

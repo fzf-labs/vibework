@@ -151,7 +151,7 @@ export interface UseAgentReturn {
     questionId: string,
     answers: Record<string, string>
   ) => Promise<void>;
-  setSessionInfo: (sessionId: string) => void;
+  setSessionInfo: (sessionId: string | null) => void;
   // Background tasks
   backgroundTasks: BackgroundTask[];
   runningBackgroundTaskCount: number;
@@ -194,7 +194,7 @@ export function useAgent(): UseAgentReturn {
   }, [initialPrompt]);
 
   // Helper to set session info
-  const setSessionInfo = useCallback((sessionId: string) => {
+  const setSessionInfo = useCallback((sessionId: string | null) => {
     setCurrentSessionId(sessionId);
   }, []);
 
@@ -676,12 +676,24 @@ export function useAgent(): UseAgentReturn {
       try {
         if (!existingTask) {
           const settings = getSettings();
+          let agentToolConfigId: string | null = null;
+          if (settings.defaultCliToolId) {
+            try {
+              const configs = await db.listAgentToolConfigs(settings.defaultCliToolId);
+              const list = Array.isArray(configs) ? (configs as Array<{ id: string; is_default?: number }>) : [];
+              const defaultConfig = list.find((cfg) => cfg.is_default);
+              agentToolConfigId = defaultConfig?.id ?? null;
+            } catch {
+              agentToolConfigId = null;
+            }
+          }
           await db.createTask({
             id: currentTaskId,
             session_id: sessId,
             title: prompt,
             prompt,
             cli_tool_id: settings.defaultCliToolId || null,
+            agent_tool_config_id: agentToolConfigId,
           });
           console.log(
             '[useAgent] Created new task:',

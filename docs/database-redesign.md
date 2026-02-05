@@ -1,13 +1,13 @@
 # 数据库重设计方案（对话日志外置）
 
 本文档基于现有项目使用方式进行重设计：
-- 每个 Task 代表一次对话（**1 Task = 1 Session**）。
-- Task 持有 `session_id`，作为对话上下文 ID，且 **`session_id = task.id`**。
-- 所有 Agent/CLI 对话记录不入库，统一写入文件目录 `~/.vibework/data/sessions/<session_id>/`。
+- 每个 Task 代表一次对话（**1 Task = 1 Log**）。
+- Task 可持有 `session_id` 作为 CLI 会话 ID（对话启动后生成）。
+- 所有 Agent/CLI 对话记录不入库，统一写入文件 `~/.vibework/data/sessions/<project_id>/<task_id>.jsonl`。
 
 重做前提（无历史迁移）：
 - **不考虑旧数据迁移**，启动即使用新结构，旧数据可直接忽略/丢弃。
-- **统一 ID 策略**：`session_id = task.id`（同一 ULID），彻底消除 1:1 与 1:N 的冲突。
+- **统一日志定位**：对话日志文件以 `task_id` 命名，`session_id` 仅用于 CLI 会话。
 
 目标：
 - 结构更清晰、状态更稳定。
@@ -31,14 +31,14 @@ workflow_templates (1) → workflow_template_nodes (N)
 - 工作流进度：`workflows.current_node_index` + `work_nodes.status`
 - 当前节点展示：`work_nodes`（按 node_order 排序）
 - 执行状态：`agent_executions.status`（running/completed）
-- 执行日志展示：`~/.vibework/data/sessions/<session_id>/messages.jsonl`（仅 Agent/CLI 输出）
+- 执行日志展示：`~/.vibework/data/sessions/<project_id>/<task_id>.jsonl`（仅 Agent/CLI 输出）
 
 ---
 
 ## 执行日志存储（文件系统）
 
-- 目录：`~/.vibework/data/sessions/<session_id>/`
-- 推荐文件：`messages.jsonl`
+- 目录：`~/.vibework/data/sessions/<project_id>/`
+- 推荐文件：`<task_id>.jsonl`
 - 每行 JSON：
   - `type`（stdout/stderr/normalized/finished 等）
   - `content` / `entry` / `exit_code`
@@ -47,7 +47,7 @@ workflow_templates (1) → workflow_template_nodes (N)
   - `schema_version`
 
 数据库只存任务与执行结构，不再存消息明细。
-仅保存 Agent/CLI 执行产生的数据到 `messages.jsonl`（不再单独写 logs/sessions）；消息相关功能整体移除。
+仅保存 Agent/CLI 执行产生的数据到 `<task_id>.jsonl`（不再单独写 logs/sessions）；消息相关功能整体移除。
 
 **约束说明：**
 - 不再使用 `sessions` 表。
@@ -81,8 +81,8 @@ CREATE TABLE tasks (
   -- 主键
   id TEXT PRIMARY KEY,
 
-  -- 会话上下文（与 task.id 相同）
-  session_id TEXT NOT NULL UNIQUE,
+  -- CLI 会话 ID（对话启动后生成）
+  session_id TEXT UNIQUE,
 
   -- 关联
   project_id TEXT,
@@ -118,7 +118,7 @@ CREATE TABLE tasks (
 - 保留 `session_id`，且每个 task 对应唯一 session（`UNIQUE`）。
 - 移除 `task_index`（每个 task 就是一段对话）。
 - 重命名 `pipeline_template_id` → `workflow_template_id`。
-- **固定策略：`session_id = task.id`**（同一 ULID）。
+- **固定策略：日志文件以 `task_id` 命名，`session_id` 由 CLI 启动时生成**。
 
 ### workflow_templates（工作流模板）
 
@@ -257,7 +257,7 @@ CREATE TABLE agent_executions (
 | 字段 | 含义与作用 | 备注 |
 | --- | --- | --- |
 | id | 任务唯一标识 | 建议 ULID |
-| session_id | 对话上下文 ID | 与文件夹同名 |
+| session_id | CLI 会话 ID | 对话启动后生成 |
 | project_id | 关联项目 | 可空 |
 | workflow_template_id | 选用模板 | 可空 |
 | cli_tool_id | 使用的 CLI 工具 | 可空 |
@@ -372,7 +372,7 @@ CREATE UNIQUE INDEX uniq_project_template_name
 
 | 表名 | 删除原因 |
 |------|----------|
-| `sessions` | 由 `tasks.session_id` 直接承载对话上下文 |
+| `sessions` | 对话日志由 `task_id` 文件承载，无需单独 sessions 表 |
 | `messages` | 对话明细外置到文件系统 |
 | `global_workflow_templates` | 合并到 `workflow_templates` |
 | `project_workflow_templates` | 合并到 `workflow_templates` |
@@ -388,12 +388,12 @@ CREATE UNIQUE INDEX uniq_project_template_name
 **执行要点：**
 1. 启动时删除旧数据库文件（`~/.vibework/data/vibework.db` 及 `-wal/-shm`，若存在）。
 2. 初始化新表结构（本方案中的 `projects` / `tasks` / `workflows` / `workflow_templates` / `workflow_template_nodes` / `work_nodes` / `agent_executions`）。
-3. 统一 ID：创建 task 时同时写 `session_id = task.id`。
+3. 统一日志定位：创建 task 后，对话日志以 `task_id` 命名存储。
 4. 创建 task 时，同时插入 `workflows` 与 `work_nodes`（从 `workflow_template_nodes` 快照写入 name/prompt/approval 等字段）。
 5. 执行日志读写全部改为 JSONL 文件：
-   - 写入：`~/.vibework/data/sessions/<session_id>/messages.jsonl`
+   - 写入：`~/.vibework/data/sessions/<project_id>/<task_id>.jsonl`
    - 读取：按需加载，不再通过 DB。
-6. 只保留 Agent/CLI 执行日志（stdout/stderr/normalized/finished）写入 `messages.jsonl`，移除 `logs/sessions` 与对应读写逻辑。
+6. 只保留 Agent/CLI 执行日志（stdout/stderr/normalized/finished）写入 `<task_id>.jsonl`，移除 `logs/sessions` 与对应读写逻辑。
 7. 删除相关旧逻辑：`sessions`/`messages`/`task_index` 及其 IPC 与 UI 调用路径。
 
 **收益：**
@@ -418,8 +418,8 @@ CREATE UNIQUE INDEX uniq_project_template_name
   - 约定：完全忽略旧数据（含 DB 与旧 logs/sessions），直接启用新结构。
 
 - **路径不统一**
-  - 推荐统一在 `AppPaths` 增加 `getSessionDataDir(sessionId)`，路径固定到 `~/.vibework/data/sessions/<session_id>/`；
+  - 推荐统一在 `AppPaths` 增加 `getTaskDataDir(taskId)`，路径固定到 `~/.vibework/data/sessions/<project_id>/<task_id>/`；
   - CLI 输出、agent 消息、附件都走这一个入口，避免 `~/.VibeWork` / `~/.vibework/logs` 分叉。
 
 - **删除任务后的垃圾文件**
-  - 推荐：在 `TaskService.deleteTask` 增加清理对应 session 目录（`~/.vibework/data/sessions/<session_id>/`）。
+  - 推荐：在 `TaskService.deleteTask` 增加清理对应 task 目录或日志文件（`~/.vibework/data/sessions/<project_id>/<task_id>.jsonl`）。

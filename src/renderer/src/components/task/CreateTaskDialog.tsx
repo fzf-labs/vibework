@@ -9,6 +9,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog'
 import { db } from '@/data'
+import type { AgentToolConfig } from '@/data'
 import { getSettings } from '@/data/settings'
 import { useLanguage } from '@/providers/language-provider'
 
@@ -46,6 +47,8 @@ export function CreateTaskDialog({
   const [prompt, setPrompt] = useState('')
   const [cliTools, setCliTools] = useState<CLIToolInfo[]>([])
   const [selectedCliToolId, setSelectedCliToolId] = useState('')
+  const [cliConfigs, setCliConfigs] = useState<AgentToolConfig[]>([])
+  const [selectedCliConfigId, setSelectedCliConfigId] = useState('')
   const [branches, setBranches] = useState<string[]>([])
   const [selectedBaseBranch, setSelectedBaseBranch] = useState('')
   const [pipelineTemplates, setPipelineTemplates] = useState<PipelineTemplate[]>([])
@@ -134,10 +137,34 @@ export function CreateTaskDialog({
     loadBranches()
   }, [open, projectId, projectPath, isGitProject])
 
+  useEffect(() => {
+    if (!open) return
+    if (!selectedCliToolId) {
+      setCliConfigs([])
+      setSelectedCliConfigId('')
+      return
+    }
+    const loadConfigs = async () => {
+      try {
+        const result = await db.listAgentToolConfigs(selectedCliToolId)
+        const list = Array.isArray(result) ? (result as AgentToolConfig[]) : []
+        setCliConfigs(list)
+        const defaultConfig = list.find((cfg) => cfg.is_default)
+        setSelectedCliConfigId(defaultConfig?.id || '')
+      } catch (err) {
+        console.error('Failed to load CLI configs:', err)
+        setCliConfigs([])
+        setSelectedCliConfigId('')
+      }
+    }
+    void loadConfigs()
+  }, [open, selectedCliToolId])
+
   const resetForm = () => {
     setTitle('')
     setPrompt('')
     setSelectedCliToolId('')
+    setSelectedCliConfigId('')
     setSelectedTemplateId('')
     setSelectedBaseBranch('')
   }
@@ -154,6 +181,14 @@ export function CreateTaskDialog({
     }
     if (!selectedCliToolId) {
       setError(t.task.createCliRequired)
+      return
+    }
+    if (cliConfigs.length > 0 && !selectedCliConfigId) {
+      setError(t.task.createCliConfigRequired || '请选择 CLI 配置项')
+      return
+    }
+    if (cliConfigs.length === 0) {
+      setError(t.task.createCliConfigEmpty || '请先创建 CLI 配置项')
       return
     }
     if (isGitProject && !selectedBaseBranch) {
@@ -181,6 +216,7 @@ export function CreateTaskDialog({
         worktreeBranchPrefix,
         worktreeRootPath,
         cliToolId: selectedCliToolId,
+        agentToolConfigId: selectedCliConfigId || undefined,
         workflowTemplateId
       })
 
@@ -252,6 +288,37 @@ export function CreateTaskDialog({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium">
+              {t.task.createCliConfigLabel || 'CLI 配置项'}
+            </label>
+            <select
+              value={selectedCliConfigId}
+              onChange={(e) => setSelectedCliConfigId(e.target.value)}
+              disabled={!selectedCliToolId || cliConfigs.length === 0}
+              className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="">
+                {t.task.createCliConfigPlaceholder || '请选择 CLI 配置项'}
+              </option>
+              {cliConfigs.map((cfg) => (
+                <option key={cfg.id} value={cfg.id}>
+                  {cfg.name}
+                </option>
+              ))}
+            </select>
+            {!selectedCliToolId && (
+              <div className="text-muted-foreground mt-1 text-xs">
+                {t.task.createCliConfigSelectTool || '请先选择 CLI 工具'}
+              </div>
+            )}
+            {selectedCliToolId && cliConfigs.length === 0 && (
+              <div className="text-amber-500 mt-1 text-xs">
+                {t.task.createCliConfigEmpty || '请先创建 CLI 配置项'}
+              </div>
+            )}
           </div>
 
           {isGitProject && (

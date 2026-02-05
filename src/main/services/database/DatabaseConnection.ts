@@ -21,6 +21,20 @@ export class DatabaseConnection {
     const db = this.assertDb()
     console.log('[DatabaseService] Creating tables...')
 
+    // 创建 agent_tool_configs 表
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_tool_configs (
+        id TEXT PRIMARY KEY,
+        tool_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        config_json TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `)
+
     // 创建 projects 表
     db.exec(`
       CREATE TABLE IF NOT EXISTS projects (
@@ -53,6 +67,8 @@ export class DatabaseConnection {
         base_branch TEXT,
         workspace_path TEXT,
         cli_tool_id TEXT,
+        agent_tool_config_id TEXT,
+        agent_tool_config_snapshot TEXT,
         workflow_template_id TEXT,
         cost REAL,
         duration REAL,
@@ -62,6 +78,10 @@ export class DatabaseConnection {
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
       )
     `)
+
+    this.migrateTasksSessionIdNullable(db)
+    this.ensureColumn(db, 'tasks', 'agent_tool_config_id', 'TEXT')
+    this.ensureColumn(db, 'tasks', 'agent_tool_config_snapshot', 'TEXT')
 
     // 创建 workflow_templates 表
     db.exec(`
@@ -143,6 +163,7 @@ export class DatabaseConnection {
       )
     `)
 
+    this.purgeDeletedAgentToolConfigs(db)
     this.createIndexes(db)
 
     console.log('[DatabaseService] Tables created successfully')
@@ -172,6 +193,7 @@ export class DatabaseConnection {
       CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id);
       CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
       CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_tool_configs_tool_id ON agent_tool_configs(tool_id);
       CREATE INDEX IF NOT EXISTS idx_workflows_task_id ON workflows(task_id);
       CREATE INDEX IF NOT EXISTS idx_work_nodes_workflow_id ON work_nodes(workflow_id);
       CREATE INDEX IF NOT EXISTS idx_agent_exec_work_node_id ON agent_executions(work_node_id);
@@ -186,5 +208,122 @@ export class DatabaseConnection {
         ON workflow_templates(project_id, name)
         WHERE scope = 'project';
     `)
+
+    db.exec(`
+      DROP INDEX IF EXISTS uniq_agent_tool_config;
+      DROP INDEX IF EXISTS uniq_agent_tool_default;
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_tool_config
+        ON agent_tool_configs(tool_id, name);
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_tool_default
+        ON agent_tool_configs(tool_id)
+        WHERE is_default = 1;
+    `)
+  }
+
+  private purgeDeletedAgentToolConfigs(db: Database.Database): void {
+    if (!this.hasColumn(db, 'agent_tool_configs', 'deleted_at')) return
+    db.exec(`DELETE FROM agent_tool_configs WHERE deleted_at IS NOT NULL`)
+  }
+
+  private hasColumn(db: Database.Database, table: string, column: string): boolean {
+    try {
+      const info = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+      return info.some((entry) => entry.name === column)
+    } catch (error) {
+      console.error('[DatabaseService] Failed to inspect column:', table, column, error)
+      return false
+    }
+  }
+
+  private ensureColumn(
+    db: Database.Database,
+    table: string,
+    column: string,
+    definition: string
+  ): void {
+    try {
+      const info = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+      const exists = info.some((entry) => entry.name === column)
+      if (!exists) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+      }
+    } catch (error) {
+      console.error('[DatabaseService] Failed to ensure column:', table, column, error)
+    }
+  }
+
+  private migrateTasksSessionIdNullable(db: Database.Database): void {
+    let needsMigration = false
+    try {
+      const info = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{
+        name: string
+        notnull: number
+      }>
+      const sessionIdInfo = info.find((entry) => entry.name === 'session_id')
+      needsMigration = Boolean(sessionIdInfo?.notnull)
+    } catch (error) {
+      console.error('[DatabaseService] Failed to inspect tasks.session_id:', error)
+      return
+    }
+
+    if (!needsMigration) return
+
+    let createSql: string | null | undefined
+    try {
+      const row = db
+        .prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'`)
+        .get() as { sql?: string | null } | undefined
+      createSql = row?.sql
+    } catch (error) {
+      console.error('[DatabaseService] Failed to read tasks table SQL:', error)
+      return
+    }
+
+    if (!createSql) {
+      console.error('[DatabaseService] Missing tasks table SQL; cannot migrate safely')
+      return
+    }
+
+    const tempTable = 'tasks__tmp_session_id_nullable'
+    const tempCreateSql = this.makeTasksCreateSqlSessionIdNullable(createSql, tempTable)
+    if (!tempCreateSql) {
+      console.error('[DatabaseService] Failed to rewrite tasks schema for nullable session_id')
+      return
+    }
+
+    const fkRow = db.prepare('PRAGMA foreign_keys').get() as { foreign_keys?: number } | undefined
+    const shouldRestoreForeignKeys = Boolean(fkRow?.foreign_keys)
+
+    try {
+      db.exec('PRAGMA foreign_keys = OFF')
+      const migrate = db.transaction(() => {
+        db.exec(`DROP TABLE IF EXISTS ${tempTable}`)
+        db.exec(tempCreateSql)
+        db.exec(`INSERT INTO ${tempTable} SELECT * FROM tasks`)
+        db.exec('DROP TABLE tasks')
+        db.exec(`ALTER TABLE ${tempTable} RENAME TO tasks`)
+      })
+      migrate()
+      console.log('[DatabaseService] Migrated tasks.session_id to be nullable')
+    } catch (error) {
+      console.error('[DatabaseService] Failed to migrate tasks.session_id to nullable:', error)
+    } finally {
+      if (shouldRestoreForeignKeys) {
+        db.exec('PRAGMA foreign_keys = ON')
+      }
+    }
+  }
+
+  private makeTasksCreateSqlSessionIdNullable(createSql: string, tableName: string): string | null {
+    const renamed = createSql.replace(
+      /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`\\[]?tasks["'`\\]]?/i,
+      `CREATE TABLE ${tableName}`
+    )
+
+    const sessionIdDef = renamed.match(/\bsession_id\b[^,)]*/i)?.[0]
+    if (!sessionIdDef) return null
+
+    const rewrittenSessionIdDef = sessionIdDef.replace(/\bNOT\s+NULL\b/gi, ' ').replace(/\s+/g, ' ')
+    return renamed.replace(sessionIdDef, rewrittenSessionIdDef)
   }
 }

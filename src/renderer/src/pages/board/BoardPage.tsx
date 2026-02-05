@@ -11,7 +11,7 @@ import type { TaskStatus } from '@/data/types';
 // Task type from API (camelCase fields)
 interface TaskWithWorktree {
   id: string;
-  sessionId: string;
+  sessionId: string | null;
   title: string;
   prompt: string;
   status: string;

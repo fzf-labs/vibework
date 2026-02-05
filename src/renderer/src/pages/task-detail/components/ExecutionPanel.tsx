@@ -23,6 +23,7 @@ interface ExecutionPanelProps {
   taskId?: string | null;
   sessionId: string;
   toolId: string;
+  configId?: string | null;
   workingDir: string;
   prompt: string;
   cliSessionRef: RefObject<CLISessionHandle | null>;
@@ -46,6 +47,7 @@ export function ExecutionPanel({
   taskId,
   sessionId,
   toolId,
+  configId,
   workingDir,
   prompt,
   cliSessionRef,
@@ -101,6 +103,7 @@ export function ExecutionPanel({
                     sessionId={sessionId}
                     taskId={taskId}
                     toolId={toolId}
+                    configId={configId}
                     workdir={workingDir}
                     prompt={prompt}
                     className="h-full w-full"

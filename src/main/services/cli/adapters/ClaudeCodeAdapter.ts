@@ -6,6 +6,14 @@ import { LogNormalizerService } from '../../LogNormalizerService'
 import { ClaudeCodeNormalizer } from '../../normalizers/ClaudeCodeNormalizer'
 import { CLIToolConfigService } from '../../CLIToolConfigService'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
+import {
+  asBoolean,
+  asString,
+  asStringArray,
+  pushFlag,
+  pushFlagWithValue,
+  pushRepeatableFlag
+} from './config-utils'
 
 function detectClaudeCompletion(line: string) {
   const msg = parseJsonLine(line)
@@ -31,7 +39,8 @@ export class ClaudeCodeAdapter implements CliAdapter {
     this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
   }
 
-  private getExecutablePath(): string {
+  private getExecutablePath(override?: string): string {
+    if (override) return override
     const config = this.configService.getConfig('claude-code')
     const cmd = config.executablePath || 'claude'
     if (cmd === 'claude') {
@@ -42,7 +51,11 @@ export class ClaudeCodeAdapter implements CliAdapter {
 
   async startSession(options: CliStartOptions): Promise<CliSessionHandle> {
     const config = this.configService.getConfig('claude-code')
-    const model = options.model || (options.toolConfig?.model as string) || config.defaultModel
+    const toolConfig = options.toolConfig ?? {}
+    const model =
+      options.model ||
+      asString((toolConfig as Record<string, unknown>).model) ||
+      config.defaultModel
     const homeDir = os.homedir()
 
     const args = [
@@ -50,12 +63,76 @@ export class ClaudeCodeAdapter implements CliAdapter {
       '--verbose',
       '--output-format=stream-json',
       '--input-format=stream-json',
-      '--dangerously-skip-permissions',
       '--session-id', options.sessionId
     ]
 
+    const allowDangerouslySkipPermissions = asBoolean(
+      (toolConfig as Record<string, unknown>).allowDangerouslySkipPermissions
+    )
+    if (allowDangerouslySkipPermissions) {
+      args.push('--allow-dangerously-skip-permissions')
+    }
+
+    const skipPermissions = asBoolean(
+      (toolConfig as Record<string, unknown>).dangerouslySkipPermissions
+    )
+    if (skipPermissions === undefined || skipPermissions === true) {
+      args.push('--dangerously-skip-permissions')
+    }
+
     if (model) {
       args.push('--model', model)
+    }
+
+    pushFlagWithValue(args, '--agent', (toolConfig as Record<string, unknown>).agent)
+    pushFlagWithValue(args, '--agents', (toolConfig as Record<string, unknown>).agentsJson)
+    pushRepeatableFlag(args, '--add-dir', (toolConfig as Record<string, unknown>).addDir)
+
+    const allowedTools = asStringArray((toolConfig as Record<string, unknown>).allowedTools)
+    if (allowedTools) {
+      args.push('--allowed-tools', allowedTools.join(','))
+    }
+    const disallowedTools = asStringArray((toolConfig as Record<string, unknown>).disallowedTools)
+    if (disallowedTools) {
+      args.push('--disallowed-tools', disallowedTools.join(','))
+    }
+
+    pushFlagWithValue(args, '--append-system-prompt', (toolConfig as Record<string, unknown>).appendSystemPrompt)
+    pushFlagWithValue(args, '--system-prompt', (toolConfig as Record<string, unknown>).systemPrompt)
+    pushFlagWithValue(args, '--permission-mode', (toolConfig as Record<string, unknown>).permissionMode)
+    pushRepeatableFlag(args, '--mcp-config', (toolConfig as Record<string, unknown>).mcpConfig)
+    pushFlag(args, '--strict-mcp-config', asBoolean((toolConfig as Record<string, unknown>).strictMcpConfig))
+    pushFlagWithValue(args, '--settings', (toolConfig as Record<string, unknown>).settings)
+    pushFlagWithValue(args, '--setting-sources', (toolConfig as Record<string, unknown>).settingSources)
+    pushFlag(args, '--continue', asBoolean((toolConfig as Record<string, unknown>).continue))
+    pushFlagWithValue(args, '--resume', (toolConfig as Record<string, unknown>).resume)
+    pushFlagWithValue(args, '--output-format', (toolConfig as Record<string, unknown>).outputFormat)
+    pushFlagWithValue(args, '--input-format', (toolConfig as Record<string, unknown>).inputFormat)
+    pushFlag(args, '--include-partial-messages', asBoolean((toolConfig as Record<string, unknown>).includePartialMessages))
+    pushFlag(args, '--replay-user-messages', asBoolean((toolConfig as Record<string, unknown>).replayUserMessages))
+    pushFlag(args, '--no-session-persistence', asBoolean((toolConfig as Record<string, unknown>).noSessionPersistence))
+    const debugValue = (toolConfig as Record<string, unknown>).debug
+    if (typeof debugValue === 'string' && debugValue.trim()) {
+      args.push('--debug', debugValue.trim())
+    } else {
+      pushFlag(args, '--debug', asBoolean(debugValue))
+    }
+    pushFlagWithValue(args, '--debug-file', (toolConfig as Record<string, unknown>).debugFile)
+    pushFlag(args, '--verbose', asBoolean((toolConfig as Record<string, unknown>).verbose))
+    pushRepeatableFlag(args, '--betas', (toolConfig as Record<string, unknown>).betas)
+    pushFlagWithValue(args, '--fallback-model', (toolConfig as Record<string, unknown>).fallbackModel)
+    pushFlagWithValue(args, '--max-budget-usd', (toolConfig as Record<string, unknown>).maxBudgetUsd)
+    pushFlagWithValue(args, '--json-schema', (toolConfig as Record<string, unknown>).jsonSchema)
+    pushFlagWithValue(args, '--tools', (toolConfig as Record<string, unknown>).tools)
+    pushRepeatableFlag(args, '--file', (toolConfig as Record<string, unknown>).fileResources)
+    pushFlag(args, '--chrome', asBoolean((toolConfig as Record<string, unknown>).chrome))
+    pushFlag(args, '--no-chrome', asBoolean((toolConfig as Record<string, unknown>).noChrome))
+    pushFlag(args, '--ide', asBoolean((toolConfig as Record<string, unknown>).ide))
+    pushRepeatableFlag(args, '--plugin-dir', (toolConfig as Record<string, unknown>).pluginDir)
+
+    const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+    if (additionalArgs) {
+      args.push(...additionalArgs)
     }
 
     const initSequence: InitSequenceStep[] = [
@@ -82,11 +159,12 @@ export class ClaudeCodeAdapter implements CliAdapter {
       options.sessionId,
       options.toolId,
       {
-        command: this.getExecutablePath(),
+        command: this.getExecutablePath(options.executablePath),
         args,
         cwd: options.workdir,
         env: {
           ...process.env,
+          ...(options.env ?? {}),
           PATH: `${homeDir}/.local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`
         },
         initSequence

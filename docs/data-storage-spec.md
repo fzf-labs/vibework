@@ -19,9 +19,9 @@
 │   └── settings.json # 通用设置（主题、颜色等）
 ├── data/             # 持久化数据
 │   ├── vibework.db   # SQLite 数据库（项目、任务、工作流等）
-│   └── sessions/     # 会话数据（1 Task = 1 Session）
-│       └── <session_id>/
-│           └── messages.jsonl
+│   └── sessions/     # 会话数据（1 Task = 1 Log）
+│       └── <project_id>/
+│           └── <task_id>.jsonl
 ├── logs/             # 日志文件
 │   └── app.log
 └── cache/            # 缓存数据（可清理）
@@ -37,7 +37,7 @@
 | 通用配置 | `settings.json` - 主题、语言、颜色 |
 | 需要人工编辑 | 用户可能手动修改的配置 |
 | 数据量小 | 总大小 < 100KB |
-| Agent/CLI 执行日志 | `messages.jsonl` - 每行一条日志 |
+| Agent/CLI 执行日志 | `<task_id>.jsonl` - 每行一条日志 |
 
 ### SQLite 数据库适用场景
 
@@ -80,8 +80,8 @@ SQLite 数据库，包含以下表：
 | work_nodes | 工作节点实例 |
 | agent_executions | Agent 执行记录 |
 
-### data/sessions/<session_id>/messages.jsonl
-仅保存 Agent/CLI 执行产生的数据（**1 Task = 1 Session**），不保存用户消息或对话内容。
+### data/sessions/<project_id>/<task_id>.jsonl
+仅保存 Agent/CLI 执行产生的数据（**1 Task = 1 Log**），不保存用户消息或对话内容。
 每行一条 JSON，建议包含：
 `id, task_id, session_id, type, content|entry|exit_code, created_at, meta, schema_version`
 
@@ -115,8 +115,8 @@ appPaths.getDataDir()      // ~/.vibework/data/
 appPaths.getLogsDir()      // ~/.vibework/logs/
 appPaths.getCacheDir()     // ~/.vibework/cache/
 appPaths.getSessionsDir()  // ~/.vibework/data/sessions/
-appPaths.getSessionDataDir(sessionId) // ~/.vibework/data/sessions/<session_id>/
-appPaths.getSessionMessagesFile(sessionId) // ~/.vibework/data/sessions/<session_id>/messages.jsonl
+appPaths.getTaskDataDir(taskId) // ~/.vibework/data/sessions/<project_id>/<task_id>/
+appPaths.getTaskMessagesFile(taskId) // ~/.vibework/data/sessions/<project_id>/<task_id>.jsonl
 
 // 获取具体文件路径
 appPaths.getProjectsFile() // ~/.vibework/data/projects.json
@@ -130,9 +130,8 @@ appPaths.getSettingsFile() // ~/.vibework/config/settings.json
 const dataDir = await window.api.path.vibeworkDataDir()
 // 返回: /Users/xxx/.vibework
 
-// 获取 session 数据目录
-const sessionDir = `${dataDir}/data/sessions/${sessionId}`
-const messagesFile = `${sessionDir}/messages.jsonl`
+// 获取 task 日志文件
+const messagesFile = `${dataDir}/data/sessions/${projectId}/${taskId}.jsonl`
 
 // 获取通用设置
 const settings = await window.api.settings.get()
@@ -162,8 +161,8 @@ const dbPath = appPaths.getDatabaseFile()
 // 错误：硬编码路径
 const dbPath = '/Users/xxx/.vibework/data/vibework.db'
 
-// 错误：硬编码 session 路径
-const messagesFile = `/Users/xxx/.vibework/data/sessions/${sessionId}/messages.jsonl`
+// 错误：硬编码 task 日志路径
+const messagesFile = `/Users/xxx/.vibework/data/sessions/${projectId}/${taskId}.jsonl`
 
 // 错误：使用 app.getPath('userData')
 const dbPath = join(app.getPath('userData'), 'vibework.db')

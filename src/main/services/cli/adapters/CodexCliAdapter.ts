@@ -4,6 +4,7 @@ import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { parseJsonLine, successSignal } from './completion'
 import { NormalizedEntry } from '../../../types/log'
+import { asBoolean, asString, asStringArray, pushFlag, pushFlagWithValue, pushRepeatableFlag } from './config-utils'
 
 type RecordLike = Record<string, unknown>
 
@@ -49,11 +50,36 @@ export class CodexCliAdapter implements CliAdapter {
         id: this.id,
         buildCommand: (options: CliStartOptions) => {
           const command = options.executablePath || 'codex'
-          const model = options.model || (options.toolConfig?.model as string | undefined)
+          const toolConfig = options.toolConfig ?? {}
+          const model = options.model || asString((toolConfig as Record<string, unknown>).model)
           const prompt = options.prompt
           const resumeThreadId = this.getResumeThreadId(options)
           const hasPrompt = typeof prompt === 'string' && prompt.trim().length > 0
-          const args = ['exec']
+          const args: string[] = []
+
+          pushRepeatableFlag(args, '-c', (toolConfig as Record<string, unknown>).configOverrides)
+          pushRepeatableFlag(args, '--enable', (toolConfig as Record<string, unknown>).enableFeatures)
+          pushRepeatableFlag(args, '--disable', (toolConfig as Record<string, unknown>).disableFeatures)
+          pushRepeatableFlag(args, '-i', (toolConfig as Record<string, unknown>).imagePaths)
+
+          pushFlagWithValue(args, '--profile', (toolConfig as Record<string, unknown>).profile)
+          pushFlagWithValue(args, '--sandbox', (toolConfig as Record<string, unknown>).sandbox)
+          pushFlagWithValue(args, '--ask-for-approval', (toolConfig as Record<string, unknown>).askForApproval)
+          pushFlag(args, '--full-auto', asBoolean((toolConfig as Record<string, unknown>).fullAuto))
+          pushFlag(args, '--dangerously-bypass-approvals-and-sandbox', asBoolean((toolConfig as Record<string, unknown>).dangerouslyBypassApprovalsAndSandbox))
+          pushFlag(args, '--oss', asBoolean((toolConfig as Record<string, unknown>).oss))
+          pushFlagWithValue(args, '--local-provider', (toolConfig as Record<string, unknown>).localProvider)
+          pushFlag(args, '--search', asBoolean((toolConfig as Record<string, unknown>).search))
+          pushRepeatableFlag(args, '--add-dir', (toolConfig as Record<string, unknown>).addDir)
+          pushFlagWithValue(args, '--cd', (toolConfig as Record<string, unknown>).cd)
+          pushFlag(args, '--no-alt-screen', asBoolean((toolConfig as Record<string, unknown>).noAltScreen))
+
+          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+          if (additionalArgs) {
+            args.push(...additionalArgs)
+          }
+
+          args.push('exec')
           if (resumeThreadId) {
             args.push('resume', '--json')
           } else {

@@ -7,6 +7,7 @@ import { TaskRepository } from './database/TaskRepository'
 import { ProjectRepository } from './database/ProjectRepository'
 import { WorkflowRepository } from './database/WorkflowRepository'
 import { AgentRepository } from './database/AgentRepository'
+import { AgentToolConfigRepository } from './database/AgentToolConfigRepository'
 import type { CreateProjectInput, Project, UpdateProjectInput } from '../types/project'
 import type { CreateTaskInput, Task, UpdateTaskInput } from '../types/task'
 import type { AgentExecution } from '../types/agent'
@@ -27,6 +28,7 @@ export class DatabaseService {
   private projectRepo: ProjectRepository
   private workflowRepo: WorkflowRepository
   private agentRepo: AgentRepository
+  private agentToolConfigRepo: AgentToolConfigRepository
   private workNodeStatusListeners: Array<(node: WorkNode) => void> = []
   private dbPath: string
 
@@ -70,6 +72,7 @@ export class DatabaseService {
     this.projectRepo = new ProjectRepository(this.db)
     this.workflowRepo = new WorkflowRepository(this.db)
     this.agentRepo = new AgentRepository(this.db)
+    this.agentToolConfigRepo = new AgentToolConfigRepository(this.db)
   }
 
   onWorkNodeStatusChange(listener: (node: WorkNode) => void): () => void {
@@ -121,6 +124,35 @@ export class DatabaseService {
 
   deleteTask(id: string): boolean {
     return this.taskRepo.deleteTask(id)
+  }
+
+  // ============ Agent Tool Config 操作 ============
+  listAgentToolConfigs(toolId?: string) {
+    return this.agentToolConfigRepo.list(toolId)
+  }
+
+  getAgentToolConfig(id: string) {
+    return this.agentToolConfigRepo.get(id)
+  }
+
+  getDefaultAgentToolConfig(toolId: string) {
+    return this.agentToolConfigRepo.getDefault(toolId)
+  }
+
+  createAgentToolConfig(input: { id: string; tool_id: string; name: string; description?: string | null; config_json: string; is_default?: number }) {
+    return this.agentToolConfigRepo.create(input)
+  }
+
+  updateAgentToolConfig(id: string, updates: { name?: string; description?: string | null; config_json?: string; is_default?: number }) {
+    return this.agentToolConfigRepo.update(id, updates)
+  }
+
+  deleteAgentToolConfig(id: string) {
+    return this.agentToolConfigRepo.delete(id)
+  }
+
+  setDefaultAgentToolConfig(id: string) {
+    return this.agentToolConfigRepo.setDefault(id)
   }
 
   // ============ 任务状态变更触发 ============

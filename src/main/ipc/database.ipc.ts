@@ -33,6 +33,40 @@ export const registerDatabaseIpc = ({
     databaseService.getTasksByProjectId(projectId)
   )
 
+  handle(
+    IPC_CHANNELS.database.listAgentToolConfigs,
+    [v.optional(v.string({ allowEmpty: true }))],
+    (_, toolId) => databaseService.listAgentToolConfigs(toolId || undefined)
+  )
+
+  handle(IPC_CHANNELS.database.getAgentToolConfig, [v.string()], (_, id) =>
+    databaseService.getAgentToolConfig(id)
+  )
+
+  handle(IPC_CHANNELS.database.createAgentToolConfig, [v.object()], (_, input) =>
+    databaseService.createAgentToolConfig(
+      input as unknown as Parameters<DatabaseService['createAgentToolConfig']>[0]
+    )
+  )
+
+  handle(
+    IPC_CHANNELS.database.updateAgentToolConfig,
+    [v.string(), v.object()],
+    (_, id, updates) =>
+      databaseService.updateAgentToolConfig(
+        id,
+        updates as unknown as Parameters<DatabaseService['updateAgentToolConfig']>[1]
+      )
+  )
+
+  handle(IPC_CHANNELS.database.deleteAgentToolConfig, [v.string()], (_, id) =>
+    databaseService.deleteAgentToolConfig(id)
+  )
+
+  handle(IPC_CHANNELS.database.setDefaultAgentToolConfig, [v.string()], (_, id) =>
+    databaseService.setDefaultAgentToolConfig(id)
+  )
+
   handle(IPC_CHANNELS.database.getGlobalWorkflowTemplates, [], () =>
     databaseService.getGlobalWorkflowTemplates()
   )

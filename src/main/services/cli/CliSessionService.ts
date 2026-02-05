@@ -9,8 +9,11 @@ import { LogNormalizerService } from '../LogNormalizerService'
 import { ClaudeCodeNormalizer } from '../normalizers/ClaudeCodeNormalizer'
 import { CodexNormalizer } from '../normalizers/CodexNormalizer'
 import { GeminiNormalizer } from '../normalizers/GeminiNormalizer'
+import { CursorAgentNormalizer } from '../normalizers/CursorAgentNormalizer'
+import { OpencodeNormalizer } from '../normalizers/OpencodeNormalizer'
 import { MsgStoreService } from '../MsgStoreService'
 import { CLIToolConfigService } from '../CLIToolConfigService'
+import { DatabaseService } from '../DatabaseService'
 import { LogMsg } from '../../types/log'
 import type { LogMsgInput } from '../../types/log'
 
@@ -27,15 +30,19 @@ export class CliSessionService extends EventEmitter {
   private adapters: Map<string, CliAdapter> = new Map()
   private normalizer: LogNormalizerService
   private configService: CLIToolConfigService
+  private databaseService: DatabaseService
 
-  constructor(configService: CLIToolConfigService) {
+  constructor(configService: CLIToolConfigService, databaseService: DatabaseService) {
     super()
     this.configService = configService
+    this.databaseService = databaseService
 
     this.normalizer = new LogNormalizerService()
     this.normalizer.registerAdapter(new ClaudeCodeNormalizer())
     this.normalizer.registerAdapter(new CodexNormalizer())
     this.normalizer.registerAdapter(new GeminiNormalizer())
+    this.normalizer.registerAdapter(new CursorAgentNormalizer())
+    this.normalizer.registerAdapter(new OpencodeNormalizer())
 
     this.registerAdapter(new ClaudeCodeAdapter(configService))
     this.registerAdapter(new CursorAgentAdapter(this.normalizer))
@@ -56,7 +63,8 @@ export class CliSessionService extends EventEmitter {
     env?: NodeJS.ProcessEnv,
     model?: string,
     projectId?: string | null,
-    taskId?: string
+    taskId?: string,
+    configId?: string | null
   ): Promise<void> {
     if (this.sessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} already exists`)
@@ -67,8 +75,52 @@ export class CliSessionService extends EventEmitter {
       throw new Error(`Unsupported CLI tool: ${toolId}`)
     }
 
-    const toolConfig = this.configService.getConfig(toolId)
-    const executablePath = typeof toolConfig.executablePath === 'string' ? toolConfig.executablePath : undefined
+    const baseConfig = this.configService.getConfig(toolId)
+    const normalizedBase: Record<string, unknown> = { ...baseConfig }
+    if (typeof baseConfig.defaultModel === 'string' && !('model' in normalizedBase)) {
+      normalizedBase.model = baseConfig.defaultModel
+    }
+    if (typeof baseConfig.apiKey === 'string' && !('apiKey' in normalizedBase)) {
+      normalizedBase.apiKey = baseConfig.apiKey
+    }
+
+    let resolvedConfigId = configId ?? null
+    if (!resolvedConfigId && taskId) {
+      const task = this.databaseService.getTask(taskId)
+      resolvedConfigId = task?.agent_tool_config_id ?? null
+    }
+
+    let profileConfig: Record<string, unknown> = {}
+    if (resolvedConfigId) {
+      const record = this.databaseService.getAgentToolConfig(resolvedConfigId)
+      if (record?.config_json) {
+        try {
+          const parsed = JSON.parse(record.config_json)
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            profileConfig = parsed as Record<string, unknown>
+          }
+        } catch (error) {
+          console.error('[CliSessionService] Failed to parse agent tool config:', error)
+        }
+      }
+    }
+
+    const toolConfig = {
+      ...normalizedBase,
+      ...profileConfig
+    }
+
+    const envFromConfig = (toolConfig.env && typeof toolConfig.env === 'object' && !Array.isArray(toolConfig.env))
+      ? (toolConfig.env as Record<string, string>)
+      : undefined
+    const mergedEnv = {
+      ...process.env,
+      ...(envFromConfig ?? {}),
+      ...(env ?? {})
+    }
+
+    const executablePath =
+      typeof toolConfig.executablePath === 'string' ? toolConfig.executablePath : undefined
 
     const pendingMsgStore = this.pendingMsgStores.get(sessionId)
     const msgStore =
@@ -80,7 +132,7 @@ export class CliSessionService extends EventEmitter {
       taskId,
       projectId,
       prompt,
-      env,
+      env: mergedEnv,
       executablePath,
       toolConfig,
       model,

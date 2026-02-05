@@ -70,6 +70,14 @@ export class TaskService {
       }
     }
 
+    let agentToolConfigId = options.agentToolConfigId
+    if (!agentToolConfigId && options.cliToolId) {
+      const defaultConfig = this.db.getDefaultAgentToolConfig(options.cliToolId)
+      if (defaultConfig?.id) {
+        agentToolConfigId = defaultConfig.id
+      }
+    }
+
     const task = this.db.createTask({
       id: taskId,
       session_id: null,
@@ -81,6 +89,8 @@ export class TaskService {
       base_branch: baseBranch ?? undefined,
       workspace_path: workspacePath ?? undefined,
       cli_tool_id: options.cliToolId,
+      agent_tool_config_id: agentToolConfigId,
+      agent_tool_config_snapshot: options.agentToolConfigSnapshot,
       workflow_template_id: options.workflowTemplateId
     })
 
@@ -237,6 +247,8 @@ export class TaskService {
       baseBranch: task.base_branch ?? null,
       workspacePath: task.workspace_path ?? task.worktree_path ?? null,
       cliToolId: task.cli_tool_id ?? null,
+      agentToolConfigId: task.agent_tool_config_id ?? null,
+      agentToolConfigSnapshot: task.agent_tool_config_snapshot ?? null,
       workflowTemplateId: task.workflow_template_id ?? null,
       cost: task.cost,
       duration: task.duration,

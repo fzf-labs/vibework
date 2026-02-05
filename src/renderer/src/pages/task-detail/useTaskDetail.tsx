@@ -231,13 +231,16 @@ export function useTaskDetail({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [editPrompt, setEditPrompt] = useState('');
   const [editCliToolId, setEditCliToolId] = useState('');
+  const [editCliConfigId, setEditCliConfigId] = useState('');
   const [editPipelineTemplateId, setEditPipelineTemplateId] = useState('');
   const [pipelineTemplates, setPipelineTemplates] = useState<PipelineTemplateOption[]>([]);
+  const [cliConfigs, setCliConfigs] = useState<Array<{ id: string; name: string; is_default?: number }>>([]);
 
   const handleOpenEdit = useCallback(() => {
     if (!task || task.status !== 'todo') return;
     setEditPrompt(task.prompt || '');
     setEditCliToolId(task.cli_tool_id || '');
+    setEditCliConfigId(task.agent_tool_config_id || '');
     setEditPipelineTemplateId(task.pipeline_template_id || '');
     setIsEditOpen(true);
   }, [task]);
@@ -250,6 +253,7 @@ export function useTaskDetail({
       const updatedTask = await db.updateTask(taskId, {
         prompt: trimmedPrompt,
         cli_tool_id: editCliToolId || null,
+        agent_tool_config_id: editCliConfigId || null,
         pipeline_template_id: editPipelineTemplateId || null,
       });
       if (updatedTask) setTask(updatedTask);
@@ -257,7 +261,7 @@ export function useTaskDetail({
     } catch (error) {
       console.error('Failed to update task:', error);
     }
-  }, [editCliToolId, editPipelineTemplateId, editPrompt, taskId]);
+  }, [editCliToolId, editCliConfigId, editPipelineTemplateId, editPrompt, taskId]);
 
   const handleDeleteTask = useCallback(async () => {
     if (!taskId) return;
@@ -285,6 +289,36 @@ export function useTaskDetail({
     void loadTemplates();
     return () => { active = false; };
   }, [isEditOpen, task?.project_id]);
+
+  useEffect(() => {
+    if (!isEditOpen) return;
+    if (!editCliToolId) {
+      setCliConfigs([]);
+      setEditCliConfigId('');
+      return;
+    }
+    let active = true;
+    const loadConfigs = async () => {
+      try {
+        const result = await db.listAgentToolConfigs(editCliToolId);
+        const list = Array.isArray(result) ? (result as Array<{ id: string; name: string; is_default?: number }>) : [];
+        if (!active) return;
+        setCliConfigs(list);
+        const exists = editCliConfigId && list.some((cfg) => cfg.id === editCliConfigId);
+        if (!exists) {
+          const defaultConfig = list.find((cfg) => cfg.is_default);
+          setEditCliConfigId(defaultConfig?.id || '');
+        }
+      } catch {
+        if (active) {
+          setCliConfigs([]);
+          setEditCliConfigId('');
+        }
+      }
+    };
+    void loadConfigs();
+    return () => { active = false; };
+  }, [editCliConfigId, editCliToolId, isEditOpen]);
 
   // ===========================================================================
   // Section 4: CLI Session
@@ -388,6 +422,11 @@ export function useTaskDetail({
       if (!sessionId) {
         sessionId = await ensureCliSessionId();
         if (!sessionId) return;
+        pendingCliStartRef.current = true;
+        pendingCliPromptRef.current = content || undefined;
+        return;
+      }
+      if (!task?.session_id || task.session_id !== sessionId) {
         pendingCliStartRef.current = true;
         pendingCliPromptRef.current = content || undefined;
         return;
@@ -835,8 +874,8 @@ export function useTaskDetail({
       if (!prompt.trim() || !active) return;
 
       lastAutoRunWorkNodeIdRef.current = workflowCurrentNode.id;
-      const sessionId = await appendCliUserLog(prompt);
-      await runCliPrompt(prompt, sessionId);
+      const newSessionId = await appendCliUserLog(prompt);
+      await runCliPrompt(prompt, newSessionId);
     };
     void run();
     return () => { active = false; };
@@ -1141,25 +1180,25 @@ export function useTaskDetail({
       return;
     }
 
-      if (useCliSession) {
-        try {
-          if (!cliSessionRef.current) throw new Error('CLI session not initialized');
-          let prompt = task?.prompt || initialPrompt;
-          if (task?.workflow_template_id || workflowCurrentNode) {
-            const nodePrompt = await resolveWorkNodePrompt(workflowCurrentNode?.id, workflowCurrentNode?.index ?? 0, workflowCurrentNode?.templateId);
-            const composed = buildCliPrompt(nodePrompt);
-            if (composed.trim()) prompt = composed;
-          }
-          let sessionId: string | null = null;
-          if (prompt) {
-            sessionId = await appendCliUserLog(prompt);
-          }
-          await runCliPrompt(prompt, sessionId);
-        } catch {
-          await appendCliSystemLog(t.common.errors.serverNotRunning || 'CLI session is not running.');
+    if (useCliSession) {
+      try {
+        if (!cliSessionRef.current) throw new Error('CLI session not initialized');
+        let prompt = task?.prompt || initialPrompt;
+        if (task?.workflow_template_id || workflowCurrentNode) {
+          const nodePrompt = await resolveWorkNodePrompt(workflowCurrentNode?.id, workflowCurrentNode?.index ?? 0, workflowCurrentNode?.templateId);
+          const composed = buildCliPrompt(nodePrompt);
+          if (composed.trim()) prompt = composed;
         }
-        return;
+        let sessionId: string | null = null;
+        if (prompt) {
+          sessionId = await appendCliUserLog(prompt);
+        }
+        await runCliPrompt(prompt, sessionId);
+      } catch {
+        await appendCliSystemLog(t.common.errors.serverNotRunning || 'CLI session is not running.');
       }
+      return;
+    }
 
     const sessionInfo = task?.session_id ? { sessionId: task.session_id } : undefined;
     const pendingAttachments = initialAttachmentsRef.current;
@@ -1185,6 +1224,8 @@ export function useTaskDetail({
     return isRunning;
   }, [cliStatus, isRunning, useCliSession]);
 
+  const agentToolConfigId = task?.agent_tool_config_id ?? null;
+
   // ===========================================================================
   // Return
   // ===========================================================================
@@ -1194,6 +1235,7 @@ export function useTaskDetail({
     setTask,
     isLoading,
     useCliSession,
+    agentToolConfigId,
 
     // CLI Tools
     cliTools,
@@ -1205,9 +1247,12 @@ export function useTaskDetail({
     setEditPrompt,
     editCliToolId,
     setEditCliToolId,
+    editCliConfigId,
+    setEditCliConfigId,
     editPipelineTemplateId,
     setEditPipelineTemplateId,
     pipelineTemplates,
+    cliConfigs,
     isDeleteOpen,
     setIsDeleteOpen,
     handleOpenEdit,

@@ -27,15 +27,14 @@ CREATE TABLE IF NOT EXISTS agent_tool_configs (
   config_json TEXT NOT NULL,      -- JSON，按 tool schema 解释
   is_default INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  deleted_at TEXT
+  updated_at TEXT NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_tool_config
-  ON agent_tool_configs(tool_id, name) WHERE deleted_at IS NULL;
+  ON agent_tool_configs(tool_id, name);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_tool_default
-  ON agent_tool_configs(tool_id) WHERE is_default = 1 AND deleted_at IS NULL;
+  ON agent_tool_configs(tool_id) WHERE is_default = 1;
 ```
 
 ### 表：tasks 新增字段

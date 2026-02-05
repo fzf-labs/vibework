@@ -50,9 +50,9 @@ export class CLIToolConfigService {
       case 'claude-code':
         return { executablePath: 'claude', defaultModel: 'sonnet' }
       case 'codex':
-        return { executablePath: 'codex', apiKey: '' }
+        return { executablePath: 'codex' }
       case 'gemini-cli':
-        return { executablePath: 'gemini', apiKey: '' }
+        return { executablePath: 'gemini' }
       case 'opencode':
         return { executablePath: 'opencode' }
       case 'cursor-agent':

@@ -25,7 +25,7 @@ export const createAppContext = (): AppContext => {
   const cliProcessService = new CLIProcessService()
   const cliToolDetectorService = new CLIToolDetectorService()
   const cliToolConfigService = new CLIToolConfigService()
-  const cliSessionService = new CliSessionService(cliToolConfigService)
+  const cliSessionService = new CliSessionService(cliToolConfigService, databaseService)
   const terminalService = new TerminalService()
   const editorService = new EditorService()
   const pipelineService = new PipelineService()

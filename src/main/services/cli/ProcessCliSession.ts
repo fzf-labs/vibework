@@ -43,6 +43,10 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
   private detectStderrCompletion?: CompletionDetector
   private stderrNormalizer?: StderrNormalizer
   private normalizer?: LogNormalizerService
+  private hasStdout = false
+  private hasStderr = false
+  private noOutputTimer?: NodeJS.Timeout
+  private stillRunningTimer?: NodeJS.Timeout
 
   constructor(
     sessionId: string,
@@ -65,13 +69,59 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     this.stderrNormalizer = stderrNormalizer
     this.msgStore = msgStore ?? new MsgStoreService(undefined, taskId, sessionId, projectId)
 
-    this.process = safeSpawn(commandSpec.command, commandSpec.args, {
+    try {
+      this.process = safeSpawn(commandSpec.command, commandSpec.args, {
+        cwd: commandSpec.cwd,
+        env: commandSpec.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        allowlist: config.commandAllowlist,
+        label: 'ProcessCliSession'
+      })
+    } catch (error) {
+      console.error('[ProcessCliSession] spawn_failed', {
+        sessionId,
+        toolId,
+        command: commandSpec.command,
+        argsCount: commandSpec.args.length,
+        cwd: commandSpec.cwd,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      throw error
+    }
+
+    this.log('spawned', {
+      pid: this.process.pid,
+      command: commandSpec.command,
+      argsCount: commandSpec.args.length,
       cwd: commandSpec.cwd,
-      env: commandSpec.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      allowlist: config.commandAllowlist,
-      label: 'ProcessCliSession'
+      hasInitialInput: commandSpec.initialInput !== undefined,
+      closeStdinAfterInput: Boolean(commandSpec.closeStdinAfterInput),
+      initSequenceLength: commandSpec.initSequence?.length ?? 0
     })
+
+    this.noOutputTimer = setTimeout(() => {
+      if (!this.hasStdout && !this.hasStderr) {
+        this.log('no_output_yet', {
+          pid: this.process.pid,
+          exitCode: this.process.exitCode,
+          signalCode: this.process.signalCode,
+          killed: this.process.killed,
+          stdinWritable: this.process.stdin?.writable ?? false
+        })
+      }
+    }, 3000)
+
+    this.stillRunningTimer = setTimeout(() => {
+      if (this.status === 'running' && !this.process.killed) {
+        this.log('still_running', {
+          pid: this.process.pid,
+          exitCode: this.process.exitCode,
+          signalCode: this.process.signalCode,
+          hasStdout: this.hasStdout,
+          hasStderr: this.hasStderr
+        })
+      }
+    }, 15000)
 
     this.stdoutBatcher = new DataBatcher((data) => {
       this.msgStore.push({ type: 'stdout', content: data, timestamp: Date.now() })
@@ -84,16 +134,34 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     })
 
     this.process.stdout?.on('data', (data) => {
+      if (!this.hasStdout) {
+        this.hasStdout = true
+        this.clearNoOutputTimer()
+        this.log('stdout_first_chunk', {
+          pid: this.process.pid,
+          bytes: typeof data === 'string' ? data.length : data.byteLength
+        })
+      }
       this.handleStdoutChunk(data)
       this.stdoutBatcher.write(data)
     })
 
     this.process.stderr?.on('data', (data) => {
+      if (!this.hasStderr) {
+        this.hasStderr = true
+        this.clearNoOutputTimer()
+        this.log('stderr_first_chunk', {
+          pid: this.process.pid,
+          bytes: typeof data === 'string' ? data.length : data.byteLength
+        })
+      }
       this.handleStderrChunk(data)
       this.stderrBatcher.write(data)
     })
 
-    this.process.on('close', (code) => {
+    this.process.on('close', (code, signal) => {
+      this.clearNoOutputTimer()
+      this.clearStillRunningTimer()
       this.stdoutBatcher.destroy()
       this.stderrBatcher.destroy()
 
@@ -102,6 +170,8 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
       } else {
         this.status = code === 0 ? 'stopped' : 'error'
       }
+
+      this.log('closed', { pid: this.process.pid, code, signal })
 
       const finishedMsg: LogMsgInput = {
         type: 'finished',
@@ -118,9 +188,15 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     })
 
     this.process.on('error', (error) => {
+      this.clearNoOutputTimer()
+      this.clearStillRunningTimer()
       this.status = 'error'
       this.emit('status', { sessionId, status: this.status })
       this.emit('error', { sessionId, error })
+      this.log('process_error', {
+        pid: this.process.pid,
+        error: error instanceof Error ? error.message : String(error)
+      })
     })
 
     if (commandSpec.initialInput !== undefined) {
@@ -144,6 +220,35 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
       } catch {
         // ignore
       }
+    }
+  }
+
+  private log(message: string, meta?: Record<string, unknown>): void {
+    if (meta) {
+      console.info('[ProcessCliSession]', message, {
+        sessionId: this.sessionId,
+        toolId: this.toolId,
+        ...meta
+      })
+    } else {
+      console.info('[ProcessCliSession]', message, {
+        sessionId: this.sessionId,
+        toolId: this.toolId
+      })
+    }
+  }
+
+  private clearNoOutputTimer(): void {
+    if (this.noOutputTimer) {
+      clearTimeout(this.noOutputTimer)
+      this.noOutputTimer = undefined
+    }
+  }
+
+  private clearStillRunningTimer(): void {
+    if (this.stillRunningTimer) {
+      clearTimeout(this.stillRunningTimer)
+      this.stillRunningTimer = undefined
     }
   }
 

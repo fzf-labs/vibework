@@ -10,6 +10,8 @@ export interface DbTask {
   base_branch: string | null
   workspace_path: string | null
   cli_tool_id: string | null
+  agent_tool_config_id: string | null
+  agent_tool_config_snapshot: string | null
   workflow_template_id: string | null
   cost: number | null
   duration: number | null
@@ -29,6 +31,8 @@ export interface CreateTaskInput {
   base_branch?: string
   workspace_path?: string
   cli_tool_id?: string
+  agent_tool_config_id?: string
+  agent_tool_config_snapshot?: string
   workflow_template_id?: string
 }
 
@@ -42,6 +46,8 @@ export interface UpdateTaskInput {
   base_branch?: string | null
   workspace_path?: string | null
   cli_tool_id?: string | null
+  agent_tool_config_id?: string | null
+  agent_tool_config_snapshot?: string | null
   workflow_template_id?: string | null
   cost?: number | null
   duration?: number | null

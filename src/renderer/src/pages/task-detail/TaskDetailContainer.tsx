@@ -140,6 +140,7 @@ export function TaskDetailContainer() {
                 taskId={taskId ?? null}
                 sessionId={cliSessionId}
                 toolId={cliToolId}
+                configId={detail.agentToolConfigId}
                 workingDir={detail.workingDir}
                 prompt={detail.taskPrompt}
                 cliSessionRef={detail.cliSessionRef}
@@ -182,9 +183,12 @@ export function TaskDetailContainer() {
         setEditPrompt={detail.setEditPrompt}
         editCliToolId={detail.editCliToolId}
         setEditCliToolId={detail.setEditCliToolId}
+        editCliConfigId={detail.editCliConfigId}
+        setEditCliConfigId={detail.setEditCliConfigId}
         editPipelineTemplateId={detail.editPipelineTemplateId}
         setEditPipelineTemplateId={detail.setEditPipelineTemplateId}
         cliTools={detail.cliTools}
+        cliConfigs={detail.cliConfigs}
         pipelineTemplates={detail.pipelineTemplates}
         onSaveEdit={detail.handleSaveEdit}
         isDeleteOpen={detail.isDeleteOpen}

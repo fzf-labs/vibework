@@ -13,9 +13,10 @@ export class TaskRepository {
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
         id, session_id, title, prompt, status, project_id, worktree_path, branch_name,
-        base_branch, workspace_path, cli_tool_id, workflow_template_id, created_at, updated_at
+        base_branch, workspace_path, cli_tool_id, agent_tool_config_id, agent_tool_config_snapshot,
+        workflow_template_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     stmt.run(
       input.id,
@@ -28,6 +29,8 @@ export class TaskRepository {
       input.base_branch || null,
       input.workspace_path || null,
       input.cli_tool_id || null,
+      input.agent_tool_config_id || null,
+      input.agent_tool_config_snapshot || null,
       input.workflow_template_id || null,
       now,
       now
@@ -107,6 +110,14 @@ export class TaskRepository {
     if (updates.cli_tool_id !== undefined) {
       fields.push('cli_tool_id = ?')
       values.push(updates.cli_tool_id)
+    }
+    if (updates.agent_tool_config_id !== undefined) {
+      fields.push('agent_tool_config_id = ?')
+      values.push(updates.agent_tool_config_id)
+    }
+    if (updates.agent_tool_config_snapshot !== undefined) {
+      fields.push('agent_tool_config_snapshot = ?')
+      values.push(updates.agent_tool_config_snapshot)
     }
     if (updates.workflow_template_id !== undefined) {
       fields.push('workflow_template_id = ?')

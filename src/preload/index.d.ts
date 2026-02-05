@@ -155,7 +155,7 @@ interface CliSessionAPI {
     sessionId: string,
     toolId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
+    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
@@ -269,6 +269,13 @@ interface DatabaseAPI {
   updateTask: (id: string, updates: unknown) => Promise<unknown>
   deleteTask: (id: string) => Promise<boolean>
   getTasksByProjectId: (projectId: string) => Promise<unknown[]>
+  // Agent tool configs
+  listAgentToolConfigs: (toolId?: string) => Promise<unknown[]>
+  getAgentToolConfig: (id: string) => Promise<unknown>
+  createAgentToolConfig: (input: unknown) => Promise<unknown>
+  updateAgentToolConfig: (id: string, updates: unknown) => Promise<unknown>
+  deleteAgentToolConfig: (id: string) => Promise<unknown>
+  setDefaultAgentToolConfig: (id: string) => Promise<unknown>
   // Workflow template
   getGlobalWorkflowTemplates: () => Promise<unknown[]>
   getWorkflowTemplatesByProject: (projectId: string) => Promise<unknown[]>
@@ -366,6 +373,8 @@ interface TaskWithWorktree {
   baseBranch?: string | null
   workspacePath?: string | null
   cliToolId?: string | null
+  agentToolConfigId?: string | null
+  agentToolConfigSnapshot?: string | null
   workflowTemplateId?: string | null
   cost: number | null
   duration: number | null
@@ -385,6 +394,8 @@ interface TaskAPI {
     worktreeBranchPrefix?: string
     worktreeRootPath?: string
     cliToolId?: string
+    agentToolConfigId?: string
+    agentToolConfigSnapshot?: string
     workflowTemplateId?: string
   }) => Promise<{ success: boolean; data?: TaskWithWorktree; error?: string }>
   get: (id: string) => Promise<TaskWithWorktree | null>

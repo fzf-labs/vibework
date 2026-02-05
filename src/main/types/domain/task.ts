@@ -8,6 +8,8 @@ export interface CreateTaskOptions {
   worktreeBranchPrefix?: string
   worktreeRootPath?: string
   cliToolId?: string
+  agentToolConfigId?: string
+  agentToolConfigSnapshot?: string
   workflowTemplateId?: string
 }
 
@@ -23,6 +25,8 @@ export interface TaskWithWorktree {
   baseBranch: string | null
   workspacePath: string | null
   cliToolId: string | null
+  agentToolConfigId: string | null
+  agentToolConfigSnapshot: string | null
   workflowTemplateId: string | null
   cost: number | null
   duration: number | null

@@ -2,6 +2,7 @@ import { CliAdapter, CliSessionHandle, CliStartOptions } from '../types'
 import { LogNormalizerService } from '../../LogNormalizerService'
 import { ProcessCliAdapter } from './ProcessCliAdapter'
 import { failureSignal, parseJsonLine, successSignal } from './completion'
+import { asBoolean, asStringArray, pushFlag, pushFlagWithValue, pushRepeatableFlag } from './config-utils'
 
 export class OpencodeAdapter implements CliAdapter {
   id = 'opencode'
@@ -13,7 +14,26 @@ export class OpencodeAdapter implements CliAdapter {
         id: this.id,
         buildCommand: (options: CliStartOptions) => {
           const command = options.executablePath || 'opencode'
+          const toolConfig = options.toolConfig ?? {}
           const args: string[] = []
+
+          pushFlagWithValue(args, '--model', (toolConfig as Record<string, unknown>).model)
+          pushFlag(args, '--continue', asBoolean((toolConfig as Record<string, unknown>).continue))
+          pushFlagWithValue(args, '--session', (toolConfig as Record<string, unknown>).session)
+          pushFlagWithValue(args, '--prompt', (toolConfig as Record<string, unknown>).prompt)
+          pushFlagWithValue(args, '--agent', (toolConfig as Record<string, unknown>).agent)
+          pushFlag(args, '--print-logs', asBoolean((toolConfig as Record<string, unknown>).printLogs))
+          pushFlagWithValue(args, '--log-level', (toolConfig as Record<string, unknown>).logLevel)
+          pushFlagWithValue(args, '--port', (toolConfig as Record<string, unknown>).port)
+          pushFlagWithValue(args, '--hostname', (toolConfig as Record<string, unknown>).hostname)
+          pushFlag(args, '--mdns', asBoolean((toolConfig as Record<string, unknown>).mdns))
+          pushFlagWithValue(args, '--mdns-domain', (toolConfig as Record<string, unknown>).mdnsDomain)
+          pushRepeatableFlag(args, '--cors', (toolConfig as Record<string, unknown>).cors)
+
+          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+          if (additionalArgs) {
+            args.push(...additionalArgs)
+          }
           return {
             command,
             args,

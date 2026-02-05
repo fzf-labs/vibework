@@ -41,6 +41,31 @@ export const db = {
     return window.api.task.delete(id, removeWorktree)
   },
 
+  // ============ Agent Tool Config 操作 ============
+  listAgentToolConfigs: (toolId?: string): Promise<unknown[]> => {
+    return window.api.database.listAgentToolConfigs(toolId) as Promise<unknown[]>
+  },
+
+  getAgentToolConfig: (id: string): Promise<unknown> => {
+    return window.api.database.getAgentToolConfig(id) as Promise<unknown>
+  },
+
+  createAgentToolConfig: (input: unknown): Promise<unknown> => {
+    return window.api.database.createAgentToolConfig(input) as Promise<unknown>
+  },
+
+  updateAgentToolConfig: (id: string, updates: unknown): Promise<unknown> => {
+    return window.api.database.updateAgentToolConfig(id, updates) as Promise<unknown>
+  },
+
+  deleteAgentToolConfig: (id: string): Promise<unknown> => {
+    return window.api.database.deleteAgentToolConfig(id) as Promise<unknown>
+  },
+
+  setDefaultAgentToolConfig: (id: string): Promise<unknown> => {
+    return window.api.database.setDefaultAgentToolConfig(id) as Promise<unknown>
+  },
+
   // ============ Workflow Template 操作 ============
   getGlobalWorkflowTemplates: (): Promise<unknown[]> => {
     return window.api.database.getGlobalWorkflowTemplates() as Promise<unknown[]>

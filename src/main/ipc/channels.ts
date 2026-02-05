@@ -138,6 +138,12 @@ export const IPC_CHANNELS = {
     updateTask: 'db:updateTask',
     deleteTask: 'db:deleteTask',
     getTasksByProjectId: 'db:getTasksByProjectId',
+    listAgentToolConfigs: 'db:listAgentToolConfigs',
+    getAgentToolConfig: 'db:getAgentToolConfig',
+    createAgentToolConfig: 'db:createAgentToolConfig',
+    updateAgentToolConfig: 'db:updateAgentToolConfig',
+    deleteAgentToolConfig: 'db:deleteAgentToolConfig',
+    setDefaultAgentToolConfig: 'db:setDefaultAgentToolConfig',
     getGlobalWorkflowTemplates: 'db:getGlobalWorkflowTemplates',
     getWorkflowTemplatesByProject: 'db:getWorkflowTemplatesByProject',
     getWorkflowTemplate: 'db:getWorkflowTemplate',
@@ -320,7 +326,7 @@ export interface IpcContracts {
   'claudeCode:getSession': IpcContract<[string], unknown>
 
   'cliSession:startSession': IpcContract<
-    [string, string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string }?],
+    [string, string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }?],
     unknown
   >
   'cliSession:stopSession': IpcContract<[string], unknown>
@@ -386,6 +392,12 @@ export interface IpcContracts {
   'db:updateTask': IpcContract<[string, UnknownRecord], unknown>
   'db:deleteTask': IpcContract<[string], unknown>
   'db:getTasksByProjectId': IpcContract<[string], unknown[]>
+  'db:listAgentToolConfigs': IpcContract<[string?], unknown[]>
+  'db:getAgentToolConfig': IpcContract<[string], unknown>
+  'db:createAgentToolConfig': IpcContract<[UnknownRecord], unknown>
+  'db:updateAgentToolConfig': IpcContract<[string, UnknownRecord], unknown>
+  'db:deleteAgentToolConfig': IpcContract<[string], unknown>
+  'db:setDefaultAgentToolConfig': IpcContract<[string], unknown>
   'db:getGlobalWorkflowTemplates': IpcContract<[], unknown[]>
   'db:getWorkflowTemplatesByProject': IpcContract<[string], unknown[]>
   'db:getWorkflowTemplate': IpcContract<[string], unknown>
@@ -453,6 +465,8 @@ export interface IpcContracts {
         worktreeBranchPrefix?: string
         worktreeRootPath?: string
         cliToolId?: string
+        agentToolConfigId?: string
+        agentToolConfigSnapshot?: string
         workflowTemplateId?: string
       }
     ],

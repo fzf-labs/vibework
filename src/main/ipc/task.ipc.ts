@@ -18,6 +18,8 @@ export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcMo
         worktreeBranchPrefix: v.optional(v.string()),
         worktreeRootPath: v.optional(v.string()),
         cliToolId: v.optional(v.string()),
+        agentToolConfigId: v.optional(v.string()),
+        agentToolConfigSnapshot: v.optional(v.string()),
         workflowTemplateId: v.optional(v.string())
       })
     ],

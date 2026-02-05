@@ -24,7 +24,7 @@ const setupMsgStore = async (env: Record<string, string>) => {
   vi.doMock('../../src/main/services/AppPaths', () => ({
     getAppPaths: () => ({
       getProjectSessionsDir: () => sessionRoot,
-      getSessionMessagesFile: (sessionId: string) => join(sessionRoot, `${sessionId}.jsonl`),
+      getTaskMessagesFile: (taskId: string) => join(sessionRoot, `${taskId}.jsonl`),
       getSessionsDir: () => sessionRoot,
       getLegacySessionMessagesFile: (sessionId: string) =>
         join(sessionRoot, sessionId, 'messages.jsonl')
@@ -57,8 +57,8 @@ describe('MsgStoreService', () => {
       VIBEWORK_LOG_MAX_FILES: '1'
     })
 
-    const store = new MsgStoreService(undefined, 'session-a', 'project')
-    const logFilePath = join(sessionRoot, 'session-a.jsonl')
+    const store = new MsgStoreService(undefined, 'task-a', 'session-a', 'project')
+    const logFilePath = join(sessionRoot, 'task-a.jsonl')
 
     store.push({ type: 'stdout', content: 'hello' } as any)
     expect(existsSync(logFilePath)).toBe(false)
@@ -80,8 +80,8 @@ describe('MsgStoreService', () => {
       VIBEWORK_LOG_MAX_FILES: '2'
     })
 
-    const store = new MsgStoreService(undefined, 'session-b', 'project')
-    const logFilePath = join(sessionRoot, 'session-b.jsonl')
+    const store = new MsgStoreService(undefined, 'task-b', 'session-b', 'project')
+    const logFilePath = join(sessionRoot, 'task-b.jsonl')
 
     for (let i = 0; i < 10; i += 1) {
       store.push({ type: 'stdout', content: 'x'.repeat(80) } as any)

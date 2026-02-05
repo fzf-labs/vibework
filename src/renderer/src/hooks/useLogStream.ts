@@ -88,18 +88,27 @@ export interface UseLogStreamResult {
   resubscribe: (options?: { clear?: boolean; includeHistory?: boolean }) => Promise<void>
 }
 
+export interface UseLogStreamOptions {
+  source?: 'session' | 'file'
+  pollIntervalMs?: number
+}
+
 /**
  * 日志流订阅 Hook
  */
 export function useLogStream(
   sessionId: string | null,
-  taskId?: string | null
+  taskId?: string | null,
+  options?: UseLogStreamOptions
 ): UseLogStreamResult {
+  const source = options?.source ?? 'session'
+  const pollIntervalMs = options?.pollIntervalMs ?? 1000
   const [rawLogs, setRawLogs] = useState<LogMsg[]>([])
   const [normalizedLogs, setNormalizedLogs] = useState<NormalizedEntry[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const pollTimerRef = useRef<number | null>(null)
   const sessionIdRef = useRef<string | null>(sessionId)
   const taskIdRef = useRef<string | null>(taskId ?? null)
   const seenIdsRef = useRef<Set<string>>(new Set())
@@ -122,8 +131,12 @@ export function useLogStream(
   const processMessages = useCallback((messages: LogMsg[]) => {
     const raw: LogMsg[] = []
     const normalized: NormalizedEntry[] = []
+    const currentSessionId = sessionIdRef.current
 
     for (const msg of messages) {
+      if (source !== 'file' && currentSessionId && msg.session_id && msg.session_id !== currentSessionId) {
+        continue
+      }
       if (msg.id) {
         if (seenIdsRef.current.has(msg.id)) {
           continue
@@ -139,6 +152,23 @@ export function useLogStream(
 
     setRawLogs((prev) => [...prev, ...raw])
     setNormalizedLogs((prev) => [...prev, ...normalized])
+  }, [source])
+
+  const setLogsFromHistory = useCallback((messages: LogMsg[]) => {
+    const raw: LogMsg[] = []
+    const normalized: NormalizedEntry[] = []
+
+    for (const msg of messages) {
+      if (msg.type === 'stdout' || msg.type === 'stderr') {
+        raw.push(msg)
+      } else if (msg.type === 'normalized' && msg.entry) {
+        normalized.push(normalizeLogEntry(msg.entry))
+      }
+    }
+
+    setRawLogs(raw)
+    setNormalizedLogs(normalized)
+    seenIdsRef.current = new Set(messages.map((msg) => msg.id).filter(Boolean) as string[])
   }, [])
 
   const subscribe = useCallback(async (options?: { includeHistory?: boolean }) => {
@@ -153,15 +183,21 @@ export function useLogStream(
       // 获取历史日志
       const includeHistory = options?.includeHistory ?? true
       if (includeHistory && currentTaskId) {
-        console.log('[useLogStream] Getting history for:', { taskId: currentTaskId, sessionId: currentSessionId })
-        const history = await window.api.logStream.getHistory(currentTaskId, currentSessionId ?? null)
+        const historySessionId = source === 'file' ? null : currentSessionId ?? null
+        console.log('[useLogStream] Getting history for:', { taskId: currentTaskId, sessionId: historySessionId })
+        const history = await window.api.logStream.getHistory(currentTaskId, historySessionId)
         console.log('[useLogStream] History received:', history?.length || 0, 'messages')
         if (Array.isArray(history) && history.length > 0) {
-          processMessages(history as LogMsg[])
+          console.log('[useLogStream] History sample:', history[history.length - 1])
+          if (source === 'file') {
+            setLogsFromHistory(history as LogMsg[])
+          } else {
+            processMessages(history as LogMsg[])
+          }
         }
       }
 
-      if (!currentSessionId) {
+      if (source === 'file' || !currentSessionId) {
         setIsConnected(false)
         return
       }
@@ -180,7 +216,7 @@ export function useLogStream(
       console.error('[useLogStream] Subscribe error:', err)
       setError(err instanceof Error ? err.message : 'Unknown error')
     }
-  }, [processMessages])
+  }, [processMessages, source])
 
   const resubscribe = useCallback(
     async (options?: { clear?: boolean; includeHistory?: boolean }) => {
@@ -209,7 +245,7 @@ export function useLogStream(
       return
     }
 
-    if (sessionId) {
+    if (source === 'session' && sessionId) {
       // 监听实时消息
       const removeListener = window.api.logStream.onMessage((sid, msg) => {
         if (sid === sessionId) {
@@ -222,6 +258,21 @@ export function useLogStream(
     // 初始订阅（包含历史）
     subscribe()
 
+      if (source === 'file' && taskId) {
+        const poll = async () => {
+          try {
+            const history = await window.api.logStream.getHistory(taskId, null)
+            if (Array.isArray(history) && history.length > 0) {
+              console.log('[useLogStream] File poll sample:', history[history.length - 1])
+              setLogsFromHistory(history as LogMsg[])
+            }
+          } catch (err) {
+            console.error('[useLogStream] File poll error:', err)
+          }
+        }
+      pollTimerRef.current = window.setInterval(poll, pollIntervalMs)
+    }
+
     return () => {
       if (sessionId) {
         // 取消订阅
@@ -231,9 +282,13 @@ export function useLogStream(
           unsubscribeRef.current = null
         }
       }
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
       setIsConnected(false)
     }
-  }, [sessionId, taskId, processMessages, subscribe])
+  }, [processMessages, pollIntervalMs, sessionId, source, subscribe, taskId])
 
   return {
     rawLogs,

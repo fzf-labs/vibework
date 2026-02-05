@@ -42,6 +42,8 @@ export interface Task {
   base_branch?: string | null; // Base branch used to create worktree
   workspace_path?: string | null; // Actual workspace path for the task
   cli_tool_id?: string | null; // Selected CLI tool id
+  agent_tool_config_id?: string | null; // Selected agent tool config
+  agent_tool_config_snapshot?: string | null; // Snapshot of config json
   workflow_template_id?: string | null; // Selected workflow template
   pipeline_template_id?: string | null; // Selected pipeline template
   created_at: string;
@@ -60,6 +62,8 @@ export interface CreateTaskInput {
   base_branch?: string | null;
   workspace_path?: string | null;
   cli_tool_id?: string | null;
+  agent_tool_config_id?: string | null;
+  agent_tool_config_snapshot?: string | null;
   workflow_template_id?: string | null;
   pipeline_template_id?: string | null;
 }
@@ -77,6 +81,19 @@ export interface UpdateTaskInput {
   base_branch?: string | null;
   workspace_path?: string | null;
   cli_tool_id?: string | null;
+  agent_tool_config_id?: string | null;
+  agent_tool_config_snapshot?: string | null;
   workflow_template_id?: string | null;
   pipeline_template_id?: string | null;
+}
+
+export interface AgentToolConfig {
+  id: string;
+  tool_id: string;
+  name: string;
+  description?: string | null;
+  config_json: string;
+  is_default: number;
+  created_at: string;
+  updated_at: string;
 }

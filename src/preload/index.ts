@@ -189,7 +189,7 @@ const api = {
       sessionId: string,
       toolId: string,
       workdir: string,
-      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
+      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }
     ) => invoke(IPC_CHANNELS.cliSession.startSession, sessionId, toolId, workdir, options),
     stopSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.stopSession, sessionId),
     sendInput: (sessionId: string, input: string) =>
@@ -225,7 +225,7 @@ const api = {
     subscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.subscribe, sessionId),
     unsubscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.unsubscribe, sessionId),
     getHistory: (taskId: string, sessionId?: string | null) =>
-      invoke(IPC_CHANNELS.logStream.getHistory, taskId, sessionId ?? null),
+      invoke(IPC_CHANNELS.logStream.getHistory, taskId, sessionId || null),
     onMessage: (callback: (sessionId: string, msg: unknown) => void) => {
       const listener = (_: unknown, sessionId: string, msg: unknown) => callback(sessionId, msg)
       ipcRenderer.on(IPC_EVENTS.logStream.message, listener)
@@ -325,6 +325,18 @@ const api = {
     deleteTask: (id: string) => invoke(IPC_CHANNELS.database.deleteTask, id),
     getTasksByProjectId: (projectId: string) =>
       invoke(IPC_CHANNELS.database.getTasksByProjectId, projectId),
+    listAgentToolConfigs: (toolId?: string) =>
+      invoke(IPC_CHANNELS.database.listAgentToolConfigs, toolId),
+    getAgentToolConfig: (id: string) =>
+      invoke(IPC_CHANNELS.database.getAgentToolConfig, id),
+    createAgentToolConfig: (input: unknown) =>
+      invoke(IPC_CHANNELS.database.createAgentToolConfig, input),
+    updateAgentToolConfig: (id: string, updates: unknown) =>
+      invoke(IPC_CHANNELS.database.updateAgentToolConfig, id, updates),
+    deleteAgentToolConfig: (id: string) =>
+      invoke(IPC_CHANNELS.database.deleteAgentToolConfig, id),
+    setDefaultAgentToolConfig: (id: string) =>
+      invoke(IPC_CHANNELS.database.setDefaultAgentToolConfig, id),
     // Workflow template operations
     getGlobalWorkflowTemplates: () => invoke(IPC_CHANNELS.database.getGlobalWorkflowTemplates),
     getWorkflowTemplatesByProject: (projectId: string) =>
@@ -420,6 +432,8 @@ const api = {
       worktreeBranchPrefix?: string
       worktreeRootPath?: string
       cliToolId?: string
+      agentToolConfigId?: string
+      agentToolConfigSnapshot?: string
       workflowTemplateId?: string
     }) => invoke(IPC_CHANNELS.task.create, options),
     get: (id: string) => invoke(IPC_CHANNELS.task.get, id),

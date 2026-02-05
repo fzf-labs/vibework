@@ -22,7 +22,8 @@ export const registerCliSessionIpc = ({
           prompt: v.optional(v.string({ allowEmpty: true })),
           model: v.optional(v.string()),
           projectId: v.optional(v.nullable(v.string({ allowEmpty: true }))),
-          taskId: v.optional(v.string())
+          taskId: v.optional(v.string()),
+          configId: v.optional(v.nullable(v.string({ allowEmpty: true })))
         })
       )
     ],
@@ -31,7 +32,7 @@ export const registerCliSessionIpc = ({
       sessionId,
       toolId,
       workdir,
-      options?: { prompt?: string; model?: string; projectId?: string | null; taskId?: string }
+      options?: { prompt?: string; model?: string; projectId?: string | null; taskId?: string; configId?: string | null }
     ) => {
       const task = options?.taskId ? databaseService.getTask(options.taskId) : null
       const projectId =
@@ -44,7 +45,8 @@ export const registerCliSessionIpc = ({
         undefined,
         options?.model,
         projectId,
-        options?.taskId
+        options?.taskId,
+        options?.configId ?? null
       )
     }
   )

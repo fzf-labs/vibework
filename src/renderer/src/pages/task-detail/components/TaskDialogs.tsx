@@ -20,6 +20,11 @@ type PipelineTemplateOption = {
   name: string;
 };
 
+type AgentToolConfigOption = {
+  id: string;
+  name: string;
+};
+
 interface TaskDialogsProps {
   t: LanguageStrings;
   isEditOpen: boolean;
@@ -28,9 +33,12 @@ interface TaskDialogsProps {
   setEditPrompt: (value: string) => void;
   editCliToolId: string;
   setEditCliToolId: (value: string) => void;
+  editCliConfigId: string;
+  setEditCliConfigId: (value: string) => void;
   editPipelineTemplateId: string;
   setEditPipelineTemplateId: (value: string) => void;
   cliTools: CLIToolInfo[];
+  cliConfigs: AgentToolConfigOption[];
   pipelineTemplates: PipelineTemplateOption[];
   onSaveEdit: () => void;
   isDeleteOpen: boolean;
@@ -46,9 +54,12 @@ export function TaskDialogs({
   setEditPrompt,
   editCliToolId,
   setEditCliToolId,
+  editCliConfigId,
+  setEditCliConfigId,
   editPipelineTemplateId,
   setEditPipelineTemplateId,
   cliTools,
+  cliConfigs,
   pipelineTemplates,
   onSaveEdit,
   isDeleteOpen,
@@ -94,6 +105,35 @@ export function TaskDialogs({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {t.task.createCliConfigLabel || 'CLI 配置项'}
+              </label>
+              <select
+                value={editCliConfigId}
+                onChange={(e) => setEditCliConfigId(e.target.value)}
+                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
+                disabled={!editCliToolId || cliConfigs.length === 0}
+              >
+                <option value="">{t.task.createCliConfigPlaceholder || '请选择 CLI 配置项'}</option>
+                {cliConfigs.map((config) => (
+                  <option key={config.id} value={config.id}>
+                    {config.name}
+                  </option>
+                ))}
+              </select>
+              {!editCliToolId && (
+                <p className="text-muted-foreground text-xs">
+                  {t.task.createCliConfigSelectTool || '请先选择 CLI 工具'}
+                </p>
+              )}
+              {editCliToolId && cliConfigs.length === 0 && (
+                <p className="text-amber-500 text-xs">
+                  {t.task.createCliConfigEmpty || '请先创建 CLI 配置项'}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
