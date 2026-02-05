@@ -264,7 +264,7 @@ export function useTaskDetail({
     try {
       await db.deleteTask(taskId);
       setIsDeleteOpen(false);
-      navigate('/');
+      navigate('/board', { replace: true });
     } catch (error) {
       console.error('Failed to delete task:', error);
     }

@@ -9,7 +9,9 @@ import {
   Wrench,
   CheckCircle,
   User,
-  Bot
+  Bot,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 import { ToolCallRenderer } from './ToolCallRenderer'
 
@@ -76,6 +78,7 @@ function formatTime(timestamp: number): string {
 function LogEntry({ entry }: { entry: NormalizedEntry }) {
   const config = TYPE_CONFIG[entry.type] || TYPE_CONFIG.system_message
   const Icon = config.icon
+  const [expanded, setExpanded] = useState(false)
 
   const subtitle = useMemo(() => {
     if (entry.metadata?.toolName) return entry.metadata.toolName
@@ -83,6 +86,100 @@ function LogEntry({ entry }: { entry: NormalizedEntry }) {
     if (entry.metadata?.command) return entry.metadata.command
     return null
   }, [entry.metadata])
+
+  const content = entry.content ?? ''
+  const lines = useMemo(() => content.split('\n'), [content])
+  const preview = lines[0] ?? ''
+  const isLong = content.length > 160 || lines.length > 1
+  const hasMeta = entry.metadata && Object.keys(entry.metadata).length > 0
+  const isPanelType =
+    entry.type === 'system_message' || entry.type === 'error' || entry.type === 'tool_result'
+  const hasDetails = isLong || hasMeta
+
+  const statusBadge = useMemo(() => {
+    const status = entry.metadata?.status
+    const exitCode = entry.metadata?.exitCode
+    if (status === 'failed' || (typeof exitCode === 'number' && exitCode !== 0)) return 'ERROR'
+    if (status === 'success' || exitCode === 0) return 'OK'
+    return null
+  }, [entry.metadata])
+
+  if (isPanelType) {
+    return (
+      <div className="rounded-md border border-border/60 bg-background">
+        <button
+          onClick={() => hasDetails && setExpanded((prev) => !prev)}
+          className={cn(
+            'flex w-full items-center gap-2 px-3 py-2 transition-colors',
+            hasDetails ? 'hover:bg-accent/40' : 'cursor-default'
+          )}
+          type="button"
+        >
+          {hasDetails ? (
+            expanded ? (
+              <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+            )
+          ) : (
+            <span className="w-4 shrink-0" />
+          )}
+
+          <Icon className={cn('size-4 shrink-0', config.color)} />
+
+          <span className="text-xs font-medium shrink-0">{config.label}</span>
+
+          {subtitle && (
+            <span className="text-xs text-muted-foreground truncate font-mono">{subtitle}</span>
+          )}
+
+          <span className="flex-1 truncate text-left text-xs text-muted-foreground">
+            {preview}
+          </span>
+
+          {statusBadge && (
+            <span
+              className={cn(
+                'ml-1 rounded border px-1.5 py-0.5 text-[10px]',
+                statusBadge === 'ERROR'
+                  ? 'border-red-500/30 text-red-500'
+                  : 'border-emerald-500/30 text-emerald-600'
+              )}
+            >
+              {statusBadge}
+            </span>
+          )}
+
+          <span className="text-[10px] text-muted-foreground/70 ml-auto shrink-0">
+            {formatTime(entry.timestamp)}
+          </span>
+        </button>
+
+        {expanded && (
+          <div className="border-t border-border px-3 py-2 space-y-2">
+            <div className="text-sm text-foreground whitespace-pre-wrap break-words">
+              {content}
+            </div>
+            {entry.metadata?.exitCode !== undefined && (
+              <div
+                className={cn(
+                  'text-xs font-medium',
+                  entry.metadata.exitCode === 0 ? 'text-emerald-600' : 'text-red-600'
+                )}
+              >
+                Exit code: {entry.metadata.exitCode}
+              </div>
+            )}
+            {hasMeta && (
+              <pre className="text-xs font-mono bg-muted/30 rounded-sm p-2 overflow-auto max-h-40 text-muted-foreground whitespace-pre-wrap break-all">
+                {JSON.stringify(entry.metadata, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex gap-3 py-2 px-3 hover:bg-accent/50 rounded-md transition-colors">
@@ -98,18 +195,8 @@ function LogEntry({ entry }: { entry: NormalizedEntry }) {
           <span className="text-xs text-muted-foreground/70 ml-auto">{formatTime(entry.timestamp)}</span>
         </div>
         <div className="text-sm text-foreground whitespace-pre-wrap break-words">
-          {entry.content}
+          {content}
         </div>
-        {entry.metadata?.exitCode !== undefined && (
-          <div
-            className={cn(
-              'text-xs mt-1 font-medium',
-              entry.metadata.exitCode === 0 ? 'text-emerald-600' : 'text-red-600'
-            )}
-          >
-            Exit code: {entry.metadata.exitCode}
-          </div>
-        )}
       </div>
     </div>
   )

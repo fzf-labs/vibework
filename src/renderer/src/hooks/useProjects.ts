@@ -82,6 +82,17 @@ export function useProjects() {
     window.dispatchEvent(new CustomEvent(CURRENT_PROJECT_CHANGED_EVENT, { detail: id }));
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    if (projects.length === 0) return;
+    const hasValidCurrent = currentProjectId
+      ? projects.some((project) => project.id === currentProjectId)
+      : false;
+    if (!hasValidCurrent) {
+      setCurrentProjectId(projects[0].id);
+    }
+  }, [loading, projects, currentProjectId, setCurrentProjectId]);
+
   const addProject = useCallback(async (input: CreateProjectInput): Promise<Project> => {
     const result = await window.api.projects.add({
       ...input,
