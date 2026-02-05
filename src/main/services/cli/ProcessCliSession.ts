@@ -1,6 +1,5 @@
 import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
-import { DataBatcher } from '../../utils/data-batcher'
 import { MsgStoreService } from '../MsgStoreService'
 import { CliCompletionSignal, CliSessionHandle, CliSessionStatus } from './types'
 import { LogMsgInput } from '../../types/log'
@@ -32,8 +31,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
   msgStore: MsgStoreService
 
   private process: ChildProcess
-  private stdoutBatcher: DataBatcher
-  private stderrBatcher: DataBatcher
   private stdoutBuffer = ''
   private stderrBuffer = ''
   private completionOverride: CliCompletionSignal | null = null
@@ -115,16 +112,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
       }
     }, 15000)
 
-    this.stdoutBatcher = new DataBatcher((data) => {
-      this.msgStore.push({ type: 'stdout', content: data, timestamp: Date.now() })
-      this.emit('output', { sessionId, type: 'stdout', content: data })
-    })
-
-    this.stderrBatcher = new DataBatcher((data) => {
-      this.msgStore.push({ type: 'stderr', content: data, timestamp: Date.now() })
-      this.emit('output', { sessionId, type: 'stderr', content: data })
-    })
-
     this.process.stdout?.on('data', (data) => {
       if (!this.hasStdout) {
         this.hasStdout = true
@@ -135,7 +122,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         })
       }
       this.handleStdoutChunk(data)
-      this.stdoutBatcher.write(data)
     })
 
     this.process.stderr?.on('data', (data) => {
@@ -148,14 +134,13 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         })
       }
       this.handleStderrChunk(data)
-      this.stderrBatcher.write(data)
     })
 
     this.process.on('close', (code, signal) => {
       this.clearNoOutputTimer()
       this.clearStillRunningTimer()
-      this.stdoutBatcher.destroy()
-      this.stderrBatcher.destroy()
+      this.flushStdoutBuffer()
+      this.flushStderrBuffer()
 
       if (this.completionOverride) {
         this.status = this.completionOverride.status === 'success' ? 'stopped' : 'error'
@@ -291,6 +276,8 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
       }
 
+      this.msgStore.push({ type: 'stdout', content: rawLine, timestamp: Date.now() })
+      this.emit('output', { sessionId: this.sessionId, type: 'stdout', content: rawLine })
     }
   }
 
@@ -312,6 +299,24 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
         this.emit('status', { sessionId: this.sessionId, status: this.status, forced: true })
       }
 
+      this.msgStore.push({ type: 'stderr', content: rawLine, timestamp: Date.now() })
+      this.emit('output', { sessionId: this.sessionId, type: 'stderr', content: rawLine })
     }
+  }
+
+  private flushStdoutBuffer(): void {
+    const remaining = this.stdoutBuffer
+    if (!remaining) return
+    this.stdoutBuffer = ''
+    this.msgStore.push({ type: 'stdout', content: remaining, timestamp: Date.now() })
+    this.emit('output', { sessionId: this.sessionId, type: 'stdout', content: remaining })
+  }
+
+  private flushStderrBuffer(): void {
+    const remaining = this.stderrBuffer
+    if (!remaining) return
+    this.stderrBuffer = ''
+    this.msgStore.push({ type: 'stderr', content: remaining, timestamp: Date.now() })
+    this.emit('output', { sessionId: this.sessionId, type: 'stderr', content: remaining })
   }
 }

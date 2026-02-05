@@ -86,16 +86,12 @@ export class MsgStoreService extends EventEmitter {
   private loadExistingHistory(): void {
     if (!this.logFilePath || !existsSync(this.logFilePath)) return
     try {
-      const content = readFileSync(this.logFilePath, 'utf-8').trim()
+      const content = readFileSync(this.logFilePath, 'utf-8')
       if (!content) return
-      const lines = content.split('\n').filter(Boolean)
+      const lines = content.split('\n').filter((line) => line.length > 0)
       for (const line of lines) {
-        try {
-          const msg = JSON.parse(line) as LogMsg
-          this.addToHistory(msg)
-        } catch {
-          // Ignore malformed line
-        }
+        const msg = this.parsePersistedLine(line, this._taskId ?? undefined, this._sessionId ?? undefined)
+        if (msg) this.addToHistory(msg)
       }
     } catch (error) {
       console.error('[MsgStore] Failed to load existing log history:', error)
@@ -185,7 +181,7 @@ export class MsgStoreService extends EventEmitter {
     this.addToHistory(normalized)
 
     // 持久化到文件
-    this.enqueuePersist(JSON.stringify(normalized) + '\n')
+    this.persistNormalized(normalized)
 
     // 广播给所有监听者
     this.emit('message', normalized)
@@ -223,6 +219,60 @@ export class MsgStoreService extends EventEmitter {
       ...normalizedInput,
       ...base
     } as LogMsg
+  }
+
+  private persistNormalized(msg: LogMsg): void {
+    if (!this.logFilePath) return
+    if (msg.type === 'stdout' || msg.type === 'stderr') {
+      const content = typeof msg.content === 'string' ? msg.content : ''
+      if (!content) return
+      const lines = content.split('\n')
+      for (const line of lines) {
+        if (line.length === 0) continue
+        this.enqueuePersist(line + '\n')
+      }
+      return
+    }
+
+    const payload = { __vw_log: true, ...msg }
+    this.enqueuePersist(JSON.stringify(payload) + '\n')
+  }
+
+  private parsePersistedLine(
+    line: string,
+    taskId?: string,
+    sessionId?: string
+  ): LogMsg | null {
+    if (!line) return null
+    const trimmed = line.trim()
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.__vw_log === true) {
+          const { __vw_log, ...rest } = parsed as Record<string, unknown>
+          return rest as LogMsg
+        }
+        const type = parsed.type
+        const hasSchema = typeof parsed.schema_version === 'string' || typeof parsed.task_id === 'string'
+        if (typeof type === 'string' && hasSchema) {
+          return parsed as LogMsg
+        }
+      }
+    } catch {
+      // treat as raw stdout
+    }
+
+    const now = Date.now()
+    return {
+      id: newUlid(),
+      type: 'stdout',
+      content: line,
+      timestamp: now,
+      task_id: taskId ?? 'unknown',
+      session_id: sessionId ?? 'unknown',
+      created_at: new Date(now).toISOString(),
+      schema_version: 'v1'
+    }
   }
 
   /**
@@ -278,24 +328,10 @@ export class MsgStoreService extends EventEmitter {
    * 按行分割 stdout 内容，确保 JSON 解析的准确性
    */
   stdoutLinesStream(callback: (line: string) => void): () => void {
-    let lineBuffer = ''
-
     const handleMessage = (msg: LogMsg): void => {
       if (msg.type !== 'stdout') return
-
-      lineBuffer += msg.content
-
-      // 按换行符分割
-      const lines = lineBuffer.split('\n')
-
-      // 最后一个元素可能是不完整的行，保留在缓冲区
-      lineBuffer = lines.pop() || ''
-
-      // 推送完整的行
-      for (const line of lines) {
-        if (line.trim()) {
-          callback(line)
-        }
+      if (typeof msg.content === 'string' && msg.content.trim()) {
+        callback(msg.content)
       }
     }
 
@@ -335,8 +371,41 @@ export class MsgStoreService extends EventEmitter {
 
     try {
       const content = readFileSync(logFilePath, 'utf-8')
-      const lines = content.trim().split('\n').filter(Boolean)
-      return lines.map((line) => JSON.parse(line) as LogMsg)
+      if (!content) return []
+      const lines = content.split('\n').filter((line) => line.length > 0)
+      return lines
+        .map((line) => {
+          if (!line) return null
+          const trimmed = line.trim()
+          try {
+            const parsed = JSON.parse(trimmed) as Record<string, unknown>
+            if (parsed && typeof parsed === 'object') {
+              if (parsed.__vw_log === true) {
+                const { __vw_log, ...rest } = parsed as Record<string, unknown>
+                return rest as LogMsg
+              }
+              const type = parsed.type
+              const hasSchema = typeof parsed.schema_version === 'string' || typeof parsed.task_id === 'string'
+              if (typeof type === 'string' && hasSchema) {
+                return parsed as LogMsg
+              }
+            }
+          } catch {
+            // treat as raw stdout
+          }
+          const now = Date.now()
+          return {
+            id: newUlid(),
+            type: 'stdout',
+            content: line,
+            timestamp: now,
+            task_id: taskId,
+            session_id: 'unknown',
+            created_at: new Date(now).toISOString(),
+            schema_version: 'v1'
+          } as LogMsg
+        })
+        .filter((msg): msg is LogMsg => Boolean(msg))
     } catch (error) {
       console.error('[MsgStore] Failed to load log file:', error)
       return []
