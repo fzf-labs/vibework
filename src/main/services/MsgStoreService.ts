@@ -15,6 +15,7 @@ export class MsgStoreService extends EventEmitter {
   private history: StoredMsg[] = []
   private totalBytes = 0
   private config: MsgStoreConfig
+  private _taskId: string | null = null
   private _sessionId: string | null = null
   private logFilePath: string | null = null
   private pendingWrites: string[] = []
@@ -26,17 +27,28 @@ export class MsgStoreService extends EventEmitter {
   private logMaxFileBytes = config.log.rotation.maxFileBytes
   private logMaxFiles = config.log.rotation.maxFiles
 
-  constructor(config?: Partial<MsgStoreConfig>, sessionId?: string, projectId?: string | null) {
+  constructor(
+    config?: Partial<MsgStoreConfig>,
+    taskId?: string,
+    sessionId?: string,
+    projectId?: string | null
+  ) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
+    if (taskId) {
+      this._taskId = taskId
+    }
     if (sessionId) {
       this._sessionId = sessionId
+    }
+    const logKey = taskId || sessionId
+    if (logKey) {
       const appPaths = getAppPaths()
       const projectDir = appPaths.getProjectSessionsDir(projectId)
       if (!existsSync(projectDir)) {
         mkdirSync(projectDir, { recursive: true })
       }
-      this.logFilePath = appPaths.getSessionMessagesFile(sessionId, projectId)
+      this.logFilePath = appPaths.getTaskMessagesFile(logKey, projectId)
       this.loadExistingHistory()
     }
   }
@@ -186,7 +198,12 @@ export class MsgStoreService extends EventEmitter {
       : msg
 
     const sessionId = normalizedInput.session_id ?? this._sessionId ?? 'unknown'
-    const taskId = normalizedInput.task_id ?? sessionId
+    const taskId =
+      normalizedInput.task_id ??
+      this._taskId ??
+      normalizedInput.session_id ??
+      this._sessionId ??
+      'unknown'
     const createdAt = normalizedInput.created_at
       ? normalizedInput.created_at
       : normalizedInput.timestamp
@@ -288,12 +305,12 @@ export class MsgStoreService extends EventEmitter {
   /**
    * 从文件加载历史日志（静态方法）
    */
-  static loadFromFile(sessionId: string, projectId?: string | null): LogMsg[] {
+  static loadFromFile(taskId: string, projectId?: string | null): LogMsg[] {
     const appPaths = getAppPaths()
     const candidatePaths: string[] = []
 
     if (projectId !== undefined) {
-      candidatePaths.push(appPaths.getSessionMessagesFile(sessionId, projectId))
+      candidatePaths.push(appPaths.getTaskMessagesFile(taskId, projectId))
     }
 
     if (!projectId) {
@@ -303,7 +320,7 @@ export class MsgStoreService extends EventEmitter {
         for (const entry of entries) {
           if (!entry.isDirectory()) continue
           candidatePaths.push(
-            appPaths.getSessionMessagesFile(sessionId, entry.name)
+            appPaths.getTaskMessagesFile(taskId, entry.name)
           )
         }
       } catch {

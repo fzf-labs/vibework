@@ -43,7 +43,7 @@ export class DatabaseConnection {
     db.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL UNIQUE,
+        session_id TEXT UNIQUE,
         title TEXT NOT NULL,
         prompt TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'todo',

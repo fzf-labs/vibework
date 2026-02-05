@@ -55,7 +55,8 @@ export class CliSessionService extends EventEmitter {
     prompt?: string,
     env?: NodeJS.ProcessEnv,
     model?: string,
-    projectId?: string | null
+    projectId?: string | null,
+    taskId?: string
   ): Promise<void> {
     if (this.sessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} already exists`)
@@ -70,17 +71,20 @@ export class CliSessionService extends EventEmitter {
     const executablePath = typeof toolConfig.executablePath === 'string' ? toolConfig.executablePath : undefined
 
     const pendingMsgStore = this.pendingMsgStores.get(sessionId)
+    const msgStore =
+      pendingMsgStore ?? new MsgStoreService(undefined, taskId, sessionId, projectId)
     const handle = await adapter.startSession({
       sessionId,
       toolId,
       workdir,
+      taskId,
       projectId,
       prompt,
       env,
       executablePath,
       toolConfig,
       model,
-      msgStore: pendingMsgStore
+      msgStore
     } as CliStartOptions)
 
     this.sessions.set(sessionId, {
@@ -165,21 +169,32 @@ export class CliSessionService extends EventEmitter {
     return msgStore.subscribe(callback)
   }
 
-  getSessionLogHistory(sessionId: string): LogMsg[] {
-    const msgStore = this.getSessionMsgStore(sessionId)
+  getSessionLogHistory(sessionId?: string | null, taskId?: string | null): LogMsg[] {
+    const msgStore = sessionId ? this.getSessionMsgStore(sessionId) : undefined
     if (msgStore) {
       return msgStore.getHistory()
     }
-    return MsgStoreService.loadFromFile(sessionId)
+    if (taskId) {
+      return MsgStoreService.loadFromFile(taskId)
+    }
+    if (sessionId) {
+      return MsgStoreService.loadFromFile(sessionId)
+    }
+    return []
   }
 
-  appendSessionLog(sessionId: string, msg: LogMsgInput, projectId?: string | null): void {
+  appendSessionLog(
+    taskId: string,
+    sessionId: string,
+    msg: LogMsgInput,
+    projectId?: string | null
+  ): void {
     const msgStore = this.getSessionMsgStore(sessionId)
     if (msgStore) {
       msgStore.push(msg)
       return
     }
-    const pendingStore = new MsgStoreService(undefined, sessionId, projectId)
+    const pendingStore = new MsgStoreService(undefined, taskId, sessionId, projectId)
     this.pendingMsgStores.set(sessionId, pendingStore)
     pendingStore.push(msg)
   }
@@ -193,8 +208,8 @@ export class CliSessionService extends EventEmitter {
     this.configService.saveConfig(toolId, { ...current, ...updates })
   }
 
-  getSessionOutput(sessionId: string): string[] {
-    const history = this.getSessionLogHistory(sessionId)
+  getSessionOutput(sessionId: string, taskId?: string | null): string[] {
+    const history = this.getSessionLogHistory(sessionId, taskId)
     return history
       .filter(msg => msg.type === 'stdout')
       .map(msg => (msg as { content: string }).content)

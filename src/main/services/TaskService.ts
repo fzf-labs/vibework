@@ -4,7 +4,7 @@ import { realpath, rm } from 'fs/promises'
 import { homedir } from 'os'
 import { DatabaseService } from './DatabaseService'
 import { GitService } from './GitService'
-import { newUlid, newUuid } from '../utils/ids'
+import { newUlid } from '../utils/ids'
 import { getAppPaths } from '../app/AppPaths'
 import type { CreateTaskOptions, TaskWithWorktree } from '../types/domain/task'
 
@@ -30,7 +30,6 @@ export class TaskService {
 
   async createTask(options: CreateTaskOptions): Promise<TaskWithWorktree> {
     const taskId = newUlid()
-    const sessionId = newUuid()
     let worktreePath: string | null = null
     let branchName: string | null = null
     let baseBranch: string | null = null
@@ -73,7 +72,7 @@ export class TaskService {
 
     const task = this.db.createTask({
       id: taskId,
-      session_id: sessionId,
+      session_id: null,
       title: options.title.trim(),
       prompt: options.prompt,
       project_id: options.projectId,
@@ -214,8 +213,8 @@ export class TaskService {
 
     const appPaths = getAppPaths()
     try {
-      const sessionDir = appPaths.getSessionDataDir(task.session_id, task.project_id)
-      const sessionLog = appPaths.getSessionMessagesFile(task.session_id, task.project_id)
+      const sessionDir = appPaths.getTaskDataDir(task.id, task.project_id)
+      const sessionLog = appPaths.getTaskMessagesFile(task.id, task.project_id)
       await rm(sessionDir, { recursive: true, force: true })
       await rm(sessionLog, { force: true })
     } catch (error) {
@@ -228,7 +227,7 @@ export class TaskService {
   private mapTask(task: any): TaskWithWorktree {
     return {
       id: task.id,
-      sessionId: task.session_id,
+      sessionId: task.session_id ?? null,
       title: task.title ?? task.prompt,
       prompt: task.prompt,
       status: task.status,

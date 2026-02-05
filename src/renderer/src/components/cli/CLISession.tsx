@@ -7,6 +7,7 @@ import { Play, Square } from 'lucide-react'
 
 interface CLISessionProps {
   sessionId: string
+  taskId?: string | null
   toolId: string
   workdir: string
   prompt?: string
@@ -27,6 +28,7 @@ export interface CLISessionHandle {
 
 export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function CLISession({
   sessionId,
+  taskId,
   toolId,
   workdir,
   prompt,
@@ -38,7 +40,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
 }: CLISessionProps, ref) {
   const [status, setStatus] = useState<CLISessionStatus>('idle')
 
-  const { normalizedLogs, resubscribe } = useLogStream(sessionId)
+  const { normalizedLogs, resubscribe } = useLogStream(sessionId, taskId)
   const logContainerRef = useRef<HTMLDivElement>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
@@ -113,7 +115,10 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
     try {
       const nextPrompt = promptOverride ?? prompt
       setStatus('running')
-      await window.api.cliSession.startSession(sessionId, toolId, workdir, { prompt: nextPrompt })
+      await window.api.cliSession.startSession(sessionId, toolId, workdir, {
+        prompt: nextPrompt,
+        taskId: taskId ?? undefined
+      })
       await resubscribe({ clear: false })
     } catch (error) {
       setStatus('error')

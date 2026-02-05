@@ -254,20 +254,23 @@ export function useAgent(): UseAgentReturn {
         if (task.session_id) {
           setCurrentSessionId(task.session_id);
           sessionIdRef.current = task.session_id;
+        } else {
+          setCurrentSessionId(null);
+          sessionIdRef.current = null;
+        }
 
-          // Compute and set session folder
-          try {
-            const sessionsDir = await getSessionsDir();
-            const projectKey = task.project_id || 'project';
-            const computedSessionFolder = `${sessionsDir}/${projectKey}/${task.session_id}`;
-            setSessionFolder(computedSessionFolder);
-            console.log(
-              '[useAgent] Loaded sessionFolder from task:',
-              computedSessionFolder
-            );
-          } catch (error) {
-            console.error('Failed to compute session folder:', error);
-          }
+        // Compute and set session folder (task-based)
+        try {
+          const sessionsDir = await getSessionsDir();
+          const projectKey = task.project_id || 'project';
+          const computedSessionFolder = `${sessionsDir}/${projectKey}/${task.id}`;
+          setSessionFolder(computedSessionFolder);
+          console.log(
+            '[useAgent] Loaded sessionFolder from task:',
+            computedSessionFolder
+          );
+        } catch (error) {
+          console.error('Failed to compute session folder:', error);
         }
       }
       return task;
@@ -649,15 +652,22 @@ export function useAgent(): UseAgentReturn {
 
       // Compute session folder path
       let computedSessionFolder: string | null = null;
-      if (sessId) {
-        try {
-          const sessionsDir = await getSessionsDir();
-          const projectKey = existingTask?.project_id || 'project';
-          computedSessionFolder = `${sessionsDir}/${projectKey}/${sessId}`;
-          setSessionFolder(computedSessionFolder);
-        } catch (error) {
-          console.error('Failed to compute session folder:', error);
+      try {
+        if (existingTask && !existingTask.session_id) {
+          const updatedTask = await db.updateTask(currentTaskId, { session_id: sessId });
+          if (updatedTask) existingTask = updatedTask;
         }
+      } catch (error) {
+        console.error('[useAgent] Failed to persist session_id:', error);
+      }
+
+      try {
+        const sessionsDir = await getSessionsDir();
+        const projectKey = existingTask?.project_id || 'project';
+        computedSessionFolder = `${sessionsDir}/${projectKey}/${currentTaskId}`;
+        setSessionFolder(computedSessionFolder);
+      } catch (error) {
+        console.error('Failed to compute session folder:', error);
       }
       setTaskId(currentTaskId);
       activeTaskIdRef.current = currentTaskId; // Set as active task for stream isolation

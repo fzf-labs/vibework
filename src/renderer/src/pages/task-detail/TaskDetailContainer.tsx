@@ -137,6 +137,7 @@ export function TaskDetailContainer() {
                 onApprovePlan={approvePlan}
                 onRejectPlan={rejectPlan}
                 isRunning={isRunning}
+                taskId={taskId ?? null}
                 sessionId={cliSessionId}
                 toolId={cliToolId}
                 workingDir={detail.workingDir}

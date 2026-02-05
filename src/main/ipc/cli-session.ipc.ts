@@ -8,7 +8,7 @@ export const registerCliSessionIpc = ({
   services,
   resolveProjectIdForSession
 }: IpcModuleContext): void => {
-  const { cliSessionService } = services
+  const { cliSessionService, databaseService } = services
   const logStreamSubscriptions = new Map<string, () => void>()
 
   handle(
@@ -21,7 +21,8 @@ export const registerCliSessionIpc = ({
         v.shape({
           prompt: v.optional(v.string({ allowEmpty: true })),
           model: v.optional(v.string()),
-          projectId: v.optional(v.nullable(v.string({ allowEmpty: true })))
+          projectId: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+          taskId: v.optional(v.string())
         })
       )
     ],
@@ -30,9 +31,11 @@ export const registerCliSessionIpc = ({
       sessionId,
       toolId,
       workdir,
-      options?: { prompt?: string; model?: string; projectId?: string | null }
+      options?: { prompt?: string; model?: string; projectId?: string | null; taskId?: string }
     ) => {
-      const projectId = options?.projectId ?? resolveProjectIdForSession(sessionId)
+      const task = options?.taskId ? databaseService.getTask(options.taskId) : null
+      const projectId =
+        options?.projectId ?? task?.project_id ?? resolveProjectIdForSession(sessionId)
       await cliSessionService.startSession(
         sessionId,
         toolId,
@@ -40,7 +43,8 @@ export const registerCliSessionIpc = ({
         options?.prompt,
         undefined,
         options?.model,
-        projectId
+        projectId,
+        options?.taskId
       )
     }
   )
@@ -66,9 +70,14 @@ export const registerCliSessionIpc = ({
 
   handle(
     IPC_CHANNELS.cliSession.appendLog,
-    [v.string(), v.object(), v.optional(v.nullable(v.string({ allowEmpty: true })))],
-    (_, sessionId, msg, projectId) => {
-      cliSessionService.appendSessionLog(sessionId, msg as LogMsgInput, projectId ?? null)
+    [
+      v.string(),
+      v.string(),
+      v.object(),
+      v.optional(v.nullable(v.string({ allowEmpty: true })))
+    ],
+    (_, taskId, sessionId, msg, projectId) => {
+      cliSessionService.appendSessionLog(taskId, sessionId, msg as LogMsgInput, projectId ?? null)
     }
   )
 
@@ -116,10 +125,14 @@ export const registerCliSessionIpc = ({
     return { success: true }
   })
 
-  handle(IPC_CHANNELS.logStream.getHistory, [v.string()], (_, sessionId) => {
-    console.log('[IPC] logStream:getHistory called:', sessionId)
-    const history = cliSessionService.getSessionLogHistory(sessionId)
-    console.log('[IPC] logStream:getHistory returning:', history.length, 'messages')
-    return history
-  })
+  handle(
+    IPC_CHANNELS.logStream.getHistory,
+    [v.string(), v.optional(v.nullable(v.string({ allowEmpty: true })))],
+    (_, taskId, sessionId) => {
+      console.log('[IPC] logStream:getHistory called:', { taskId, sessionId })
+      const history = cliSessionService.getSessionLogHistory(sessionId ?? null, taskId)
+      console.log('[IPC] logStream:getHistory returning:', history.length, 'messages')
+      return history
+    }
+  )
 }

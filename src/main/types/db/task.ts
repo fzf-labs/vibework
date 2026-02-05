@@ -1,6 +1,6 @@
 export interface DbTask {
   id: string
-  session_id: string
+  session_id: string | null
   title: string
   prompt: string
   status: string
@@ -20,7 +20,7 @@ export interface DbTask {
 
 export interface CreateTaskInput {
   id: string
-  session_id: string
+  session_id?: string | null
   title: string
   prompt: string
   project_id?: string
@@ -33,7 +33,7 @@ export interface CreateTaskInput {
 }
 
 export interface UpdateTaskInput {
-  session_id?: string
+  session_id?: string | null
   title?: string
   prompt?: string
   status?: string

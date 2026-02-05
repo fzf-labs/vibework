@@ -310,7 +310,7 @@ export interface IpcContracts {
   'claudeCode:getConfig': IpcContract<[], UnknownRecord>
   'claudeCode:saveConfig': IpcContract<[UnknownRecord], unknown>
   'claudeCode:startSession': IpcContract<
-    [string, string, { model?: string; prompt?: string; projectId?: string | null }?],
+    [string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string }?],
     unknown
   >
   'claudeCode:stopSession': IpcContract<[string], unknown>
@@ -320,18 +320,18 @@ export interface IpcContracts {
   'claudeCode:getSession': IpcContract<[string], unknown>
 
   'cliSession:startSession': IpcContract<
-    [string, string, string, { model?: string; prompt?: string; projectId?: string | null }?],
+    [string, string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string }?],
     unknown
   >
   'cliSession:stopSession': IpcContract<[string], unknown>
   'cliSession:sendInput': IpcContract<[string, string], unknown>
   'cliSession:getSessions': IpcContract<[], unknown[]>
   'cliSession:getSession': IpcContract<[string], unknown>
-  'cliSession:appendLog': IpcContract<[string, unknown, (string | null)?], unknown>
+  'cliSession:appendLog': IpcContract<[string, string, unknown, (string | null)?], unknown>
 
   'logStream:subscribe': IpcContract<[string], { success: boolean; error?: string }>
   'logStream:unsubscribe': IpcContract<[string], { success: boolean; error?: string }>
-  'logStream:getHistory': IpcContract<[string], unknown[]>
+  'logStream:getHistory': IpcContract<[string, (string | null)?], unknown[]>
 
   'cliTools:getAll': IpcContract<[], unknown[]>
   'cliTools:detect': IpcContract<[string], unknown>

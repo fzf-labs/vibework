@@ -95,6 +95,7 @@ export class ClaudeCodeAdapter implements CliAdapter {
       this.normalizer,
       undefined,
       undefined,
+      options.taskId,
       options.projectId,
       options.msgStore
     )

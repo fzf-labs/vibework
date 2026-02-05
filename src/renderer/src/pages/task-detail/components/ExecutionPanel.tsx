@@ -20,6 +20,7 @@ interface ExecutionPanelProps {
   onApprovePlan: () => void;
   onRejectPlan: () => void;
   isRunning: boolean;
+  taskId?: string | null;
   sessionId: string;
   toolId: string;
   workingDir: string;
@@ -42,6 +43,7 @@ export function ExecutionPanel({
   onApprovePlan,
   onRejectPlan,
   isRunning,
+  taskId,
   sessionId,
   toolId,
   workingDir,
@@ -97,6 +99,7 @@ export function ExecutionPanel({
                   <CLISession
                     ref={cliSessionRef}
                     sessionId={sessionId}
+                    taskId={taskId}
                     toolId={toolId}
                     workdir={workingDir}
                     prompt={prompt}

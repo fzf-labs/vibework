@@ -91,19 +91,27 @@ export interface UseLogStreamResult {
 /**
  * 日志流订阅 Hook
  */
-export function useLogStream(sessionId: string | null): UseLogStreamResult {
+export function useLogStream(
+  sessionId: string | null,
+  taskId?: string | null
+): UseLogStreamResult {
   const [rawLogs, setRawLogs] = useState<LogMsg[]>([])
   const [normalizedLogs, setNormalizedLogs] = useState<NormalizedEntry[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const sessionIdRef = useRef<string | null>(sessionId)
+  const taskIdRef = useRef<string | null>(taskId ?? null)
   const seenIdsRef = useRef<Set<string>>(new Set())
 
   // 保持 sessionId ref 同步
   useEffect(() => {
     sessionIdRef.current = sessionId
   }, [sessionId])
+
+  useEffect(() => {
+    taskIdRef.current = taskId ?? null
+  }, [taskId])
 
   const clearLogs = useCallback(() => {
     setRawLogs([])
@@ -135,21 +143,27 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
 
   const subscribe = useCallback(async (options?: { includeHistory?: boolean }) => {
     const currentSessionId = sessionIdRef.current
-    if (!currentSessionId) {
-      console.log('[useLogStream] No sessionId, skipping subscribe')
+    const currentTaskId = taskIdRef.current
+    if (!currentSessionId && !currentTaskId) {
+      console.log('[useLogStream] No sessionId or taskId, skipping subscribe')
       return
     }
 
     try {
       // 获取历史日志
       const includeHistory = options?.includeHistory ?? true
-      if (includeHistory) {
-        console.log('[useLogStream] Getting history for:', currentSessionId)
-        const history = await window.api.logStream.getHistory(currentSessionId)
+      if (includeHistory && currentTaskId) {
+        console.log('[useLogStream] Getting history for:', { taskId: currentTaskId, sessionId: currentSessionId })
+        const history = await window.api.logStream.getHistory(currentTaskId, currentSessionId ?? null)
         console.log('[useLogStream] History received:', history?.length || 0, 'messages')
         if (Array.isArray(history) && history.length > 0) {
           processMessages(history as LogMsg[])
         }
+      }
+
+      if (!currentSessionId) {
+        setIsConnected(false)
+        return
       }
 
       // 订阅实时日志
@@ -171,15 +185,18 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
   const resubscribe = useCallback(
     async (options?: { clear?: boolean; includeHistory?: boolean }) => {
       const currentSessionId = sessionIdRef.current
-      if (!currentSessionId) return
+      const currentTaskId = taskIdRef.current
+      if (!currentSessionId && !currentTaskId) return
       const clear = options?.clear ?? true
       if (clear) {
         clearLogs()
       }
-      try {
-        await window.api.logStream.unsubscribe(currentSessionId)
-      } catch {
-        // ignore unsubscribe errors
+      if (currentSessionId) {
+        try {
+          await window.api.logStream.unsubscribe(currentSessionId)
+        } catch {
+          // ignore unsubscribe errors
+        }
       }
       await subscribe({ includeHistory: options?.includeHistory })
     },
@@ -187,32 +204,36 @@ export function useLogStream(sessionId: string | null): UseLogStreamResult {
   )
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId && !taskId) {
       setIsConnected(false)
       return
     }
 
-    // 监听实时消息
-    const removeListener = window.api.logStream.onMessage((sid, msg) => {
-      if (sid === sessionId) {
-        processMessages([msg as LogMsg])
-      }
-    })
-    unsubscribeRef.current = removeListener
+    if (sessionId) {
+      // 监听实时消息
+      const removeListener = window.api.logStream.onMessage((sid, msg) => {
+        if (sid === sessionId) {
+          processMessages([msg as LogMsg])
+        }
+      })
+      unsubscribeRef.current = removeListener
+    }
 
-    // 初始订阅
+    // 初始订阅（包含历史）
     subscribe()
 
     return () => {
-      // 取消订阅
-      window.api.logStream.unsubscribe(sessionId)
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
-        unsubscribeRef.current = null
+      if (sessionId) {
+        // 取消订阅
+        window.api.logStream.unsubscribe(sessionId)
+        if (unsubscribeRef.current) {
+          unsubscribeRef.current()
+          unsubscribeRef.current = null
+        }
       }
       setIsConnected(false)
     }
-  }, [sessionId, processMessages, subscribe])
+  }, [sessionId, taskId, processMessages, subscribe])
 
   return {
     rawLogs,

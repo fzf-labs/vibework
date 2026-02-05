@@ -66,17 +66,17 @@ export class AppPaths {
   }
 
   /**
-   * 获取指定 session 的数据目录路径
+   * 获取指定 task 的数据目录路径
    */
-  getSessionDataDir(sessionId: string, projectId?: string | null): string {
-    return join(this.getProjectSessionsDir(projectId), sessionId)
+  getTaskDataDir(taskId: string, projectId?: string | null): string {
+    return join(this.getProjectSessionsDir(projectId), taskId)
   }
 
   /**
-   * 获取指定 session 的日志文件路径 ~/.vibework/data/sessions/<projectId>/<sessionId>.jsonl
+   * 获取指定 task 的日志文件路径 ~/.vibework/data/sessions/<projectId>/<taskId>.jsonl
    */
-  getSessionMessagesFile(sessionId: string, projectId?: string | null): string {
-    return join(this.getProjectSessionsDir(projectId), `${sessionId}.jsonl`)
+  getTaskMessagesFile(taskId: string, projectId?: string | null): string {
+    return join(this.getProjectSessionsDir(projectId), `${taskId}.jsonl`)
   }
 
   /**

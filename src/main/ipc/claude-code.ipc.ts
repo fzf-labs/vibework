@@ -7,7 +7,7 @@ export const registerClaudeCodeIpc = ({
   services,
   resolveProjectIdForSession
 }: IpcModuleContext): void => {
-  const { cliSessionService } = services
+  const { cliSessionService, databaseService } = services
 
   handle(IPC_CHANNELS.claudeCode.getConfig, [], () =>
     cliSessionService.getToolConfig('claude-code')
@@ -26,7 +26,8 @@ export const registerClaudeCodeIpc = ({
         v.shape({
           model: v.optional(v.string()),
           prompt: v.optional(v.string({ allowEmpty: true })),
-          projectId: v.optional(v.nullable(v.string({ allowEmpty: true })))
+          projectId: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+          taskId: v.optional(v.string())
         })
       )
     ],
@@ -35,7 +36,9 @@ export const registerClaudeCodeIpc = ({
       if (options?.prompt) {
         console.log('[IPC] claudeCode:startSession prompt:', options.prompt)
       }
-      const projectId = options?.projectId ?? resolveProjectIdForSession(sessionId)
+      const task = options?.taskId ? databaseService.getTask(options.taskId) : null
+      const projectId =
+        options?.projectId ?? task?.project_id ?? resolveProjectIdForSession(sessionId)
       await cliSessionService.startSession(
         sessionId,
         'claude-code',
@@ -43,7 +46,8 @@ export const registerClaudeCodeIpc = ({
         options?.prompt,
         undefined,
         options?.model,
-        projectId
+        projectId,
+        options?.taskId
       )
       console.log('[IPC] claudeCode:startSession success')
     }

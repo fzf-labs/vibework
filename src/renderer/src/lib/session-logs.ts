@@ -15,12 +15,12 @@ export interface SessionLogEntry {
 }
 
 export async function getSessionLogPath(
-  sessionId: string,
+  taskId: string,
   projectId?: string | null
 ): Promise<string> {
   const root = await getVibeworkDataDir()
   const projectKey = projectId?.trim() || 'project'
-  return `${root}/data/sessions/${projectKey}/${sessionId}.jsonl`
+  return `${root}/data/sessions/${projectKey}/${taskId}.jsonl`
 }
 
 export async function ensureSessionDir(projectId?: string | null): Promise<string> {
@@ -39,21 +39,21 @@ export async function ensureSessionDir(projectId?: string | null): Promise<strin
 }
 
 export async function appendSessionLog(
-  sessionId: string,
+  taskId: string,
   entry: SessionLogEntry,
   projectId?: string | null
 ): Promise<void> {
   await ensureSessionDir(projectId)
-  const logPath = await getSessionLogPath(sessionId, projectId)
+  const logPath = await getSessionLogPath(taskId, projectId)
   const line = JSON.stringify(entry) + '\n'
   await fs.appendTextFile(logPath, line)
 }
 
 export async function readSessionLogs(
-  sessionId: string,
+  taskId: string,
   projectId?: string | null
 ): Promise<SessionLogEntry[]> {
-  const logPath = await getSessionLogPath(sessionId, projectId)
+  const logPath = await getSessionLogPath(taskId, projectId)
   const exists = await fs.exists(logPath)
   if (!exists) {
     return []

@@ -29,7 +29,7 @@ export interface CreateProjectInput {
 
 export interface Task {
   id: string;
-  session_id: string; // UUID for CLI session
+  session_id: string | null; // UUID for CLI session
   title: string;
   prompt: string;
   status: TaskStatus;
@@ -51,7 +51,7 @@ export interface Task {
 // Input types for creating records
 export interface CreateTaskInput {
   id: string;
-  session_id: string; // UUID for CLI session
+  session_id?: string | null; // UUID for CLI session
   title: string;
   prompt: string;
   project_id?: string | null;
@@ -65,7 +65,7 @@ export interface CreateTaskInput {
 }
 
 export interface UpdateTaskInput {
-  session_id?: string;
+  session_id?: string | null;
   title?: string;
   prompt?: string;
   status?: TaskStatus;

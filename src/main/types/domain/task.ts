@@ -13,7 +13,7 @@ export interface CreateTaskOptions {
 
 export interface TaskWithWorktree {
   id: string
-  sessionId: string
+  sessionId: string | null
   title: string
   prompt: string
   status: string

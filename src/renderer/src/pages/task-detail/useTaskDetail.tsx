@@ -176,12 +176,12 @@ export function useTaskDetail({
           setIsLoading(false);
           setMessages([]);
 
-          const sessionId = initialSessionId || newUuid();
+          const sessionId = initialSessionId || null;
           try {
             const settings = getSettings();
             const createdTask = await db.createTask({
               id: taskId,
-              session_id: sessionId,
+              session_id: sessionId ?? undefined,
               title: initialPrompt,
               prompt: initialPrompt,
               cli_tool_id: settings.defaultCliToolId || null,
@@ -291,6 +291,34 @@ export function useTaskDetail({
   // ===========================================================================
   const [cliStatus, setCliStatus] = useState<ExecutionStatus>('idle');
   const cliSessionRef = useRef<CLISessionHandle>(null);
+  const pendingCliStartRef = useRef(false);
+  const pendingCliPromptRef = useRef<string | undefined>(undefined);
+
+  const ensureCliSessionId = useCallback(async (): Promise<string | null> => {
+    if (!taskId) return null;
+    if (task?.session_id) return task.session_id;
+    const newSessionId = newUuid();
+    try {
+      const updated = await db.updateTask(taskId, { session_id: newSessionId });
+      if (updated) {
+        setTask(updated as Task);
+      } else {
+        setTask((prev) => (prev ? { ...prev, session_id: newSessionId } : prev));
+      }
+    } catch (error) {
+      console.error('[TaskDetail] Failed to persist session_id:', error);
+      setTask((prev) => (prev ? { ...prev, session_id: newSessionId } : prev));
+    }
+    return newSessionId;
+  }, [setTask, task?.session_id, taskId]);
+
+  useEffect(() => {
+    if (!task?.session_id || !pendingCliStartRef.current) return;
+    const promptOverride = pendingCliPromptRef.current;
+    pendingCliStartRef.current = false;
+    pendingCliPromptRef.current = undefined;
+    cliSessionRef.current?.start(promptOverride).catch(() => {});
+  }, [task?.session_id]);
 
   useEffect(() => { setCliStatus('idle'); }, [taskId]);
 
@@ -351,12 +379,19 @@ export function useTaskDetail({
   );
 
   const runCliPrompt = useCallback(
-    async (prompt?: string) => {
+    async (prompt?: string, sessionIdOverride?: string | null) => {
       const session = cliSessionRef.current;
       if (!session) return;
       const content = prompt?.trim() || '';
 
-      const sessionId = task?.session_id;
+      let sessionId = sessionIdOverride ?? task?.session_id;
+      if (!sessionId) {
+        sessionId = await ensureCliSessionId();
+        if (!sessionId) return;
+        pendingCliStartRef.current = true;
+        pendingCliPromptRef.current = content || undefined;
+        return;
+      }
       if (sessionId && window.api?.cliSession?.getSession) {
         try {
           const existingSession = await window.api.cliSession.getSession(sessionId);
@@ -374,27 +409,44 @@ export function useTaskDetail({
 
       await session.start(content || undefined);
     },
-    [cliStatus, task?.session_id]
+    [cliStatus, ensureCliSessionId, task?.session_id]
   );
 
   const appendCliLog = useCallback(
-    (content: string, type: 'user_message' | 'system_message') => {
-      const sessionId = task?.session_id;
-      if (!sessionId) return;
+    async (content: string, type: 'user_message' | 'system_message', sessionIdOverride?: string | null): Promise<string | null> => {
+      if (!taskId) return null;
+      const sessionId = sessionIdOverride ?? (await ensureCliSessionId());
+      if (!sessionId) return null;
       const trimmed = content.trim();
-      if (!trimmed || !window.api?.cliSession?.appendLog) return;
+      if (!trimmed || !window.api?.cliSession?.appendLog) return sessionId;
       const timestamp = Date.now();
       window.api.cliSession.appendLog(
+        taskId,
         sessionId,
-        { type: 'normalized', entry: { id: newUlid(), type, timestamp, content: trimmed }, timestamp, task_id: taskId ?? sessionId, session_id: sessionId },
+        {
+          type: 'normalized',
+          entry: { id: newUlid(), type, timestamp, content: trimmed },
+          timestamp,
+          task_id: taskId,
+          session_id: sessionId
+        },
         task?.project_id ?? null
       ).catch(() => {});
+      return sessionId;
     },
-    [task?.project_id, task?.session_id, taskId]
+    [ensureCliSessionId, task?.project_id, taskId]
   );
 
-  const appendCliUserLog = useCallback((content: string) => appendCliLog(content, 'user_message'), [appendCliLog]);
-  const appendCliSystemLog = useCallback((content: string) => appendCliLog(content, 'system_message'), [appendCliLog]);
+  const appendCliUserLog = useCallback(
+    async (content: string, sessionIdOverride?: string | null) =>
+      appendCliLog(content, 'user_message', sessionIdOverride),
+    [appendCliLog]
+  );
+  const appendCliSystemLog = useCallback(
+    async (content: string, sessionIdOverride?: string | null) =>
+      appendCliLog(content, 'system_message', sessionIdOverride),
+    [appendCliLog]
+  );
 
   const stopCli = useCallback(async () => {
     try {
@@ -665,7 +717,12 @@ export function useTaskDetail({
       try { await db.updateTask(taskId, { status: 'in_progress' }); } catch { /* ignore */ }
 
       if (useCliSession) {
-        try { appendCliUserLog(prompt); await runCliPrompt(prompt); } catch { setPipelineStatus('failed'); }
+        try {
+          const sessionId = await appendCliUserLog(prompt);
+          await runCliPrompt(prompt, sessionId);
+        } catch {
+          setPipelineStatus('failed');
+        }
         return;
       }
 
@@ -778,8 +835,8 @@ export function useTaskDetail({
       if (!prompt.trim() || !active) return;
 
       lastAutoRunWorkNodeIdRef.current = workflowCurrentNode.id;
-      appendCliUserLog(prompt);
-      void runCliPrompt(prompt);
+      const sessionId = await appendCliUserLog(prompt);
+      await runCliPrompt(prompt, sessionId);
     };
     void run();
     return () => { active = false; };
@@ -1033,7 +1090,10 @@ export function useTaskDetail({
         if (!useCliSession && isRunning) return;
         if (useCliSession) {
           const content = text.trim();
-          if (content) appendCliUserLog(content);
+          let sessionId: string | null = null;
+          if (content) {
+            sessionId = await appendCliUserLog(content);
+          }
           if (task?.status === 'in_review') {
             try {
               const updatedTask = await db.updateTask(taskId, { status: 'in_progress' });
@@ -1043,10 +1103,13 @@ export function useTaskDetail({
           try {
             if (content) {
               if (!cliSessionRef.current) throw new Error('CLI session not initialized');
-              await runCliPrompt(content);
+              await runCliPrompt(content, sessionId);
             }
           } catch {
-            appendCliSystemLog(t.common.errors.serverNotRunning || 'CLI session is not running.');
+            await appendCliSystemLog(
+              t.common.errors.serverNotRunning || 'CLI session is not running.',
+              sessionId
+            );
           }
           return;
         }
@@ -1078,22 +1141,25 @@ export function useTaskDetail({
       return;
     }
 
-    if (useCliSession) {
-      try {
-        if (!cliSessionRef.current) throw new Error('CLI session not initialized');
-        let prompt = task?.prompt || initialPrompt;
-        if (task?.workflow_template_id || workflowCurrentNode) {
-          const nodePrompt = await resolveWorkNodePrompt(workflowCurrentNode?.id, workflowCurrentNode?.index ?? 0, workflowCurrentNode?.templateId);
-          const composed = buildCliPrompt(nodePrompt);
-          if (composed.trim()) prompt = composed;
+      if (useCliSession) {
+        try {
+          if (!cliSessionRef.current) throw new Error('CLI session not initialized');
+          let prompt = task?.prompt || initialPrompt;
+          if (task?.workflow_template_id || workflowCurrentNode) {
+            const nodePrompt = await resolveWorkNodePrompt(workflowCurrentNode?.id, workflowCurrentNode?.index ?? 0, workflowCurrentNode?.templateId);
+            const composed = buildCliPrompt(nodePrompt);
+            if (composed.trim()) prompt = composed;
+          }
+          let sessionId: string | null = null;
+          if (prompt) {
+            sessionId = await appendCliUserLog(prompt);
+          }
+          await runCliPrompt(prompt, sessionId);
+        } catch {
+          await appendCliSystemLog(t.common.errors.serverNotRunning || 'CLI session is not running.');
         }
-        if (prompt) appendCliUserLog(prompt);
-        await runCliPrompt(prompt);
-      } catch {
-        appendCliSystemLog(t.common.errors.serverNotRunning || 'CLI session is not running.');
+        return;
       }
-      return;
-    }
 
     const sessionInfo = task?.session_id ? { sessionId: task.session_id } : undefined;
     const pendingAttachments = initialAttachmentsRef.current;

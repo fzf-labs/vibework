@@ -131,7 +131,7 @@ interface ClaudeCodeAPI {
   startSession: (
     sessionId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string; projectId?: string }
+    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
@@ -155,13 +155,13 @@ interface CliSessionAPI {
     sessionId: string,
     toolId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string; projectId?: string }
+    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getSessions: () => Promise<unknown[]>
   getSession: (sessionId: string) => Promise<CliSessionInfo | null>
-  appendLog: (sessionId: string, msg: unknown, projectId?: string | null) => Promise<unknown>
+  appendLog: (taskId: string, sessionId: string, msg: unknown, projectId?: string | null) => Promise<unknown>
   onStatus: (
     callback: (data: { sessionId: string; status: CliSessionStatus; forced?: boolean }) => void
   ) => () => void
@@ -177,7 +177,7 @@ interface CliSessionAPI {
 interface LogStreamAPI {
   subscribe: (sessionId: string) => Promise<{ success: boolean; error?: string }>
   unsubscribe: (sessionId: string) => Promise<unknown>
-  getHistory: (sessionId: string) => Promise<unknown[]>
+  getHistory: (taskId: string, sessionId?: string | null) => Promise<unknown[]>
   onMessage: (callback: (sessionId: string, msg: unknown) => void) => () => void
 }
 
@@ -356,7 +356,7 @@ interface SettingsAPI {
 
 interface TaskWithWorktree {
   id: string
-  sessionId: string
+  sessionId: string | null
   title: string
   prompt: string
   status: string

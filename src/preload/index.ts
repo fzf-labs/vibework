@@ -156,8 +156,11 @@ const api = {
     getConfig: () => invoke(IPC_CHANNELS.claudeCode.getConfig),
     saveConfig: (config: Record<string, unknown>) =>
       invoke(IPC_CHANNELS.claudeCode.saveConfig, config),
-    startSession: (sessionId: string, workdir: string, options?: { model?: string; prompt?: string }) =>
-      invoke(IPC_CHANNELS.claudeCode.startSession, sessionId, workdir, options),
+    startSession: (
+      sessionId: string,
+      workdir: string,
+      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
+    ) => invoke(IPC_CHANNELS.claudeCode.startSession, sessionId, workdir, options),
     stopSession: (sessionId: string) => invoke(IPC_CHANNELS.claudeCode.stopSession, sessionId),
     sendInput: (sessionId: string, input: string) =>
       invoke(IPC_CHANNELS.claudeCode.sendInput, sessionId, input),
@@ -186,15 +189,15 @@ const api = {
       sessionId: string,
       toolId: string,
       workdir: string,
-      options?: { model?: string; prompt?: string }
+      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string }
     ) => invoke(IPC_CHANNELS.cliSession.startSession, sessionId, toolId, workdir, options),
     stopSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.stopSession, sessionId),
     sendInput: (sessionId: string, input: string) =>
       invoke(IPC_CHANNELS.cliSession.sendInput, sessionId, input),
     getSessions: () => invoke(IPC_CHANNELS.cliSession.getSessions),
     getSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.getSession, sessionId),
-    appendLog: (sessionId: string, msg: unknown, projectId?: string | null) =>
-      invoke(IPC_CHANNELS.cliSession.appendLog, sessionId, msg, projectId),
+    appendLog: (taskId: string, sessionId: string, msg: unknown, projectId?: string | null) =>
+      invoke(IPC_CHANNELS.cliSession.appendLog, taskId, sessionId, msg, projectId),
     onStatus: (callback: (data: { sessionId: string; status: string; forced?: boolean }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; status: string; forced?: boolean }) =>
         callback(data)
@@ -221,7 +224,8 @@ const api = {
   logStream: {
     subscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.subscribe, sessionId),
     unsubscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.unsubscribe, sessionId),
-    getHistory: (sessionId: string) => invoke(IPC_CHANNELS.logStream.getHistory, sessionId),
+    getHistory: (taskId: string, sessionId?: string | null) =>
+      invoke(IPC_CHANNELS.logStream.getHistory, taskId, sessionId ?? null),
     onMessage: (callback: (sessionId: string, msg: unknown) => void) => {
       const listener = (_: unknown, sessionId: string, msg: unknown) => callback(sessionId, msg)
       ipcRenderer.on(IPC_EVENTS.logStream.message, listener)

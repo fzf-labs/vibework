@@ -19,7 +19,7 @@ export class TaskRepository {
     `)
     stmt.run(
       input.id,
-      input.session_id,
+      input.session_id ?? null,
       input.title,
       input.prompt,
       input.project_id || null,
