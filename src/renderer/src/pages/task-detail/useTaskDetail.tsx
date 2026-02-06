@@ -20,7 +20,7 @@ import { Clock, GitBranch } from 'lucide-react';
 
 import { db, type Task } from '@/data';
 import { getSettings } from '@/data/settings';
-import { newUlid, newUuid } from '@/lib/ids';
+import { newUuid } from '@/lib/ids';
 import type { AgentMessage, MessageAttachment } from '@/hooks/useAgent';
 import { hasValidSearchResults, type Artifact } from '@/components/artifacts';
 import { getArtifactTypeFromExt } from '@/components/task';
@@ -452,28 +452,13 @@ export function useTaskDetail({
   );
 
   const appendCliLog = useCallback(
-    async (content: string, type: 'user_message' | 'system_message', sessionIdOverride?: string | null): Promise<string | null> => {
+    async (_content: string, _type: 'user_message' | 'system_message', sessionIdOverride?: string | null): Promise<string | null> => {
       if (!taskId) return null;
       const sessionId = sessionIdOverride ?? (await ensureCliSessionId());
       if (!sessionId) return null;
-      const trimmed = content.trim();
-      if (!trimmed || !window.api?.cliSession?.appendLog) return sessionId;
-      const timestamp = Date.now();
-      window.api.cliSession.appendLog(
-        taskId,
-        sessionId,
-        {
-          type: 'normalized',
-          entry: { id: newUlid(), type, timestamp, content: trimmed },
-          timestamp,
-          task_id: taskId,
-          session_id: sessionId
-        },
-        task?.project_id ?? null
-      ).catch(() => {});
       return sessionId;
     },
-    [ensureCliSessionId, task?.project_id, taskId]
+    [ensureCliSessionId, taskId]
   );
 
   const appendCliUserLog = useCallback(

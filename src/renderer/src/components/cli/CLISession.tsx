@@ -1056,62 +1056,88 @@ function getParserForTool(toolId: string): RawParser | null {
   }
 }
 
-function parseAgentRawLogs(rawLogs: LogMsg[], toolId: string): NormalizedEntry[] {
-  const parser = getParserForTool(toolId)
-  if (!parser) return []
-  const entries: NormalizedEntry[] = []
-  let sequence = 0
+function normalizeEntryFromLog(entry: NormalizedEntry, msg: LogMsg, index: number): NormalizedEntry {
+  const id = entry.id || msg.id || `normalized-${index}`
+  const timestamp =
+    typeof entry.timestamp === 'number'
+      ? entry.timestamp
+      : msg.timestamp ?? Date.now()
+  if (id === entry.id && timestamp === entry.timestamp) return entry
+  return {
+    ...entry,
+    id,
+    timestamp
+  }
+}
 
-  rawLogs.forEach((msg, msgIndex) => {
-    if (msg.type === 'stderr') {
-      const content = msg.content?.trim()
-      if (!content) return
-      const idBase = msg.id ?? `stderr-${msgIndex}`
+function parseAgentLogs(logs: LogMsg[], toolId: string): NormalizedEntry[] {
+  const parser = getParserForTool(toolId)
+  const entries: NormalizedEntry[] = []
+  let hasNonResultAssistant = false
+
+  logs.forEach((msg, msgIndex) => {
+    if (msg.type === 'normalized' && msg.entry) {
+      const entry = normalizeEntryFromLog(msg.entry, msg, msgIndex)
+      if (entry.type === 'assistant_message' && !entry.metadata?.isResult) {
+        hasNonResultAssistant = true
+      }
+      entries.push(entry)
+      return
+    }
+
+    if (msg.type === 'finished') {
+      const exitCode = msg.exit_code
+      const content =
+        typeof exitCode === 'number'
+          ? `Process exited with code ${exitCode}`
+          : 'Process finished'
       entries.push(
         createEntry(
-          'error',
+          'system_message',
           content,
           msg.timestamp ?? Date.now(),
-          `${idBase}-stderr`,
-          { sequence }
+          msg.id ?? `finished-${msgIndex}`,
+          { exitCode }
         )
       )
-      sequence += 1
+      return
+    }
+
+    const content = msg.content
+    if (!content) return
+    const trimmed = content.trim()
+    if (!trimmed) return
+    const timestamp = msg.timestamp ?? Date.now()
+    const idBase = msg.id ?? `${msg.type}-${msgIndex}`
+
+    if (msg.type === 'stderr') {
+      entries.push(
+        createEntry('error', trimmed, timestamp, `${idBase}-stderr`)
+      )
       return
     }
 
     if (msg.type !== 'stdout') return
-    if (!msg.content) return
 
-    const lines = msg.content.split('\n')
-    const idBase = msg.id ?? `stdout-${msgIndex}`
-    lines.forEach((line, lineIndex) => {
-      const trimmed = line.trim()
-      if (!trimmed) return
-      const lineBase = `${idBase}-${lineIndex}`
-      const parsed = parser(trimmed, msg.timestamp, lineBase)
-      if (!parsed) return
+    const parsed = parser ? parser(trimmed, msg.timestamp, idBase) : null
+    if (parsed) {
       const parsedEntries = Array.isArray(parsed) ? parsed : [parsed]
       parsedEntries.forEach((entry) => {
-        entries.push({
-          ...entry,
-          metadata: {
-            ...(entry.metadata ?? {}),
-            sequence
-          }
-        })
-        sequence += 1
+        if (entry.type === 'assistant_message' && !entry.metadata?.isResult) {
+          hasNonResultAssistant = true
+        }
+        entries.push(entry)
       })
-    })
+      return
+    }
+
+    entries.push(
+      createEntry('system_message', trimmed, timestamp, `${idBase}-stdout`)
+    )
   })
 
-  if (toolId === 'cursor-agent') {
-    const hasNonResultAssistant = entries.some(
-      (entry) => entry.type === 'assistant_message' && !entry.metadata?.isResult
-    )
-    if (hasNonResultAssistant) {
-      return entries.filter((entry) => !entry.metadata?.isResult)
-    }
+  if (toolId === 'cursor-agent' && hasNonResultAssistant) {
+    return entries.filter((entry) => !entry.metadata?.isResult)
   }
 
   return entries
@@ -1154,7 +1180,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
 }: CLISessionProps, ref) {
   const [status, setStatus] = useState<CLISessionStatus>('idle')
 
-  const { normalizedLogs, rawLogs, resubscribe } = useLogStream(sessionId, taskId, {
+  const { logs, resubscribe } = useLogStream(sessionId, taskId, {
     source: 'session'
   })
   const logContainerRef = useRef<HTMLDivElement>(null)
@@ -1296,44 +1322,15 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
     }
   }, [status])
 
-  const rawEntries = useMemo(() => {
-    if (rawLogs.length === 0) return []
-    return rawLogs
-      .filter((msg) => msg.type === 'stdout' || msg.type === 'stderr')
-      .map((msg, index) =>
-        createEntry(
-          msg.type === 'stderr' ? 'error' : 'system_message',
-          msg.content ?? '',
-          msg.timestamp ?? Date.now(),
-          msg.id || `${msg.type}-${msg.timestamp ?? index}`
-        )
-      )
-  }, [rawLogs])
-
-  const parsedEntries = useMemo(() => {
-    if (rawLogs.length === 0) return []
-    return parseAgentRawLogs(rawLogs, toolId)
-  }, [rawLogs, toolId])
-
-  const displayLogs = useMemo(() => {
-    const base = parsedEntries.length > 0 ? parsedEntries : rawEntries.length > 0 ? rawEntries : normalizedLogs
-    if (base.length === 0) return base
-    const hasSequence = base.some((entry) => typeof entry.metadata?.sequence === 'number')
-    if (!hasSequence) return base
-    return [...base].sort((a, b) => {
-      const aSeq = typeof a.metadata?.sequence === 'number' ? a.metadata.sequence : 0
-      const bSeq = typeof b.metadata?.sequence === 'number' ? b.metadata.sequence : 0
-      return aSeq - bSeq
-    })
-  }, [normalizedLogs, parsedEntries, rawEntries])
+  const displayLogs = useMemo(() => parseAgentLogs(logs, toolId), [logs, toolId])
 
   const rawText = useMemo(() => {
-    if (rawLogs.length === 0) return ''
-    return rawLogs
+    if (logs.length === 0) return ''
+    return logs
       .filter((msg) => msg.type === 'stdout' || msg.type === 'stderr')
       .map((msg) => msg.content ?? '')
       .join('')
-  }, [rawLogs])
+  }, [logs])
 
   const showRawText = displayLogs.length === 0 && rawText.trim().length > 0
 
@@ -1432,13 +1429,13 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
             </div>
           </div>
         )}
-          {showRawText ? (
-            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-words px-3 py-2">
-              {rawText}
-            </pre>
-          ) : (
-            <NormalizedLogView entries={displayLogs} />
-          )}
+        {showRawText ? (
+          <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-words px-3 py-2">
+            {rawText}
+          </pre>
+        ) : (
+          <NormalizedLogView entries={displayLogs} />
+        )}
         <div ref={logEndRef} />
       </div>
     </div>

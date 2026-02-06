@@ -104,8 +104,7 @@ export interface LogMsg {
 }
 
 export interface UseLogStreamResult {
-  rawLogs: LogMsg[]
-  normalizedLogs: NormalizedEntry[]
+  logs: LogMsg[]
   isConnected: boolean
   error: string | null
   clearLogs: () => void
@@ -127,8 +126,7 @@ export function useLogStream(
 ): UseLogStreamResult {
   const source = options?.source ?? 'session'
   const pollIntervalMs = options?.pollIntervalMs ?? 1000
-  const [rawLogs, setRawLogs] = useState<LogMsg[]>([])
-  const [normalizedLogs, setNormalizedLogs] = useState<NormalizedEntry[]>([])
+  const [logs, setLogs] = useState<LogMsg[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
@@ -150,8 +148,7 @@ export function useLogStream(
   }, [taskId])
 
   const clearLogs = useCallback(() => {
-    setRawLogs([])
-    setNormalizedLogs([])
+    setLogs([])
     seenIdsRef.current = new Set()
     messageSeqRef.current = 0
     historyLoadedRef.current = false
@@ -159,8 +156,7 @@ export function useLogStream(
   }, [])
 
   const processMessages = useCallback((messages: LogMsg[]) => {
-    const raw: LogMsg[] = []
-    const normalized: NormalizedEntry[] = []
+    const nextLogs: LogMsg[] = []
     const currentSessionId = sessionIdRef.current
 
     for (const msg of messages) {
@@ -175,33 +171,31 @@ export function useLogStream(
         }
         seenIdsRef.current.add(msg.id)
       }
-      if (msg.type === 'stdout' || msg.type === 'stderr') {
-        raw.push(msg)
-      } else if (msg.type === 'normalized' && msg.entry) {
-        normalized.push(normalizeLogEntry(msg.entry))
+      if (msg.type === 'normalized' && msg.entry) {
+        nextLogs.push({ ...msg, entry: normalizeLogEntry(msg.entry) })
+      } else {
+        nextLogs.push(msg)
       }
     }
 
-    setRawLogs((prev) => [...prev, ...raw])
-    setNormalizedLogs((prev) => [...prev, ...normalized])
+    if (nextLogs.length > 0) {
+      setLogs((prev) => [...prev, ...nextLogs])
+    }
   }, [source])
 
   const setLogsFromHistory = useCallback((messages: LogMsg[]) => {
-    const raw: LogMsg[] = []
-    const normalized: NormalizedEntry[] = []
-
+    const nextLogs: LogMsg[] = []
     for (const msg of messages) {
       const seq = ++messageSeqRef.current
       logMessageDebug('history', seq, msg)
-      if (msg.type === 'stdout' || msg.type === 'stderr') {
-        raw.push(msg)
-      } else if (msg.type === 'normalized' && msg.entry) {
-        normalized.push(normalizeLogEntry(msg.entry))
+      if (msg.type === 'normalized' && msg.entry) {
+        nextLogs.push({ ...msg, entry: normalizeLogEntry(msg.entry) })
+      } else {
+        nextLogs.push(msg)
       }
     }
 
-    setRawLogs(raw)
-    setNormalizedLogs(normalized)
+    setLogs(nextLogs)
     seenIdsRef.current = new Set(messages.map((msg) => msg.id).filter(Boolean) as string[])
   }, [])
 
@@ -335,8 +329,7 @@ export function useLogStream(
   }, [processMessages, pollIntervalMs, sessionId, source, subscribe, taskId])
 
   return {
-    rawLogs,
-    normalizedLogs,
+    logs,
     isConnected,
     error,
     clearLogs,
