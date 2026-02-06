@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { LogMsg } from '@/hooks/useLogStream'
-import type { NormalizedEntry, NormalizedEntryType } from '../NormalizedLogView'
+import type { NormalizedEntry, NormalizedEntryType } from '../logTypes'
 import { cn } from '@/lib/utils'
 import {
   AlertCircle,
@@ -111,6 +111,38 @@ function summarizeParsedJson(value: unknown): string | null {
   return null
 }
 
+function summarizeSystemPayload(value: unknown): string | null {
+  if (value === undefined) return null
+  if (Array.isArray(value)) {
+    return `System payload: ${value.length} item${value.length === 1 ? '' : 's'}`
+  }
+
+  const record = asRecord(value)
+  if (!record) {
+    return summarizeParsedJson(value)
+  }
+
+  const eventType =
+    getString(record.type) ||
+    getString(record.event) ||
+    getString(record.name) ||
+    getString(record.subtype)
+
+  const message =
+    getString(record.message) ||
+    getString(record.text) ||
+    getString(record.summary) ||
+    getString(record.content) ||
+    getString(record.output)
+
+  if (eventType && message) return `${eventType}: ${message}`
+  if (eventType) return `System event: ${eventType}`
+  if (message) return message
+
+  const keys = Object.keys(record)
+  return keys.length > 0 ? `System payload (${keys.length} fields)` : 'System payload (empty)'
+}
+
 function pickToolInputValue(input: RecordLike | null): string | undefined {
   if (!input) return undefined
 
@@ -163,6 +195,13 @@ function buildSummary(entry: NormalizedEntry): {
       hasHiddenContent = hasHiddenContent || Boolean(trimmed)
     } else if (toolName) {
       summary = toolName
+      hasHiddenContent = hasHiddenContent || Boolean(trimmed)
+    }
+  } else if (entry.type === 'system_message') {
+    const parsed = tryParseJson(trimmed)
+    const systemSummary = summarizeSystemPayload(parsed)
+    if (systemSummary) {
+      summary = systemSummary
       hasHiddenContent = hasHiddenContent || Boolean(trimmed)
     }
   } else if (entry.type === 'tool_result') {
@@ -249,17 +288,19 @@ function stripToolInput(metadata: NormalizedEntry['metadata']): RecordLike | nul
   return Object.keys(next).length > 0 ? next : null
 }
 
-function CursorLogCard({ entry }: { entry: NormalizedEntry }): React.ReactNode {
+function LogCard({ entry }: { entry: NormalizedEntry }): React.ReactNode {
   const [expanded, setExpanded] = useState(false)
   const { summary, fullContent, hasHiddenContent } = useMemo(() => buildSummary(entry), [entry])
   const facts = useMemo(() => buildFacts(entry), [entry])
   const rawToolInput = useMemo(() => asRecord(entry.metadata?.toolInput), [entry.metadata])
   const rawMetadata = useMemo(() => stripToolInput(entry.metadata), [entry.metadata])
   const badge = useMemo(() => statusBadge(entry), [entry])
+  const isMessage = entry.type === 'assistant_message' || entry.type === 'user_message'
 
   const hasToolInput = Boolean(rawToolInput && Object.keys(rawToolInput).length > 0)
   const hasMetadata = Boolean(rawMetadata && Object.keys(rawMetadata).length > 0)
-  const hasDetails = hasHiddenContent || hasToolInput || hasMetadata || facts.length > 0
+  const hasDetails = !isMessage && (hasHiddenContent || hasToolInput || hasMetadata || facts.length > 0)
+  const visibleContent = isMessage ? entry.content || summary : summary
 
   return (
     <div className={cn('rounded-md border', logRowTone(entry.type))}>
@@ -297,7 +338,7 @@ function CursorLogCard({ entry }: { entry: NormalizedEntry }): React.ReactNode {
           )}
           <span className="ml-auto text-[11px] text-muted-foreground">{formatTime(entry.timestamp)}</span>
         </div>
-        <div className="pl-6 whitespace-pre-wrap break-words text-sm text-foreground">{summary}</div>
+        <div className="pl-6 whitespace-pre-wrap break-words text-sm text-foreground">{visibleContent}</div>
       </button>
 
       {expanded && hasDetails && (
@@ -355,7 +396,7 @@ function CliToolLogList({ entries }: { entries: NormalizedEntry[] }): React.Reac
   return (
     <div className="space-y-2">
       {entries.map((entry) => (
-        <CursorLogCard key={entry.id} entry={entry} />
+        <LogCard key={entry.id} entry={entry} />
       ))}
     </div>
   )

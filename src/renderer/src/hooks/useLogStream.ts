@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { NormalizedEntry } from '@/components/cli/NormalizedLogView'
+import type { NormalizedEntry } from '@/components/cli/logTypes'
 
 type ContentLike =
   | string

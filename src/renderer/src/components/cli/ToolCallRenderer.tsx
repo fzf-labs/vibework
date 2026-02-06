@@ -18,7 +18,7 @@ import {
   File,
   Folder
 } from 'lucide-react'
-import type { NormalizedEntry } from './NormalizedLogView'
+import type { NormalizedEntry } from './logTypes'
 
 interface ToolCallRendererProps {
   entry: NormalizedEntry
