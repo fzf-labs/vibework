@@ -1,5 +1,4 @@
 import type { IpcModuleContext } from './types'
-import type { LogMsgInput } from '../types/log'
 import { IPC_CHANNELS, IPC_EVENTS } from './channels'
 
 export const registerCliSessionIpc = ({
@@ -69,19 +68,6 @@ export const registerCliSessionIpc = ({
     if (!session) return null
     return session
   })
-
-  handle(
-    IPC_CHANNELS.cliSession.appendLog,
-    [
-      v.string(),
-      v.string(),
-      v.object(),
-      v.optional(v.nullable(v.string({ allowEmpty: true })))
-    ],
-    (_, taskId, sessionId, msg, projectId) => {
-      cliSessionService.appendSessionLog(taskId, sessionId, msg as LogMsgInput, projectId ?? null)
-    }
-  )
 
   handle(IPC_CHANNELS.logStream.subscribe, [v.string()], (event, sessionId) => {
     console.log('[IPC] logStream:subscribe called:', sessionId)

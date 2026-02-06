@@ -2,7 +2,6 @@ import { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 import { MsgStoreService } from '../MsgStoreService'
 import { CliCompletionSignal, CliSessionHandle, CliSessionStatus } from './types'
-import { LogMsgInput } from '../../types/log'
 import { safeSpawn } from '../../utils/safe-exec'
 import { config } from '../../config'
 
@@ -149,13 +148,6 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
       }
 
       this.log('closed', { pid: this.process.pid, code, signal })
-
-      const finishedMsg: LogMsgInput = {
-        type: 'finished',
-        exit_code: code ?? undefined,
-        timestamp: Date.now()
-      }
-      this.msgStore.push(finishedMsg)
 
       const forcedStatus = this.completionOverride
         ? (this.status as CliSessionStatus)

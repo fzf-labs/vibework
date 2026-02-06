@@ -164,8 +164,6 @@ const api = {
       invoke(IPC_CHANNELS.cliSession.sendInput, sessionId, input),
     getSessions: () => invoke(IPC_CHANNELS.cliSession.getSessions),
     getSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.getSession, sessionId),
-    appendLog: (taskId: string, sessionId: string, msg: unknown, projectId?: string | null) =>
-      invoke(IPC_CHANNELS.cliSession.appendLog, taskId, sessionId, msg, projectId),
     onStatus: (callback: (data: { sessionId: string; status: string; forced?: boolean }) => void) => {
       const listener = (_: unknown, data: { sessionId: string; status: string; forced?: boolean }) =>
         callback(data)

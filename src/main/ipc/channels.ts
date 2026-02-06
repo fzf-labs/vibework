@@ -68,8 +68,7 @@ export const IPC_CHANNELS = {
     stopSession: 'cliSession:stopSession',
     sendInput: 'cliSession:sendInput',
     getSessions: 'cliSession:getSessions',
-    getSession: 'cliSession:getSession',
-    appendLog: 'cliSession:appendLog'
+    getSession: 'cliSession:getSession'
   },
   logStream: {
     subscribe: 'logStream:subscribe',
@@ -306,7 +305,6 @@ export interface IpcContracts {
   'cliSession:sendInput': IpcContract<[string, string], unknown>
   'cliSession:getSessions': IpcContract<[], unknown[]>
   'cliSession:getSession': IpcContract<[string], unknown>
-  'cliSession:appendLog': IpcContract<[string, string, unknown, (string | null)?], unknown>
 
   'logStream:subscribe': IpcContract<[string], { success: boolean; error?: string }>
   'logStream:unsubscribe': IpcContract<[string], { success: boolean; error?: string }>

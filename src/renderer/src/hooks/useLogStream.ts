@@ -248,7 +248,7 @@ export function useLogStream(
       console.error('[useLogStream] Subscribe error:', err)
       setError(err instanceof Error ? err.message : 'Unknown error')
     }
-  }, [processMessages, source])
+  }, [processMessages, setLogsFromHistory, source])
 
   const resubscribe = useCallback(
     async (options?: { clear?: boolean; includeHistory?: boolean }) => {
@@ -326,7 +326,7 @@ export function useLogStream(
       }
       setIsConnected(false)
     }
-  }, [processMessages, pollIntervalMs, sessionId, source, subscribe, taskId])
+  }, [processMessages, pollIntervalMs, sessionId, setLogsFromHistory, source, subscribe, taskId])
 
   return {
     logs,

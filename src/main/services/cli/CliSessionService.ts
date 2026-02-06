@@ -9,7 +9,6 @@ import { MsgStoreService } from '../MsgStoreService'
 import { CLIToolConfigService } from '../CLIToolConfigService'
 import { DatabaseService } from '../DatabaseService'
 import { LogMsg } from '../../types/log'
-import type { LogMsgInput } from '../../types/log'
 
 interface SessionRecord {
   handle: CliSessionHandle
@@ -219,22 +218,6 @@ export class CliSessionService extends EventEmitter {
       return MsgStoreService.loadFromFile(sessionId)
     }
     return []
-  }
-
-  appendSessionLog(
-    taskId: string,
-    sessionId: string,
-    msg: LogMsgInput,
-    projectId?: string | null
-  ): void {
-    const msgStore = this.getSessionMsgStore(sessionId)
-    if (msgStore) {
-      msgStore.push(msg)
-      return
-    }
-    const pendingStore = new MsgStoreService(undefined, taskId, sessionId, projectId)
-    this.pendingMsgStores.set(sessionId, pendingStore)
-    pendingStore.push(msg)
   }
 
   getToolConfig(toolId: string): Record<string, unknown> {

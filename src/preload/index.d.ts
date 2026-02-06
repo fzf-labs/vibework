@@ -136,7 +136,6 @@ interface CliSessionAPI {
   sendInput: (sessionId: string, input: string) => Promise<unknown>
   getSessions: () => Promise<unknown[]>
   getSession: (sessionId: string) => Promise<CliSessionInfo | null>
-  appendLog: (taskId: string, sessionId: string, msg: unknown, projectId?: string | null) => Promise<unknown>
   onStatus: (
     callback: (data: { sessionId: string; status: CliSessionStatus; forced?: boolean }) => void
   ) => () => void

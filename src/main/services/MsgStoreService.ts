@@ -250,12 +250,12 @@ export class MsgStoreService extends EventEmitter {
       if (parsed && typeof parsed === 'object') {
         if (parsed.__vw_log === true) {
           const { __vw_log, ...rest } = parsed as Record<string, unknown>
-          return rest as LogMsg
+          return rest as unknown as LogMsg
         }
         const type = parsed.type
         const hasSchema = typeof parsed.schema_version === 'string' || typeof parsed.task_id === 'string'
         if (typeof type === 'string' && hasSchema) {
-          return parsed as LogMsg
+          return parsed as unknown as LogMsg
         }
       }
     } catch {
@@ -382,12 +382,12 @@ export class MsgStoreService extends EventEmitter {
             if (parsed && typeof parsed === 'object') {
               if (parsed.__vw_log === true) {
                 const { __vw_log, ...rest } = parsed as Record<string, unknown>
-                return rest as LogMsg
+                return rest as unknown as LogMsg
               }
               const type = parsed.type
               const hasSchema = typeof parsed.schema_version === 'string' || typeof parsed.task_id === 'string'
               if (typeof type === 'string' && hasSchema) {
-                return parsed as LogMsg
+                return parsed as unknown as LogMsg
               }
             }
           } catch {
