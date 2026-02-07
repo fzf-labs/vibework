@@ -20,7 +20,7 @@ type PipelineTemplateFormValues = WorkflowTemplateFormValues;
 
 interface WorkNodeTemplate {
   id: string;
-  workflow_template_id: string;
+  template_id: string;
   node_order: number;
   name: string;
   prompt: string;

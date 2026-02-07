@@ -15,6 +15,8 @@ export interface DbWorkNodeTemplate {
   node_order: number
   name: string
   prompt: string
+  cli_tool_id: string | null
+  agent_tool_config_id: string | null
   requires_approval: boolean
   continue_on_error: boolean
   created_at: string
@@ -33,10 +35,11 @@ export interface DbWorkflow {
 export interface DbWorkNode {
   id: string
   workflow_id: string
-  template_node_id: string | null
   node_order: number
   name: string
   prompt: string
+  cli_tool_id: string | null
+  agent_tool_config_id: string | null
   requires_approval: boolean
   continue_on_error: boolean
   status: 'todo' | 'in_progress' | 'in_review' | 'done'
@@ -50,6 +53,8 @@ export interface CreateWorkNodeTemplateInput {
   name: string
   prompt: string
   node_order: number
+  cli_tool_id?: string
+  agent_tool_config_id?: string
   requires_approval?: boolean
   continue_on_error?: boolean
 }

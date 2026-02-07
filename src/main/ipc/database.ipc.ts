@@ -149,12 +149,60 @@ export const registerDatabaseIpc = ({
     databaseService.approveTask(id)
   )
 
-  handle(IPC_CHANNELS.database.createAgentExecution, [v.string()], (_, workNodeId) =>
-    databaseService.createAgentExecution(workNodeId)
+  handle(
+    IPC_CHANNELS.database.createTaskExecution,
+    [
+      v.string(),
+      v.optional(v.string({ allowEmpty: true })),
+      v.optional(v.string({ allowEmpty: true })),
+      v.optional(v.string({ allowEmpty: true }))
+    ],
+    (_, taskId, sessionId, cliToolId, agentToolConfigId) =>
+      databaseService.createTaskExecution(
+        taskId,
+        sessionId || undefined,
+        cliToolId || undefined,
+        agentToolConfigId || undefined
+      )
+  )
+
+  handle(
+    IPC_CHANNELS.database.createWorkNodeExecution,
+    [
+      v.string(),
+      v.string(),
+      v.optional(v.string({ allowEmpty: true })),
+      v.optional(v.string({ allowEmpty: true })),
+      v.optional(v.string({ allowEmpty: true }))
+    ],
+    (_, taskId, workNodeId, sessionId, cliToolId, agentToolConfigId) =>
+      databaseService.createWorkNodeExecution(
+        taskId,
+        workNodeId,
+        sessionId || undefined,
+        cliToolId || undefined,
+        agentToolConfigId || undefined
+      )
+  )
+
+  handle(IPC_CHANNELS.database.getAgentExecutionsByTaskId, [v.string()], (_, taskId) =>
+    databaseService.getAgentExecutionsByTaskId(taskId)
   )
 
   handle(IPC_CHANNELS.database.getAgentExecutionsByWorkNodeId, [v.string()], (_, workNodeId) =>
     databaseService.getAgentExecutionsByWorkNodeId(workNodeId)
+  )
+
+  handle(IPC_CHANNELS.database.getLatestTaskExecution, [v.string()], (_, taskId) =>
+    databaseService.getLatestTaskExecution(taskId)
+  )
+
+  handle(IPC_CHANNELS.database.getLatestWorkNodeExecution, [v.string()], (_, workNodeId) =>
+    databaseService.getLatestWorkNodeExecution(workNodeId)
+  )
+
+  handle(IPC_CHANNELS.database.createAgentExecution, [v.string()], (_, workNodeId) =>
+    databaseService.createAgentExecution(workNodeId)
   )
 
   handle(IPC_CHANNELS.database.getLatestAgentExecution, [v.string()], (_, workNodeId) =>

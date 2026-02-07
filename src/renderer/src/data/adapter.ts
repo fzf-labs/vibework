@@ -137,12 +137,54 @@ export const db = {
   },
 
   // ============ AgentExecution 操作 ============
-  createAgentExecution: (workNodeId: string): Promise<unknown> => {
-    return window.api.database.createAgentExecution(workNodeId) as Promise<unknown>
+  createTaskExecution: (
+    taskId: string,
+    sessionId?: string,
+    cliToolId?: string,
+    agentToolConfigId?: string
+  ): Promise<unknown> => {
+    return window.api.database.createTaskExecution(
+      taskId,
+      sessionId,
+      cliToolId,
+      agentToolConfigId
+    ) as Promise<unknown>
+  },
+
+  createWorkNodeExecution: (
+    taskId: string,
+    workNodeId: string,
+    sessionId?: string,
+    cliToolId?: string,
+    agentToolConfigId?: string
+  ): Promise<unknown> => {
+    return window.api.database.createWorkNodeExecution(
+      taskId,
+      workNodeId,
+      sessionId,
+      cliToolId,
+      agentToolConfigId
+    ) as Promise<unknown>
+  },
+
+  getAgentExecutionsByTaskId: (taskId: string): Promise<unknown[]> => {
+    return window.api.database.getAgentExecutionsByTaskId(taskId) as Promise<unknown[]>
   },
 
   getAgentExecutionsByWorkNodeId: (workNodeId: string): Promise<unknown[]> => {
     return window.api.database.getAgentExecutionsByWorkNodeId(workNodeId) as Promise<unknown[]>
+  },
+
+  getLatestTaskExecution: (taskId: string): Promise<unknown> => {
+    return window.api.database.getLatestTaskExecution(taskId) as Promise<unknown>
+  },
+
+  getLatestWorkNodeExecution: (workNodeId: string): Promise<unknown> => {
+    return window.api.database.getLatestWorkNodeExecution(workNodeId) as Promise<unknown>
+  },
+
+  createAgentExecution: (workNodeId: string): Promise<unknown> => {
+    return window.api.database.createAgentExecution(workNodeId) as Promise<unknown>
   },
 
   getLatestAgentExecution: (workNodeId: string): Promise<unknown> => {

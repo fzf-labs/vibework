@@ -336,10 +336,44 @@ const api = {
     rejectWorkNode: (id: string) => invoke(IPC_CHANNELS.database.rejectWorkNode, id),
     approveTask: (id: string) => invoke(IPC_CHANNELS.database.approveTask, id),
     // AgentExecution operations
-    createAgentExecution: (workNodeId: string) =>
-      invoke(IPC_CHANNELS.database.createAgentExecution, workNodeId),
+    createTaskExecution: (
+      taskId: string,
+      sessionId?: string,
+      cliToolId?: string,
+      agentToolConfigId?: string
+    ) =>
+      invoke(
+        IPC_CHANNELS.database.createTaskExecution,
+        taskId,
+        sessionId,
+        cliToolId,
+        agentToolConfigId
+      ),
+    createWorkNodeExecution: (
+      taskId: string,
+      workNodeId: string,
+      sessionId?: string,
+      cliToolId?: string,
+      agentToolConfigId?: string
+    ) =>
+      invoke(
+        IPC_CHANNELS.database.createWorkNodeExecution,
+        taskId,
+        workNodeId,
+        sessionId,
+        cliToolId,
+        agentToolConfigId
+      ),
+    getAgentExecutionsByTaskId: (taskId: string) =>
+      invoke(IPC_CHANNELS.database.getAgentExecutionsByTaskId, taskId),
     getAgentExecutionsByWorkNodeId: (workNodeId: string) =>
       invoke(IPC_CHANNELS.database.getAgentExecutionsByWorkNodeId, workNodeId),
+    getLatestTaskExecution: (taskId: string) =>
+      invoke(IPC_CHANNELS.database.getLatestTaskExecution, taskId),
+    getLatestWorkNodeExecution: (workNodeId: string) =>
+      invoke(IPC_CHANNELS.database.getLatestWorkNodeExecution, workNodeId),
+    createAgentExecution: (workNodeId: string) =>
+      invoke(IPC_CHANNELS.database.createAgentExecution, workNodeId),
     getLatestAgentExecution: (workNodeId: string) =>
       invoke(IPC_CHANNELS.database.getLatestAgentExecution, workNodeId),
     updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) =>
@@ -391,6 +425,7 @@ const api = {
     create: (options: {
       title: string
       prompt: string
+      taskMode: 'conversation' | 'workflow'
       projectId?: string
       projectPath?: string
       createWorktree?: boolean
@@ -399,7 +434,6 @@ const api = {
       worktreeRootPath?: string
       cliToolId?: string
       agentToolConfigId?: string
-      agentToolConfigSnapshot?: string
       workflowTemplateId?: string
     }) => invoke(IPC_CHANNELS.task.create, options),
     get: (id: string) => invoke(IPC_CHANNELS.task.get, id),

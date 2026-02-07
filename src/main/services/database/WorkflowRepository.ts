@@ -16,7 +16,6 @@ export class WorkflowRepository {
     this.db = db
   }
 
-  // ============ Workflow Template 操作 ============
   createWorkflowTemplate(input: CreateWorkflowTemplateInput): WorkflowTemplate {
     const now = new Date().toISOString()
     const templateId = newUlid()
@@ -27,29 +26,40 @@ export class WorkflowRepository {
     }
 
     const create = this.db.transaction(() => {
-      this.db.prepare(`
-        INSERT INTO workflow_templates (id, scope, project_id, name, description, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        templateId,
-        input.scope,
-        input.scope === 'project' ? input.project_id! : null,
-        input.name,
-        input.description || null,
-        now,
-        now
-      )
+      this.db
+        .prepare(`
+          INSERT INTO workflow_templates (id, scope, project_id, name, description, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          templateId,
+          input.scope,
+          input.scope === 'project' ? input.project_id! : null,
+          input.name,
+          input.description || null,
+          now,
+          now
+        )
 
       const insertNode = this.db.prepare(`
         INSERT INTO workflow_template_nodes
-          (id, template_id, node_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, template_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id, requires_approval, continue_on_error, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
 
       nodes.forEach((node) => {
         insertNode.run(
-          newUlid(), templateId, node.node_order, node.name, node.prompt,
-          node.requires_approval ? 1 : 0, node.continue_on_error ? 1 : 0, now, now
+          newUlid(),
+          templateId,
+          node.node_order,
+          node.name,
+          node.prompt,
+          node.cli_tool_id ?? null,
+          node.agent_tool_config_id ?? null,
+          node.requires_approval ? 1 : 0,
+          node.continue_on_error ? 1 : 0,
+          now,
+          now
         )
       })
     })
@@ -72,7 +82,9 @@ export class WorkflowRepository {
 
   getWorkflowTemplatesByProject(projectId: string): WorkflowTemplate[] {
     const rows = this.db
-      .prepare('SELECT * FROM workflow_templates WHERE scope = ? AND project_id = ? ORDER BY updated_at DESC')
+      .prepare(
+        'SELECT * FROM workflow_templates WHERE scope = ? AND project_id = ? ORDER BY updated_at DESC'
+      )
       .all('project', projectId) as WorkflowTemplate[]
     return rows.map((row) => ({
       ...row,
@@ -82,7 +94,9 @@ export class WorkflowRepository {
   }
 
   getWorkflowTemplate(id: string): WorkflowTemplate | null {
-    const template = this.db.prepare('SELECT * FROM workflow_templates WHERE id = ?').get(id) as WorkflowTemplate | undefined
+    const template = this.db
+      .prepare('SELECT * FROM workflow_templates WHERE id = ?')
+      .get(id) as WorkflowTemplate | undefined
     if (!template) return null
     return { ...template, nodes: this.getWorkNodeTemplates(template.id) }
   }
@@ -93,14 +107,14 @@ export class WorkflowRepository {
     if (!existing) throw new Error('Workflow template not found')
 
     const update = this.db.transaction(() => {
-      this.db.prepare(
-        'UPDATE workflow_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
-      ).run(input.name, input.description || null, now, input.id)
+      this.db
+        .prepare('UPDATE workflow_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?')
+        .run(input.name, input.description || null, now, input.id)
       this.db.prepare('DELETE FROM workflow_template_nodes WHERE template_id = ?').run(input.id)
 
       const insertNode = this.db.prepare(
-        `INSERT INTO workflow_template_nodes (id, template_id, node_order, name, prompt, requires_approval, continue_on_error, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO workflow_template_nodes (id, template_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id, requires_approval, continue_on_error, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       input.nodes.forEach((node) => {
         insertNode.run(
@@ -109,6 +123,8 @@ export class WorkflowRepository {
           node.node_order,
           node.name,
           node.prompt,
+          node.cli_tool_id ?? null,
+          node.agent_tool_config_id ?? null,
           node.requires_approval ? 1 : 0,
           node.continue_on_error ? 1 : 0,
           now,
@@ -121,7 +137,9 @@ export class WorkflowRepository {
   }
 
   deleteWorkflowTemplate(id: string, scope: 'global' | 'project'): boolean {
-    const template = this.db.prepare('SELECT id FROM workflow_templates WHERE id = ? AND scope = ?').get(id, scope) as { id: string } | undefined
+    const template = this.db
+      .prepare('SELECT id FROM workflow_templates WHERE id = ? AND scope = ?')
+      .get(id, scope) as { id: string } | undefined
     if (!template) return false
     const del = this.db.transaction(() => {
       this.db.prepare('DELETE FROM workflow_template_nodes WHERE template_id = ?').run(id)
@@ -132,16 +150,18 @@ export class WorkflowRepository {
 
   deleteWorkflowTemplatesByProject(projectId: string): number {
     const del = this.db.transaction(() => {
-      this.db.prepare(`
-        DELETE FROM workflow_template_nodes
-        WHERE template_id IN (
-          SELECT id FROM workflow_templates WHERE scope = 'project' AND project_id = ?
-        )
-      `).run(projectId)
+      this.db
+        .prepare(`
+          DELETE FROM workflow_template_nodes
+          WHERE template_id IN (
+            SELECT id FROM workflow_templates WHERE scope = 'project' AND project_id = ?
+          )
+        `)
+        .run(projectId)
 
-      const result = this.db.prepare(
-        "DELETE FROM workflow_templates WHERE scope = 'project' AND project_id = ?"
-      ).run(projectId)
+      const result = this.db
+        .prepare("DELETE FROM workflow_templates WHERE scope = 'project' AND project_id = ?")
+        .run(projectId)
 
       return result.changes
     })
@@ -163,6 +183,8 @@ export class WorkflowRepository {
         name: node.name,
         prompt: node.prompt,
         node_order: node.node_order,
+        cli_tool_id: node.cli_tool_id ?? undefined,
+        agent_tool_config_id: node.agent_tool_config_id ?? undefined,
         requires_approval: node.requires_approval,
         continue_on_error: node.continue_on_error
       }))
@@ -170,9 +192,9 @@ export class WorkflowRepository {
   }
 
   getWorkNodeTemplate(templateNodeId: string): WorkNodeTemplate | null {
-    const template = this.db.prepare(
-      'SELECT * FROM workflow_template_nodes WHERE id = ?'
-    ).get(templateNodeId) as WorkNodeTemplate | undefined
+    const template = this.db
+      .prepare('SELECT * FROM workflow_template_nodes WHERE id = ?')
+      .get(templateNodeId) as WorkNodeTemplate | undefined
     if (!template) return null
     return {
       ...template,
@@ -181,43 +203,48 @@ export class WorkflowRepository {
     }
   }
 
-  // ============ Workflow 实例操作 ============
   createWorkflow(taskId: string): Workflow {
     const now = new Date().toISOString()
     const id = newUlid()
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO workflows (id, task_id, current_node_index, status, created_at, updated_at)
       VALUES (?, ?, 0, 'todo', ?, ?)
-    `).run(id, taskId, now, now)
+    `)
+      .run(id, taskId, now, now)
     return this.getWorkflow(id)!
   }
 
   getWorkflow(id: string): Workflow | null {
-    return this.db.prepare('SELECT * FROM workflows WHERE id = ?').get(id) as Workflow | null
+    return (this.db.prepare('SELECT * FROM workflows WHERE id = ?').get(id) as Workflow) || null
   }
 
   getWorkflowByTaskId(taskId: string): Workflow | null {
-    return this.db.prepare('SELECT * FROM workflows WHERE task_id = ?').get(taskId) as Workflow | null
+    return (this.db.prepare('SELECT * FROM workflows WHERE task_id = ?').get(taskId) as Workflow) || null
   }
 
   updateWorkflowStatus(id: string, status: string, nodeIndex?: number): Workflow | null {
     const now = new Date().toISOString()
     if (nodeIndex !== undefined) {
-      this.db.prepare('UPDATE workflows SET status = ?, current_node_index = ?, updated_at = ? WHERE id = ?').run(status, nodeIndex, now, id)
+      this.db
+        .prepare('UPDATE workflows SET status = ?, current_node_index = ?, updated_at = ? WHERE id = ?')
+        .run(status, nodeIndex, now, id)
     } else {
-      this.db.prepare('UPDATE workflows SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
+      this.db
+        .prepare('UPDATE workflows SET status = ?, updated_at = ? WHERE id = ?')
+        .run(status, now, id)
     }
     return this.getWorkflow(id)
   }
 
-  // ============ WorkNode 实例操作 ============
   createWorkNodeFromTemplate(workflowId: string, template: WorkNodeTemplate): WorkNode {
     return this.insertWorkNode(
       workflowId,
-      template.id,
       template.node_order,
       template.name,
       template.prompt,
+      template.cli_tool_id ?? null,
+      template.agent_tool_config_id ?? null,
       template.requires_approval,
       template.continue_on_error
     )
@@ -231,10 +258,11 @@ export class WorkflowRepository {
     const order = Number.isFinite(nodeOrder) ? nodeOrder : template.node_order
     return this.insertWorkNode(
       workflowId,
-      template.id,
       order,
       template.name,
       template.prompt,
+      template.cli_tool_id ?? null,
+      template.agent_tool_config_id ?? null,
       template.requires_approval,
       template.continue_on_error
     )
@@ -251,7 +279,9 @@ export class WorkflowRepository {
   }
 
   getWorkNodesByWorkflowId(workflowId: string): WorkNode[] {
-    const nodes = this.db.prepare('SELECT * FROM work_nodes WHERE workflow_id = ? ORDER BY node_order ASC').all(workflowId) as WorkNode[]
+    const nodes = this.db
+      .prepare('SELECT * FROM work_nodes WHERE workflow_id = ? ORDER BY node_order ASC')
+      .all(workflowId) as WorkNode[]
     return nodes.map((node) => ({
       ...node,
       requires_approval: Boolean((node as any).requires_approval),
@@ -262,10 +292,16 @@ export class WorkflowRepository {
   updateWorkNodeStatus(id: string, status: string): WorkNode | null {
     const now = new Date().toISOString()
     if (status === 'in_progress') {
-      this.db.prepare('UPDATE work_nodes SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ?')
+      this.db
+        .prepare(
+          'UPDATE work_nodes SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ?'
+        )
         .run(status, now, now, id)
     } else if (status === 'done') {
-      this.db.prepare('UPDATE work_nodes SET status = ?, completed_at = COALESCE(completed_at, ?), updated_at = ? WHERE id = ?')
+      this.db
+        .prepare(
+          'UPDATE work_nodes SET status = ?, completed_at = COALESCE(completed_at, ?), updated_at = ? WHERE id = ?'
+        )
         .run(status, now, now, id)
     } else {
       this.db.prepare('UPDATE work_nodes SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
@@ -274,9 +310,9 @@ export class WorkflowRepository {
   }
 
   private getWorkNodeTemplates(templateId: string): WorkNodeTemplate[] {
-    const rows = this.db.prepare(
-      'SELECT * FROM workflow_template_nodes WHERE template_id = ? ORDER BY node_order ASC'
-    ).all(templateId) as WorkNodeTemplate[]
+    const rows = this.db
+      .prepare('SELECT * FROM workflow_template_nodes WHERE template_id = ? ORDER BY node_order ASC')
+      .all(templateId) as WorkNodeTemplate[]
     return rows.map((node) => ({
       ...node,
       requires_approval: Boolean(node.requires_approval),
@@ -286,33 +322,37 @@ export class WorkflowRepository {
 
   private insertWorkNode(
     workflowId: string,
-    templateNodeId: string | null,
     nodeOrder: number,
     name: string,
     prompt: string,
+    cliToolId: string | null,
+    agentToolConfigId: string | null,
     requiresApproval: boolean,
     continueOnError: boolean
   ): WorkNode {
     const now = new Date().toISOString()
     const id = newUlid()
-    this.db.prepare(`
+    this.db
+      .prepare(`
       INSERT INTO work_nodes (
-        id, workflow_id, template_node_id, node_order, name, prompt,
+        id, workflow_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id,
         requires_approval, continue_on_error, status, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?)
-    `).run(
-      id,
-      workflowId,
-      templateNodeId,
-      nodeOrder,
-      name,
-      prompt,
-      requiresApproval ? 1 : 0,
-      continueOnError ? 1 : 0,
-      now,
-      now
-    )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?)
+    `)
+      .run(
+        id,
+        workflowId,
+        nodeOrder,
+        name,
+        prompt,
+        cliToolId,
+        agentToolConfigId,
+        requiresApproval ? 1 : 0,
+        continueOnError ? 1 : 0,
+        now,
+        now
+      )
     return this.getWorkNode(id)!
   }
 }

@@ -185,11 +185,8 @@ export function TaskDetailContainer() {
         setEditCliToolId={detail.setEditCliToolId}
         editCliConfigId={detail.editCliConfigId}
         setEditCliConfigId={detail.setEditCliConfigId}
-        editPipelineTemplateId={detail.editPipelineTemplateId}
-        setEditPipelineTemplateId={detail.setEditPipelineTemplateId}
         cliTools={detail.cliTools}
         cliConfigs={detail.cliConfigs}
-        pipelineTemplates={detail.pipelineTemplates}
         onSaveEdit={detail.handleSaveEdit}
         isDeleteOpen={detail.isDeleteOpen}
         setIsDeleteOpen={detail.setIsDeleteOpen}

@@ -150,8 +150,13 @@ export const IPC_CHANNELS = {
     approveWorkNode: 'db:approveWorkNode',
     rejectWorkNode: 'db:rejectWorkNode',
     approveTask: 'db:approveTask',
-    createAgentExecution: 'db:createAgentExecution',
+    createTaskExecution: 'db:createTaskExecution',
+    createWorkNodeExecution: 'db:createWorkNodeExecution',
+    getAgentExecutionsByTaskId: 'db:getAgentExecutionsByTaskId',
     getAgentExecutionsByWorkNodeId: 'db:getAgentExecutionsByWorkNodeId',
+    getLatestTaskExecution: 'db:getLatestTaskExecution',
+    getLatestWorkNodeExecution: 'db:getLatestWorkNodeExecution',
+    createAgentExecution: 'db:createAgentExecution',
     getLatestAgentExecution: 'db:getLatestAgentExecution',
     updateAgentExecutionStatus: 'db:updateAgentExecutionStatus'
   },
@@ -386,8 +391,13 @@ export interface IpcContracts {
   'db:approveWorkNode': IpcContract<[string], unknown>
   'db:rejectWorkNode': IpcContract<[string], unknown>
   'db:approveTask': IpcContract<[string], unknown>
-  'db:createAgentExecution': IpcContract<[string], unknown>
+  'db:createTaskExecution': IpcContract<[string, string?, string?, string?], unknown>
+  'db:createWorkNodeExecution': IpcContract<[string, string, string?, string?, string?], unknown>
+  'db:getAgentExecutionsByTaskId': IpcContract<[string], unknown[]>
   'db:getAgentExecutionsByWorkNodeId': IpcContract<[string], unknown[]>
+  'db:getLatestTaskExecution': IpcContract<[string], unknown>
+  'db:getLatestWorkNodeExecution': IpcContract<[string], unknown>
+  'db:createAgentExecution': IpcContract<[string], unknown>
   'db:getLatestAgentExecution': IpcContract<[string], unknown>
   'db:updateAgentExecutionStatus': IpcContract<
     [string, 'idle' | 'running' | 'completed', number?, number?],
@@ -429,6 +439,7 @@ export interface IpcContracts {
       {
         title: string
         prompt: string
+        taskMode: 'conversation' | 'workflow'
         projectId?: string
         projectPath?: string
         createWorktree?: boolean
@@ -437,7 +448,6 @@ export interface IpcContracts {
         worktreeRootPath?: string
         cliToolId?: string
         agentToolConfigId?: string
-        agentToolConfigSnapshot?: string
         workflowTemplateId?: string
       }
     ],

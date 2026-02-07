@@ -60,7 +60,8 @@ export class DatabaseConnection {
         session_id TEXT UNIQUE,
         title TEXT NOT NULL,
         prompt TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'todo',
+        status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'in_progress', 'in_review', 'done')),
+        task_mode TEXT NOT NULL DEFAULT 'conversation' CHECK(task_mode IN ('conversation', 'workflow')),
         project_id TEXT,
         worktree_path TEXT,
         branch_name TEXT,
@@ -68,20 +69,33 @@ export class DatabaseConnection {
         workspace_path TEXT,
         cli_tool_id TEXT,
         agent_tool_config_id TEXT,
-        agent_tool_config_snapshot TEXT,
-        workflow_template_id TEXT,
         cost REAL,
         duration REAL,
-        favorite INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
+        CHECK (
+          (task_mode = 'conversation' AND cli_tool_id IS NOT NULL)
+          OR
+          (task_mode = 'workflow')
+        ),
+        CHECK (
+          (worktree_path IS NULL AND branch_name IS NULL AND base_branch IS NULL)
+          OR
+          (worktree_path IS NOT NULL AND branch_name IS NOT NULL AND base_branch IS NOT NULL)
+        )
       )
     `)
 
     this.migrateTasksSessionIdNullable(db)
     this.ensureColumn(db, 'tasks', 'agent_tool_config_id', 'TEXT')
-    this.ensureColumn(db, 'tasks', 'agent_tool_config_snapshot', 'TEXT')
+    this.ensureColumn(
+      db,
+      'tasks',
+      'task_mode',
+      "TEXT NOT NULL DEFAULT 'conversation' CHECK(task_mode IN ('conversation', 'workflow'))"
+    )
 
     // 创建 workflow_templates 表
     db.exec(`
@@ -105,11 +119,15 @@ export class DatabaseConnection {
         node_order INTEGER NOT NULL,
         name TEXT NOT NULL,
         prompt TEXT NOT NULL,
+        cli_tool_id TEXT,
+        agent_tool_config_id TEXT,
         requires_approval INTEGER DEFAULT 0,
         continue_on_error INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE
+        FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
+        UNIQUE (template_id, node_order)
       )
     `)
 
@@ -117,7 +135,7 @@ export class DatabaseConnection {
     db.exec(`
       CREATE TABLE IF NOT EXISTS workflows (
         id TEXT PRIMARY KEY,
-        task_id TEXT NOT NULL,
+        task_id TEXT NOT NULL UNIQUE,
         current_node_index INTEGER DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'todo',
         created_at TEXT NOT NULL,
@@ -131,10 +149,11 @@ export class DatabaseConnection {
       CREATE TABLE IF NOT EXISTS work_nodes (
         id TEXT PRIMARY KEY,
         workflow_id TEXT NOT NULL,
-        template_node_id TEXT,
         node_order INTEGER NOT NULL,
         name TEXT NOT NULL,
         prompt TEXT NOT NULL,
+        cli_tool_id TEXT,
+        agent_tool_config_id TEXT,
         requires_approval INTEGER DEFAULT 0,
         continue_on_error INTEGER DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'todo',
@@ -143,7 +162,8 @@ export class DatabaseConnection {
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
-        FOREIGN KEY (template_node_id) REFERENCES workflow_template_nodes(id) ON DELETE SET NULL
+        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
+        UNIQUE (workflow_id, node_order)
       )
     `)
 
@@ -151,15 +171,27 @@ export class DatabaseConnection {
     db.exec(`
       CREATE TABLE IF NOT EXISTS agent_executions (
         id TEXT PRIMARY KEY,
-        work_node_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        work_node_id TEXT,
+        execution_scope TEXT NOT NULL CHECK (execution_scope IN ('conversation', 'workflow')),
         execution_index INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'idle',
+        session_id TEXT,
+        cli_tool_id TEXT,
+        agent_tool_config_id TEXT,
         started_at TEXT,
         completed_at TEXT,
         cost REAL,
         duration REAL,
         created_at TEXT NOT NULL,
-        FOREIGN KEY (work_node_id) REFERENCES work_nodes(id) ON DELETE CASCADE
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (work_node_id) REFERENCES work_nodes(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
+        CHECK (
+          (execution_scope = 'conversation' AND work_node_id IS NULL)
+          OR
+          (execution_scope = 'workflow' AND work_node_id IS NOT NULL)
+        )
       )
     `)
 
@@ -196,7 +228,29 @@ export class DatabaseConnection {
       CREATE INDEX IF NOT EXISTS idx_agent_tool_configs_tool_id ON agent_tool_configs(tool_id);
       CREATE INDEX IF NOT EXISTS idx_workflows_task_id ON workflows(task_id);
       CREATE INDEX IF NOT EXISTS idx_work_nodes_workflow_id ON work_nodes(workflow_id);
+      CREATE INDEX IF NOT EXISTS idx_work_nodes_status ON work_nodes(status);
+      CREATE INDEX IF NOT EXISTS idx_agent_exec_task_id ON agent_executions(task_id);
       CREATE INDEX IF NOT EXISTS idx_agent_exec_work_node_id ON agent_executions(work_node_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_exec_session_id ON agent_executions(session_id);
+      CREATE INDEX IF NOT EXISTS idx_agent_exec_scope ON agent_executions(execution_scope);
+    `)
+
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_worktree_path
+        ON tasks(worktree_path)
+        WHERE worktree_path IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_project_branch
+        ON tasks(project_id, branch_name)
+        WHERE project_id IS NOT NULL AND branch_name IS NOT NULL;
+    `)
+
+    db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_exec_task_idx
+        ON agent_executions(task_id, execution_index)
+        WHERE work_node_id IS NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_exec_work_node_idx
+        ON agent_executions(work_node_id, execution_index)
+        WHERE work_node_id IS NOT NULL;
     `)
 
     // workflow_templates 唯一性索引（部分索引）

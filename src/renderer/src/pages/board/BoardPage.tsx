@@ -21,10 +21,9 @@ interface TaskWithWorktree {
   baseBranch?: string | null;
   workspacePath?: string | null;
   cliToolId?: string | null;
-  workflowTemplateId?: string | null;
+  taskMode: 'conversation' | 'workflow';
   cost: number | null;
   duration: number | null;
-  favorite: boolean;
   createdAt: string;
   updatedAt: string;
 }

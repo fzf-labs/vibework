@@ -11,6 +11,7 @@ export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcMo
       v.shape({
         title: v.string(),
         prompt: v.string(),
+        taskMode: v.enum(['conversation', 'workflow']),
         projectId: v.optional(v.string()),
         projectPath: v.optional(v.string()),
         createWorktree: v.optional(v.boolean()),
@@ -19,7 +20,6 @@ export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcMo
         worktreeRootPath: v.optional(v.string()),
         cliToolId: v.optional(v.string()),
         agentToolConfigId: v.optional(v.string()),
-        agentToolConfigSnapshot: v.optional(v.string()),
         workflowTemplateId: v.optional(v.string())
       })
     ],

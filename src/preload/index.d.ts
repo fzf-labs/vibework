@@ -271,8 +271,13 @@ interface DatabaseAPI {
   rejectWorkNode: (id: string) => Promise<void>
   approveTask: (id: string) => Promise<boolean>
   // AgentExecution
-  createAgentExecution: (workNodeId: string) => Promise<unknown>
+  createTaskExecution: (taskId: string, sessionId?: string, cliToolId?: string, agentToolConfigId?: string) => Promise<unknown>
+  createWorkNodeExecution: (taskId: string, workNodeId: string, sessionId?: string, cliToolId?: string, agentToolConfigId?: string) => Promise<unknown>
+  getAgentExecutionsByTaskId: (taskId: string) => Promise<unknown[]>
   getAgentExecutionsByWorkNodeId: (workNodeId: string) => Promise<unknown[]>
+  getLatestTaskExecution: (taskId: string) => Promise<unknown>
+  getLatestWorkNodeExecution: (workNodeId: string) => Promise<unknown>
+  createAgentExecution: (workNodeId: string) => Promise<unknown>
   getLatestAgentExecution: (workNodeId: string) => Promise<unknown>
   updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) => Promise<unknown>
 }
@@ -341,6 +346,7 @@ interface TaskWithWorktree {
   title: string
   prompt: string
   status: string
+  taskMode: 'conversation' | 'workflow'
   projectId: string | null
   worktreePath: string | null
   branchName: string | null
@@ -348,11 +354,8 @@ interface TaskWithWorktree {
   workspacePath?: string | null
   cliToolId?: string | null
   agentToolConfigId?: string | null
-  agentToolConfigSnapshot?: string | null
-  workflowTemplateId?: string | null
   cost: number | null
   duration: number | null
-  favorite: boolean
   createdAt: string
   updatedAt: string
 }
@@ -361,6 +364,7 @@ interface TaskAPI {
   create: (options: {
     title: string
     prompt: string
+    taskMode: 'conversation' | 'workflow'
     projectId?: string
     projectPath?: string
     createWorktree?: boolean
@@ -369,7 +373,6 @@ interface TaskAPI {
     worktreeRootPath?: string
     cliToolId?: string
     agentToolConfigId?: string
-    agentToolConfigSnapshot?: string
     workflowTemplateId?: string
   }) => Promise<{ success: boolean; data?: TaskWithWorktree; error?: string }>
   get: (id: string) => Promise<TaskWithWorktree | null>

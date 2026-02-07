@@ -70,6 +70,14 @@ export class TaskService {
       }
     }
 
+    if (options.taskMode === 'conversation' && !options.cliToolId) {
+      throw new Error('CLI tool is required for conversation tasks')
+    }
+
+    if (options.taskMode === 'workflow' && !options.workflowTemplateId) {
+      throw new Error('Workflow template is required for workflow tasks')
+    }
+
     let agentToolConfigId = options.agentToolConfigId
     if (!agentToolConfigId && options.cliToolId) {
       const defaultConfig = this.db.getDefaultAgentToolConfig(options.cliToolId)
@@ -83,22 +91,34 @@ export class TaskService {
       session_id: null,
       title: options.title.trim(),
       prompt: options.prompt,
+      task_mode: options.taskMode,
       project_id: options.projectId,
       worktree_path: worktreePath ?? undefined,
       branch_name: branchName ?? undefined,
       base_branch: baseBranch ?? undefined,
       workspace_path: workspacePath ?? undefined,
       cli_tool_id: options.cliToolId,
-      agent_tool_config_id: agentToolConfigId,
-      agent_tool_config_snapshot: options.agentToolConfigSnapshot,
-      workflow_template_id: options.workflowTemplateId
+      agent_tool_config_id: agentToolConfigId
     })
 
-    if (options.workflowTemplateId) {
+    if (options.taskMode === 'workflow' && options.workflowTemplateId) {
       try {
         this.db.seedWorkflowForTask(taskId, options.workflowTemplateId)
       } catch (error) {
         console.error('Failed to seed workflow for task:', error)
+      }
+    }
+
+    if (options.taskMode === 'conversation') {
+      try {
+        this.db.createTaskExecution(
+          taskId,
+          null,
+          options.cliToolId ?? null,
+          agentToolConfigId ?? null
+        )
+      } catch (error) {
+        console.error('Failed to create conversation execution:', error)
       }
     }
 
@@ -241,6 +261,7 @@ export class TaskService {
       title: task.title ?? task.prompt,
       prompt: task.prompt,
       status: task.status,
+      taskMode: task.task_mode ?? 'conversation',
       projectId: task.project_id,
       worktreePath: task.worktree_path,
       branchName: task.branch_name,
@@ -248,11 +269,8 @@ export class TaskService {
       workspacePath: task.workspace_path ?? task.worktree_path ?? null,
       cliToolId: task.cli_tool_id ?? null,
       agentToolConfigId: task.agent_tool_config_id ?? null,
-      agentToolConfigSnapshot: task.agent_tool_config_snapshot ?? null,
-      workflowTemplateId: task.workflow_template_id ?? null,
       cost: task.cost,
       duration: task.duration,
-      favorite: task.favorite,
       createdAt: task.created_at,
       updatedAt: task.updated_at
     }

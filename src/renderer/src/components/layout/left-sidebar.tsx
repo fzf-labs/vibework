@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   KanbanSquare,
+  ListTodo,
   ListChecks,
   Server,
   Sparkles,
@@ -31,6 +32,7 @@ export function LeftSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const navItems: NavItem[] = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard, path: '/dashboard' },
     { id: 'board', label: t.nav.board, icon: KanbanSquare, path: '/board' },
+    { id: 'tasks', label: t.nav.tasks, icon: ListTodo, path: '/tasks' },
     {
       id: 'pipelineTemplates',
       label: t.nav.pipelineTemplates,

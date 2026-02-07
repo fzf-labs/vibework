@@ -157,11 +157,9 @@ export class DatabaseService {
 
   // ============ 任务状态变更触发 ============
   private onTaskStarted(taskId: string, task: Task): void {
-    const templateId = task.workflow_template_id
-    if (!templateId) return
+    if (task.task_mode !== 'workflow') return
 
-    const existing = this.getWorkflowByTaskId(taskId)
-    const workflow = existing ?? this.ensureWorkflowFromTemplate(taskId, templateId)
+    const workflow = this.getWorkflowByTaskId(taskId)
     if (!workflow) return
 
     // 启动第一个节点
@@ -192,7 +190,20 @@ export class DatabaseService {
 
   private startWorkNode(workNodeId: string): void {
     this.updateWorkNodeStatus(workNodeId, 'in_progress')
-    this.createAgentExecution(workNodeId)
+
+    const node = this.getWorkNode(workNodeId)
+    if (!node) return
+
+    const workflow = this.getWorkflow(node.workflow_id)
+    if (!workflow) return
+
+    this.createWorkNodeExecution(
+      workflow.task_id,
+      workNodeId,
+      undefined,
+      node.cli_tool_id ?? null,
+      node.agent_tool_config_id ?? null
+    )
   }
 
   syncTaskStatusFromWorkflow(workflowId: string): void {
@@ -414,20 +425,67 @@ export class DatabaseService {
   }
 
   // ============ AgentExecution 操作 ============
+  createTaskExecution(
+    taskId: string,
+    sessionId?: string | null,
+    cliToolId?: string | null,
+    agentToolConfigId?: string | null
+  ): AgentExecution {
+    return this.agentRepo.createTaskExecution(taskId, sessionId, cliToolId, agentToolConfigId)
+  }
+
+  createWorkNodeExecution(
+    taskId: string,
+    workNodeId: string,
+    sessionId?: string | null,
+    cliToolId?: string | null,
+    agentToolConfigId?: string | null
+  ): AgentExecution {
+    return this.agentRepo.createWorkNodeExecution(
+      taskId,
+      workNodeId,
+      sessionId,
+      cliToolId,
+      agentToolConfigId
+    )
+  }
+
   createAgentExecution(workNodeId: string): AgentExecution {
-    return this.agentRepo.createAgentExecution(workNodeId)
+    const node = this.getWorkNode(workNodeId)
+    if (!node) {
+      throw new Error(`Work node not found: ${workNodeId}`)
+    }
+
+    const workflow = this.getWorkflow(node.workflow_id)
+    if (!workflow) {
+      throw new Error(`Workflow not found for work node: ${workNodeId}`)
+    }
+
+    return this.createWorkNodeExecution(workflow.task_id, workNodeId)
   }
 
   getAgentExecution(id: string): AgentExecution | null {
     return this.agentRepo.getAgentExecution(id)
   }
 
+  getAgentExecutionsByTaskId(taskId: string): AgentExecution[] {
+    return this.agentRepo.getAgentExecutionsByTaskId(taskId)
+  }
+
   getAgentExecutionsByWorkNodeId(workNodeId: string): AgentExecution[] {
     return this.agentRepo.getAgentExecutionsByWorkNodeId(workNodeId)
   }
 
+  getLatestTaskExecution(taskId: string): AgentExecution | null {
+    return this.agentRepo.getLatestTaskExecution(taskId)
+  }
+
+  getLatestWorkNodeExecution(workNodeId: string): AgentExecution | null {
+    return this.agentRepo.getLatestWorkNodeExecution(workNodeId)
+  }
+
   getLatestAgentExecution(workNodeId: string): AgentExecution | null {
-    return this.agentRepo.getLatestAgentExecution(workNodeId)
+    return this.getLatestWorkNodeExecution(workNodeId)
   }
 
   updateAgentExecutionStatus(
@@ -439,7 +497,7 @@ export class DatabaseService {
     const execution = this.agentRepo.updateAgentExecutionStatus(id, status, cost, duration)
 
     // 原则1: Agent CLI → Work Node 自动联动（idle 除外）
-    if (execution && status !== 'idle') {
+    if (execution && status !== 'idle' && execution.work_node_id) {
       this.syncWorkNodeFromAgentStatus(execution.work_node_id, status)
     }
 

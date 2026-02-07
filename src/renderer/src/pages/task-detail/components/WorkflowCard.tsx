@@ -1,37 +1,36 @@
-import { CheckCircle, Clock, ListChecks } from 'lucide-react';
+import { CheckCircle, Clock, ListChecks } from 'lucide-react'
 
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 
-import type { LanguageStrings, PipelineDisplayStatus } from '../types';
+import type { LanguageStrings, PipelineDisplayStatus } from '../types'
 
 type TemplateNode = {
-  id: string;
-  name?: string;
-  prompt?: string;
-};
+  id: string
+  name?: string
+  prompt?: string
+}
 
 export type WorkflowDisplayNode = {
-  id: string;
-  work_node_template_id?: string;
-  node_order: number;
-  status: PipelineDisplayStatus;
-  name?: string;
-  prompt?: string;
-};
+  id: string
+  node_order: number
+  status: PipelineDisplayStatus
+  name?: string
+  prompt?: string
+}
 
 interface WorkflowReviewNode {
-  id: string;
-  name: string;
-  status: PipelineDisplayStatus;
+  id: string
+  name: string
+  status: PipelineDisplayStatus
 }
 
 interface WorkflowCardProps {
-  t: LanguageStrings;
-  nodes: WorkflowDisplayNode[];
-  templateNodeMap: ReadonlyMap<string, TemplateNode>;
-  currentWorkNode: WorkflowReviewNode | null;
-  onApproveCurrent: () => void;
+  t: LanguageStrings
+  nodes: WorkflowDisplayNode[]
+  templateNodeMap: ReadonlyMap<string, TemplateNode>
+  currentWorkNode: WorkflowReviewNode | null
+  onApproveCurrent: () => void
 }
 
 export function WorkflowCard({
@@ -39,7 +38,7 @@ export function WorkflowCard({
   nodes,
   templateNodeMap,
   currentWorkNode,
-  onApproveCurrent,
+  onApproveCurrent
 }: WorkflowCardProps) {
   return (
     <section className="border-border/50 bg-background/95 rounded-xl border shadow-sm">
@@ -54,17 +53,15 @@ export function WorkflowCard({
           <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
             <div className="flex min-w-max items-center gap-1 pr-2">
               {nodes.map((node, index) => {
-                const nodeStatus = node.status;
-                const isCompleted = nodeStatus === 'done';
-                const isRunningNode = nodeStatus === 'in_progress';
-                const isWaiting = nodeStatus === 'in_review';
-                const isTodo = nodeStatus === 'todo';
-                const templateNode = node.work_node_template_id
-                  ? templateNodeMap.get(node.work_node_template_id)
-                  : undefined;
+                const nodeStatus = node.status
+                const isCompleted = nodeStatus === 'done'
+                const isRunningNode = nodeStatus === 'in_progress'
+                const isWaiting = nodeStatus === 'in_review'
+                const isTodo = nodeStatus === 'todo'
+                const templateNode = templateNodeMap.get(node.id)
                 const nodeName =
-                  node.name || templateNode?.name || `${t.task.stageLabel} ${index + 1}`;
-                const nodePrompt = node.prompt || templateNode?.prompt;
+                  node.name || templateNode?.name || `${t.task.stageLabel} ${index + 1}`
+                const nodePrompt = node.prompt || templateNode?.prompt
 
                 return (
                   <div key={node.id} className="flex items-center">
@@ -97,7 +94,7 @@ export function WorkflowCard({
                       />
                     )}
                   </div>
-                );
+                )
               })}
             </div>
           </div>
@@ -105,13 +102,13 @@ export function WorkflowCard({
         {currentWorkNode?.status === 'in_review' && (
           <div className="border-amber-500/30 bg-amber-50/30 rounded-md border px-2 py-2">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-foreground flex items-center gap-2 text-xs font-medium">
-                <Clock className="size-3 text-amber-500" />
-                <span className="max-w-[140px] truncate">
-                  {currentWorkNode.name}
-                </span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-amber-700">
+                  {t.task.workNodeReviewTitle || 'Work node review'}
+                </p>
+                <p className="text-muted-foreground truncate text-xs">{currentWorkNode.name}</p>
               </div>
-              <Button size="sm" onClick={onApproveCurrent} autoFocus>
+              <Button size="sm" className="h-7 px-2 text-xs" onClick={onApproveCurrent}>
                 {t.task.confirmComplete || 'Confirm complete'}
               </Button>
             </div>
@@ -119,5 +116,5 @@ export function WorkflowCard({
         )}
       </div>
     </section>
-  );
+  )
 }

@@ -12,17 +12,17 @@ export class TaskRepository {
     const now = new Date().toISOString()
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
-        id, session_id, title, prompt, status, project_id, worktree_path, branch_name,
-        base_branch, workspace_path, cli_tool_id, agent_tool_config_id, agent_tool_config_snapshot,
-        workflow_template_id, created_at, updated_at
+        id, session_id, title, prompt, status, task_mode, project_id, worktree_path, branch_name,
+        base_branch, workspace_path, cli_tool_id, agent_tool_config_id, cost, duration, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
     `)
     stmt.run(
       input.id,
       input.session_id ?? null,
       input.title,
       input.prompt,
+      input.task_mode ?? 'conversation',
       input.project_id || null,
       input.worktree_path || null,
       input.branch_name || null,
@@ -30,8 +30,6 @@ export class TaskRepository {
       input.workspace_path || null,
       input.cli_tool_id || null,
       input.agent_tool_config_id || null,
-      input.agent_tool_config_snapshot || null,
-      input.workflow_template_id || null,
       now,
       now
     )
@@ -40,34 +38,24 @@ export class TaskRepository {
 
   getTask(id: string): Task | null {
     const stmt = this.db.prepare('SELECT * FROM tasks WHERE id = ?')
-    const task = stmt.get(id) as any
-    if (task) {
-      task.favorite = Boolean(task.favorite)
-    }
-    return task
+    return (stmt.get(id) as Task) || null
   }
 
   getTaskBySessionId(sessionId: string): Task | null {
     const stmt = this.db.prepare('SELECT * FROM tasks WHERE session_id = ?')
-    const task = stmt.get(sessionId) as any
-    if (task) {
-      task.favorite = Boolean(task.favorite)
-    }
-    return task
+    return (stmt.get(sessionId) as Task) || null
   }
 
   getAllTasks(): Task[] {
     const stmt = this.db.prepare('SELECT * FROM tasks ORDER BY created_at DESC')
-    const tasks = stmt.all() as any[]
-    return tasks.map((t) => ({ ...t, favorite: Boolean(t.favorite) }))
+    return stmt.all() as Task[]
   }
 
   getTasksByProjectId(projectId: string): Task[] {
     const stmt = this.db.prepare(
       'SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at DESC'
     )
-    const tasks = stmt.all(projectId) as any[]
-    return tasks.map((t) => ({ ...t, favorite: Boolean(t.favorite) }))
+    return stmt.all(projectId) as Task[]
   }
 
   updateTask(id: string, updates: UpdateTaskInput): Task | null {
@@ -78,6 +66,10 @@ export class TaskRepository {
     if (updates.status !== undefined) {
       fields.push('status = ?')
       values.push(updates.status)
+    }
+    if (updates.task_mode !== undefined) {
+      fields.push('task_mode = ?')
+      values.push(updates.task_mode)
     }
     if (updates.session_id !== undefined) {
       fields.push('session_id = ?')
@@ -115,14 +107,6 @@ export class TaskRepository {
       fields.push('agent_tool_config_id = ?')
       values.push(updates.agent_tool_config_id)
     }
-    if (updates.agent_tool_config_snapshot !== undefined) {
-      fields.push('agent_tool_config_snapshot = ?')
-      values.push(updates.agent_tool_config_snapshot)
-    }
-    if (updates.workflow_template_id !== undefined) {
-      fields.push('workflow_template_id = ?')
-      values.push(updates.workflow_template_id)
-    }
     if (updates.cost !== undefined) {
       fields.push('cost = ?')
       values.push(updates.cost)
@@ -130,10 +114,6 @@ export class TaskRepository {
     if (updates.duration !== undefined) {
       fields.push('duration = ?')
       values.push(updates.duration)
-    }
-    if (updates.favorite !== undefined) {
-      fields.push('favorite = ?')
-      values.push(updates.favorite ? 1 : 0)
     }
 
     if (fields.length === 0) return this.getTask(id)
@@ -149,64 +129,20 @@ export class TaskRepository {
 
   updateTaskStatus(id: string, status: string): void {
     const now = new Date().toISOString()
-    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
+    this.db
+      .prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
       .run(status, now, id)
   }
 
   deleteTasksByProjectId(projectId: string): number {
-    const del = this.db.transaction(() => {
-      this.db.prepare(`
-        DELETE FROM agent_executions
-        WHERE work_node_id IN (
-          SELECT id FROM work_nodes WHERE workflow_id IN (
-            SELECT id FROM workflows WHERE task_id IN (
-              SELECT id FROM tasks WHERE project_id = ?
-            )
-          )
-        )
-      `).run(projectId)
-
-      this.db.prepare(`
-        DELETE FROM work_nodes
-        WHERE workflow_id IN (
-          SELECT id FROM workflows WHERE task_id IN (
-            SELECT id FROM tasks WHERE project_id = ?
-          )
-        )
-      `).run(projectId)
-
-      this.db.prepare(
-        'DELETE FROM workflows WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)'
-      ).run(projectId)
-
-      const result = this.db.prepare('DELETE FROM tasks WHERE project_id = ?').run(projectId)
-      return result.changes
-    })
-
-    return del()
+    const stmt = this.db.prepare('DELETE FROM tasks WHERE project_id = ?')
+    const result = stmt.run(projectId)
+    return result.changes
   }
 
   deleteTask(id: string): boolean {
-    const del = this.db.transaction(() => {
-      this.db.prepare(`
-        DELETE FROM agent_executions
-        WHERE work_node_id IN (
-          SELECT id FROM work_nodes WHERE workflow_id IN (
-            SELECT id FROM workflows WHERE task_id = ?
-          )
-        )
-      `).run(id)
-
-      this.db.prepare(
-        'DELETE FROM work_nodes WHERE workflow_id IN (SELECT id FROM workflows WHERE task_id = ?)'
-      ).run(id)
-
-      this.db.prepare('DELETE FROM workflows WHERE task_id = ?').run(id)
-
-      const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id)
-      return result.changes > 0
-    })
-
-    return del()
+    const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?')
+    const result = stmt.run(id)
+    return result.changes > 0
   }
 }

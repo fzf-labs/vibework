@@ -1,6 +1,7 @@
 export interface CreateTaskOptions {
   title: string
   prompt: string
+  taskMode: 'conversation' | 'workflow'
   projectId?: string
   projectPath?: string
   createWorktree?: boolean
@@ -9,7 +10,6 @@ export interface CreateTaskOptions {
   worktreeRootPath?: string
   cliToolId?: string
   agentToolConfigId?: string
-  agentToolConfigSnapshot?: string
   workflowTemplateId?: string
 }
 
@@ -19,6 +19,7 @@ export interface TaskWithWorktree {
   title: string
   prompt: string
   status: string
+  taskMode: 'conversation' | 'workflow'
   projectId: string | null
   worktreePath: string | null
   branchName: string | null
@@ -26,11 +27,8 @@ export interface TaskWithWorktree {
   workspacePath: string | null
   cliToolId: string | null
   agentToolConfigId: string | null
-  agentToolConfigSnapshot: string | null
-  workflowTemplateId: string | null
   cost: number | null
   duration: number | null
-  favorite: boolean
   createdAt: string
   updatedAt: string
 }

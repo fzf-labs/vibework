@@ -9,6 +9,7 @@ import {
   McpPage,
   ProjectsPage,
   PipelineTemplatesPage,
+  TasksPage,
 } from '@/pages';
 
 import { SetupGuard } from '@/components/shared/SetupGuard';
@@ -34,6 +35,10 @@ export const router = createHashRouter([
       {
         path: 'board',
         element: <BoardPage />,
+      },
+      {
+        path: 'tasks',
+        element: <TasksPage />,
       },
       {
         path: 'pipeline-templates',

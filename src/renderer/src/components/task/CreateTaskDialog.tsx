@@ -179,17 +179,22 @@ export function CreateTaskDialog({
       setError(t.task.createPromptRequired)
       return
     }
-    if (!selectedCliToolId) {
-      setError(t.task.createCliRequired)
-      return
-    }
-    if (cliConfigs.length > 0 && !selectedCliConfigId) {
-      setError(t.task.createCliConfigRequired || '请选择 CLI 配置项')
-      return
-    }
-    if (cliConfigs.length === 0) {
-      setError(t.task.createCliConfigEmpty || '请先创建 CLI 配置项')
-      return
+
+    const taskMode = selectedTemplateId ? 'workflow' : 'conversation'
+
+    if (taskMode === 'conversation') {
+      if (!selectedCliToolId) {
+        setError(t.task.createCliRequired)
+        return
+      }
+      if (cliConfigs.length > 0 && !selectedCliConfigId) {
+        setError(t.task.createCliConfigRequired || '请选择 CLI 配置项')
+        return
+      }
+      if (cliConfigs.length === 0) {
+        setError(t.task.createCliConfigEmpty || '请先创建 CLI 配置项')
+        return
+      }
     }
     if (isGitProject && !selectedBaseBranch) {
       setError(t.task.createBaseBranchRequired)
@@ -204,19 +209,22 @@ export function CreateTaskDialog({
       const settings = getSettings()
       const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'VW-'
       const worktreeRootPath = settings.gitWorktreeDir || '~/.vibework/worktrees'
-      const workflowTemplateId = selectedTemplateId || undefined
+      const workflowTemplateId = taskMode === 'workflow' ? selectedTemplateId : undefined
+      const cliToolId = taskMode === 'conversation' ? selectedCliToolId : undefined
+      const agentToolConfigId = taskMode === 'conversation' ? selectedCliConfigId || undefined : undefined
 
       const result = await window.api.task.create({
         title: trimmedTitle,
         prompt: trimmedPrompt,
+        taskMode,
         projectId,
         projectPath,
         createWorktree: isGitProject && !!projectPath,
         baseBranch: isGitProject ? selectedBaseBranch : undefined,
         worktreeBranchPrefix,
         worktreeRootPath,
-        cliToolId: selectedCliToolId,
-        agentToolConfigId: selectedCliConfigId || undefined,
+        cliToolId,
+        agentToolConfigId,
         workflowTemplateId
       })
 
@@ -340,15 +348,14 @@ export function CreateTaskDialog({
           )}
 
           <div>
-            <label className="text-sm font-medium">{t.task.createPipelineLabel} *</label>
+            <label className="text-sm font-medium">{t.task.createPipelineLabel}</label>
             <select
               value={selectedTemplateId}
               onChange={(e) => setSelectedTemplateId(e.target.value)}
               disabled={!projectId}
-              required
               className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
-              <option value="" disabled>请选择工作流模板</option>
+              <option value="">不选择（对话模式）</option>
               {renderTemplateOptions().map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}

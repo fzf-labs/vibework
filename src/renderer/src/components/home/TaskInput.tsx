@@ -56,6 +56,7 @@ export function TaskInput() {
       const result = await window.api.task.create({
         title: prompt,
         prompt,
+        taskMode: 'conversation',
         cliToolId: settings.defaultCliToolId || undefined,
       });
       if (result.success && result.data) {

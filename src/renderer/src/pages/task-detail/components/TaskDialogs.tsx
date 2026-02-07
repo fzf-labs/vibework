@@ -15,11 +15,6 @@ type CLIToolInfo = {
   displayName?: string;
 };
 
-type PipelineTemplateOption = {
-  id: string;
-  name: string;
-};
-
 type AgentToolConfigOption = {
   id: string;
   name: string;
@@ -35,11 +30,8 @@ interface TaskDialogsProps {
   setEditCliToolId: (value: string) => void;
   editCliConfigId: string;
   setEditCliConfigId: (value: string) => void;
-  editPipelineTemplateId: string;
-  setEditPipelineTemplateId: (value: string) => void;
   cliTools: CLIToolInfo[];
   cliConfigs: AgentToolConfigOption[];
-  pipelineTemplates: PipelineTemplateOption[];
   onSaveEdit: () => void;
   isDeleteOpen: boolean;
   setIsDeleteOpen: (open: boolean) => void;
@@ -56,11 +48,8 @@ export function TaskDialogs({
   setEditCliToolId,
   editCliConfigId,
   setEditCliConfigId,
-  editPipelineTemplateId,
-  setEditPipelineTemplateId,
   cliTools,
   cliConfigs,
-  pipelineTemplates,
   onSaveEdit,
   isDeleteOpen,
   setIsDeleteOpen,
@@ -136,23 +125,6 @@ export function TaskDialogs({
               )}
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {t.task.createPipelineLabel}
-              </label>
-              <select
-                value={editPipelineTemplateId}
-                onChange={(e) => setEditPipelineTemplateId(e.target.value)}
-                className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm"
-              >
-                <option value="">{t.task.createPipelineNone}</option>
-                {pipelineTemplates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <DialogFooter>
