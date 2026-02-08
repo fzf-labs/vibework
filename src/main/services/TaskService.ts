@@ -7,6 +7,7 @@ import { GitService } from './GitService'
 import { newUlid } from '../utils/ids'
 import { getAppPaths } from '../app/AppPaths'
 import type { CreateTaskOptions, TaskWithWorktree } from '../types/domain/task'
+import type { TaskStatus } from '../types/task'
 
 export class TaskService {
   private static readonly DEFAULT_WORKTREE_PREFIX = 'VW-'
@@ -45,14 +46,10 @@ export class TaskService {
       }
       try {
         baseBranch = options.baseBranch
-        const prefix =
-          options.worktreeBranchPrefix?.trim() || TaskService.DEFAULT_WORKTREE_PREFIX
+        const prefix = options.worktreeBranchPrefix?.trim() || TaskService.DEFAULT_WORKTREE_PREFIX
         branchName = `${prefix}${taskId}`
         const projectKey = options.projectId || 'project'
-        const worktreesRoot = path.join(
-          this.resolveWorktreeRoot(options.worktreeRootPath),
-          projectKey
-        )
+        const worktreesRoot = path.join(this.resolveWorktreeRoot(options.worktreeRootPath), projectKey)
         mkdirSync(worktreesRoot, { recursive: true })
         worktreePath = path.join(worktreesRoot, branchName)
         workspacePath = worktreePath
@@ -88,7 +85,6 @@ export class TaskService {
 
     const task = this.db.createTask({
       id: taskId,
-      session_id: null,
       title: options.title.trim(),
       prompt: options.prompt,
       task_mode: options.taskMode,
@@ -96,33 +92,21 @@ export class TaskService {
       worktree_path: worktreePath ?? undefined,
       branch_name: branchName ?? undefined,
       base_branch: baseBranch ?? undefined,
-      workspace_path: workspacePath ?? undefined,
-      cli_tool_id: options.cliToolId,
-      agent_tool_config_id: agentToolConfigId
+      workspace_path: workspacePath ?? undefined
     })
 
-    if (options.taskMode === 'workflow' && options.workflowTemplateId) {
-      try {
-        this.db.seedWorkflowForTask(taskId, options.workflowTemplateId)
-      } catch (error) {
-        console.error('Failed to seed workflow for task:', error)
-      }
-    }
-
     if (options.taskMode === 'conversation') {
-      try {
-        this.db.createTaskExecution(
-          taskId,
-          null,
-          options.cliToolId ?? null,
-          agentToolConfigId ?? null
-        )
-      } catch (error) {
-        console.error('Failed to create conversation execution:', error)
-      }
+      this.db.updateCurrentTaskNodeRuntime(taskId, {
+        cli_tool_id: options.cliToolId ?? null,
+        agent_tool_config_id: agentToolConfigId ?? null
+      })
     }
 
-    return this.mapTask(task)
+    if (options.taskMode === 'workflow' && options.workflowTemplateId) {
+      this.db.createTaskNodesFromTemplate(taskId, options.workflowTemplateId)
+    }
+
+    return this.mapTask(this.db.getTask(taskId) ?? task)
   }
 
   getTask(id: string): TaskWithWorktree | null {
@@ -130,23 +114,15 @@ export class TaskService {
     return task ? this.mapTask(task) : null
   }
 
-  getTaskBySessionId(sessionId: string): TaskWithWorktree | null {
-    const task = this.db.getTaskBySessionId(sessionId)
-    return task ? this.mapTask(task) : null
-  }
-
   getAllTasks(): TaskWithWorktree[] {
-    return this.db.getAllTasks().map((t) => this.mapTask(t))
+    return this.db.getAllTasks().map((task) => this.mapTask(task))
   }
 
   getTasksByProjectId(projectId: string): TaskWithWorktree[] {
-    return this.db.getTasksByProjectId(projectId).map((t) => this.mapTask(t))
+    return this.db.getTasksByProjectId(projectId).map((task) => this.mapTask(task))
   }
 
-  updateTaskStatus(
-    id: string,
-    status: string
-  ): TaskWithWorktree | null {
+  updateTaskStatus(id: string, status: TaskStatus): TaskWithWorktree | null {
     const task = this.db.updateTask(id, { status })
     return task ? this.mapTask(task) : null
   }
@@ -165,6 +141,7 @@ export class TaskService {
             return resolved
           }
         }
+
         let projectPath: string | null = null
         if (task.project_id) {
           const project = this.db.getProject(task.project_id)
@@ -173,6 +150,7 @@ export class TaskService {
         if (!projectPath && task.worktree_path) {
           projectPath = await this.git.inferRepoPathFromWorktree(task.worktree_path)
         }
+
         if (!projectPath) {
           if (task.worktree_path) {
             try {
@@ -206,9 +184,8 @@ export class TaskService {
               ? candidatePath
               : path.resolve(projectPath, candidatePath)
             const normalizedPath = await normalizePath(resolvedPath)
-            if (normalizedPath === repoPath) {
-              continue
-            }
+            if (normalizedPath === repoPath) continue
+
             try {
               await this.git.removeWorktree(projectPath, resolvedPath, true)
             } catch (error) {
@@ -227,7 +204,6 @@ export class TaskService {
             console.error('Failed to prune worktrees:', error)
           }
 
-          // 删除分支
           if (task.branch_name) {
             try {
               await this.git.deleteBranch(projectPath, task.branch_name, true)
@@ -257,20 +233,19 @@ export class TaskService {
   private mapTask(task: any): TaskWithWorktree {
     return {
       id: task.id,
-      sessionId: task.session_id ?? null,
       title: task.title ?? task.prompt,
       prompt: task.prompt,
       status: task.status,
       taskMode: task.task_mode ?? 'conversation',
-      projectId: task.project_id,
-      worktreePath: task.worktree_path,
-      branchName: task.branch_name,
+      projectId: task.project_id ?? null,
+      worktreePath: task.worktree_path ?? null,
+      branchName: task.branch_name ?? null,
       baseBranch: task.base_branch ?? null,
       workspacePath: task.workspace_path ?? task.worktree_path ?? null,
-      cliToolId: task.cli_tool_id ?? null,
-      agentToolConfigId: task.agent_tool_config_id ?? null,
-      cost: task.cost,
-      duration: task.duration,
+      startedAt: task.started_at ?? null,
+      completedAt: task.completed_at ?? null,
+      cost: task.cost ?? null,
+      duration: task.duration ?? null,
       createdAt: task.created_at,
       updatedAt: task.updated_at
     }

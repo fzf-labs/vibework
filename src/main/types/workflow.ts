@@ -1,9 +1,7 @@
 export type {
   DbWorkflowTemplate as WorkflowTemplate,
-  DbWorkNodeTemplate as WorkNodeTemplate,
-  DbWorkflow as Workflow,
-  DbWorkNode as WorkNode,
-  CreateWorkNodeTemplateInput,
+  DbTaskNodeTemplate as TaskNodeTemplate,
+  CreateTaskNodeTemplateInput,
   CreateWorkflowTemplateInput,
   UpdateWorkflowTemplateInput
 } from './db/workflow'

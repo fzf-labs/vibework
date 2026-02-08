@@ -1,14 +1,7 @@
-// 类型定义
 import { notifyTaskCompleted, playTaskReviewSound } from '@/lib/notifications'
-import type {
-  CreateTaskInput,
-  UpdateTaskInput,
-  Task
-} from './types'
+import type { CreateTaskInput, Task, TaskNode, UpdateTaskInput } from './types'
 
-// 导出统一的数据库 API（通过 IPC 调用 Main 进程）
 export const db = {
-  // ============ Task 操作 ============
   createTask: (input: CreateTaskInput): Promise<Task> => {
     return window.api.database.createTask(input) as Promise<Task>
   },
@@ -22,8 +15,7 @@ export const db = {
   },
 
   updateTask: async (id: string, updates: UpdateTaskInput): Promise<Task | null> => {
-    const updatedTask =
-      (await window.api.database.updateTask(id, updates)) as Task | null
+    const updatedTask = (await window.api.database.updateTask(id, updates)) as Task | null
 
     if (updates.status === 'done' && updatedTask?.status === 'done') {
       const taskTitle = updatedTask.title || updatedTask.prompt || undefined
@@ -41,7 +33,6 @@ export const db = {
     return window.api.task.delete(id, removeWorktree)
   },
 
-  // ============ Agent Tool Config 操作 ============
   listAgentToolConfigs: (toolId?: string): Promise<unknown[]> => {
     return window.api.database.listAgentToolConfigs(toolId) as Promise<unknown[]>
   },
@@ -66,7 +57,6 @@ export const db = {
     return window.api.database.setDefaultAgentToolConfig(id) as Promise<unknown>
   },
 
-  // ============ Workflow Template 操作 ============
   getGlobalWorkflowTemplates: (): Promise<unknown[]> => {
     return window.api.database.getGlobalWorkflowTemplates() as Promise<unknown[]>
   },
@@ -95,105 +85,70 @@ export const db = {
     return window.api.database.copyGlobalWorkflowToProject(globalTemplateId, projectId) as Promise<unknown>
   },
 
-  // ============ Workflow 实例操作 ============
-  createWorkflow: (taskId: string): Promise<unknown> => {
-    return window.api.database.createWorkflow(taskId) as Promise<unknown>
+  getTaskNodes: (taskId: string): Promise<TaskNode[]> => {
+    return window.api.database.getTaskNodes(taskId) as Promise<TaskNode[]>
   },
 
-  getWorkflow: (id: string): Promise<unknown> => {
-    return window.api.database.getWorkflow(id) as Promise<unknown>
+  getTaskNode: (nodeId: string): Promise<TaskNode | null> => {
+    return window.api.database.getTaskNode(nodeId) as Promise<TaskNode | null>
   },
 
-  getWorkflowByTaskId: (taskId: string): Promise<unknown> => {
-    return window.api.database.getWorkflowByTaskId(taskId) as Promise<unknown>
+  getCurrentTaskNode: (taskId: string): Promise<TaskNode | null> => {
+    return window.api.database.getCurrentTaskNode(taskId) as Promise<TaskNode | null>
   },
 
-  updateWorkflowStatus: (id: string, status: string, nodeIndex?: number): Promise<unknown> => {
-    return window.api.database.updateWorkflowStatus(id, status, nodeIndex) as Promise<unknown>
-  },
-
-  // ============ WorkNode 实例操作 ============
-  createWorkNode: (workflowId: string, templateId: string, nodeOrder: number): Promise<unknown> => {
-    return window.api.database.createWorkNode(workflowId, templateId, nodeOrder) as Promise<unknown>
-  },
-
-  getWorkNodesByWorkflowId: (workflowId: string): Promise<unknown[]> => {
-    return window.api.database.getWorkNodesByWorkflowId(workflowId) as Promise<unknown[]>
-  },
-
-  updateWorkNodeStatus: async (id: string, status: string): Promise<unknown> => {
-    const updatedNode =
-      (await window.api.database.updateWorkNodeStatus(id, status)) as unknown
-
-    return updatedNode
-  },
-
-  approveWorkNode: (id: string): Promise<void> => {
-    return window.api.database.approveWorkNode(id) as Promise<void>
-  },
-
-  rejectWorkNode: (id: string): Promise<void> => {
-    return window.api.database.rejectWorkNode(id) as Promise<void>
-  },
-
-  // ============ AgentExecution 操作 ============
-  createTaskExecution: (
+  updateCurrentTaskNodeRuntime: (
     taskId: string,
-    sessionId?: string,
-    cliToolId?: string,
-    agentToolConfigId?: string
+    updates: {
+      session_id?: string | null
+      cli_tool_id?: string | null
+      agent_tool_config_id?: string | null
+    }
+  ): Promise<TaskNode | null> => {
+    return window.api.database.updateCurrentTaskNodeRuntime(taskId, updates) as Promise<TaskNode | null>
+  },
+
+  getTaskNodesByStatus: (taskId: string, status: string): Promise<TaskNode[]> => {
+    return window.api.database.getTaskNodesByStatus(taskId, status) as Promise<TaskNode[]>
+  },
+
+  completeTaskNode: (
+    nodeId: string,
+    result?: {
+      resultSummary?: string | null
+      cost?: number | null
+      duration?: number | null
+      sessionId?: string | null
+    }
   ): Promise<unknown> => {
-    return window.api.database.createTaskExecution(
-      taskId,
-      sessionId,
-      cliToolId,
-      agentToolConfigId
-    ) as Promise<unknown>
+    return window.api.database.completeTaskNode(nodeId, result) as Promise<unknown>
   },
 
-  createWorkNodeExecution: (
-    taskId: string,
-    workNodeId: string,
-    sessionId?: string,
-    cliToolId?: string,
-    agentToolConfigId?: string
-  ): Promise<unknown> => {
-    return window.api.database.createWorkNodeExecution(
-      taskId,
-      workNodeId,
-      sessionId,
-      cliToolId,
-      agentToolConfigId
-    ) as Promise<unknown>
+  markTaskNodeErrorReview: (nodeId: string, error: string): Promise<unknown> => {
+    return window.api.database.markTaskNodeErrorReview(nodeId, error) as Promise<unknown>
   },
 
-  getAgentExecutionsByTaskId: (taskId: string): Promise<unknown[]> => {
-    return window.api.database.getAgentExecutionsByTaskId(taskId) as Promise<unknown[]>
+  approveTaskNode: (nodeId: string): Promise<unknown> => {
+    return window.api.database.approveTaskNode(nodeId) as Promise<unknown>
   },
 
-  getAgentExecutionsByWorkNodeId: (workNodeId: string): Promise<unknown[]> => {
-    return window.api.database.getAgentExecutionsByWorkNodeId(workNodeId) as Promise<unknown[]>
+  rejectTaskNode: (nodeId: string, reason?: string): Promise<unknown> => {
+    return window.api.database.rejectTaskNode(nodeId, reason) as Promise<unknown>
   },
 
-  getLatestTaskExecution: (taskId: string): Promise<unknown> => {
-    return window.api.database.getLatestTaskExecution(taskId) as Promise<unknown>
+  retryTaskNode: (nodeId: string): Promise<unknown> => {
+    return window.api.database.retryTaskNode(nodeId) as Promise<unknown>
   },
 
-  getLatestWorkNodeExecution: (workNodeId: string): Promise<unknown> => {
-    return window.api.database.getLatestWorkNodeExecution(workNodeId) as Promise<unknown>
+  cancelTaskNode: (nodeId: string): Promise<unknown> => {
+    return window.api.database.cancelTaskNode(nodeId) as Promise<unknown>
   },
 
-  createAgentExecution: (workNodeId: string): Promise<unknown> => {
-    return window.api.database.createAgentExecution(workNodeId) as Promise<unknown>
+  startTaskExecution: (taskId: string): Promise<unknown> => {
+    return window.api.task.startExecution(taskId) as Promise<unknown>
   },
 
-  getLatestAgentExecution: (workNodeId: string): Promise<unknown> => {
-    return window.api.database.getLatestAgentExecution(workNodeId) as Promise<unknown>
-  },
-
-  updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number): Promise<unknown> => {
-    return window.api.database.updateAgentExecutionStatus(id, status, cost, duration) as Promise<unknown>
-  },
-
-  // ============ 辅助函数 ============
+  stopTaskExecution: (taskId: string): Promise<unknown> => {
+    return window.api.task.stopExecution(taskId) as Promise<unknown>
+  }
 }

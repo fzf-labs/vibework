@@ -11,7 +11,6 @@ import type { TaskStatus } from '@/data/types';
 // Task type from API (camelCase fields)
 interface TaskWithWorktree {
   id: string;
-  sessionId: string | null;
   title: string;
   prompt: string;
   status: string;
@@ -20,8 +19,9 @@ interface TaskWithWorktree {
   branchName: string | null;
   baseBranch?: string | null;
   workspacePath?: string | null;
-  cliToolId?: string | null;
   taskMode: 'conversation' | 'workflow';
+  startedAt?: string | null;
+  completedAt?: string | null;
   cost: number | null;
   duration: number | null;
   createdAt: string;

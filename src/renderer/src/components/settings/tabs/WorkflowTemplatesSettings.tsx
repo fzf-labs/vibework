@@ -14,7 +14,7 @@ import {
   type WorkflowTemplateFormValues,
 } from '@/components/pipeline';
 
-interface WorkNodeTemplate {
+interface TaskNodeTemplate {
   id: string;
   template_id: string;
   node_order: number;
@@ -32,7 +32,7 @@ interface WorkflowTemplate {
   description?: string | null;
   scope: 'global' | 'project';
   project_id?: string | null;
-  nodes: WorkNodeTemplate[];
+  nodes: TaskNodeTemplate[];
   created_at: string;
   updated_at: string;
 }

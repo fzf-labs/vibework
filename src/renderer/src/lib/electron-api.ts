@@ -179,16 +179,6 @@ export const shell = {
 // 路径操作
 export const path = {
   /**
-   * 获取应用数据目录
-   */
-  async appDataDir(): Promise<string> {
-    if (!window.api) {
-      throw new Error('Electron API not available')
-    }
-    return window.api.path.appDataDir()
-  },
-
-  /**
    * 获取应用配置目录
    */
   async appConfigDir(): Promise<string> {

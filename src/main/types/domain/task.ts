@@ -15,7 +15,6 @@ export interface CreateTaskOptions {
 
 export interface TaskWithWorktree {
   id: string
-  sessionId: string | null
   title: string
   prompt: string
   status: string
@@ -25,8 +24,8 @@ export interface TaskWithWorktree {
   branchName: string | null
   baseBranch: string | null
   workspacePath: string | null
-  cliToolId: string | null
-  agentToolConfigId: string | null
+  startedAt: string | null
+  completedAt: string | null
   cost: number | null
   duration: number | null
   createdAt: string

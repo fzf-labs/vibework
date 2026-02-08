@@ -19,7 +19,7 @@ export function NotificationSettings({
   const supported = isDesktopNotificationSupported();
 
   const handleToggle = async (
-    key: 'taskCompleteNotificationsEnabled' | 'workNodeCompleteNotificationsEnabled',
+    key: 'taskCompleteNotificationsEnabled' | 'taskNodeCompleteNotificationsEnabled',
     enabled: boolean
   ) => {
     if (!enabled) {
@@ -70,18 +70,18 @@ export function NotificationSettings({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {t.settings?.notificationWorkNodeTitle ||
-                'Work node completion notifications'}
+              {t.settings?.notificationTaskNodeTitle ||
+                'Task node completion notifications'}
             </p>
             <p className="text-muted-foreground text-xs">
-              {t.settings?.notificationWorkNodeDescription ||
-                'Show a desktop notification when a work node completes.'}
+              {t.settings?.notificationTaskNodeDescription ||
+                'Show a desktop notification when a task node completes.'}
             </p>
           </div>
           <Switch
-            checked={settings.workNodeCompleteNotificationsEnabled}
+            checked={settings.taskNodeCompleteNotificationsEnabled}
             onChange={(enabled) =>
-              handleToggle('workNodeCompleteNotificationsEnabled', enabled)
+              handleToggle('taskNodeCompleteNotificationsEnabled', enabled)
             }
             disabled={!supported || isRequesting}
           />

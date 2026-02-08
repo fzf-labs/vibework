@@ -1,4 +1,4 @@
-import { CheckCircle, Clock, ListChecks } from 'lucide-react'
+import { Ban, CheckCircle, Clock, ListChecks } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ interface WorkflowCardProps {
   t: LanguageStrings
   nodes: WorkflowDisplayNode[]
   templateNodeMap: ReadonlyMap<string, TemplateNode>
-  currentWorkNode: WorkflowReviewNode | null
+  currentTaskNode: WorkflowReviewNode | null
   onApproveCurrent: () => void
 }
 
@@ -37,7 +37,7 @@ export function WorkflowCard({
   t,
   nodes,
   templateNodeMap,
-  currentWorkNode,
+  currentTaskNode,
   onApproveCurrent
 }: WorkflowCardProps) {
   return (
@@ -57,6 +57,7 @@ export function WorkflowCard({
                 const isCompleted = nodeStatus === 'done'
                 const isRunningNode = nodeStatus === 'in_progress'
                 const isWaiting = nodeStatus === 'in_review'
+                const isCancelled = nodeStatus === 'cancelled'
                 const isTodo = nodeStatus === 'todo'
                 const templateNode = templateNodeMap.get(node.id)
                 const nodeName =
@@ -71,6 +72,7 @@ export function WorkflowCard({
                         isCompleted && 'bg-green-500/10 text-green-600',
                         isWaiting && 'bg-amber-500/10 text-amber-600',
                         isRunningNode && 'bg-blue-500/10 text-blue-600',
+                        isCancelled && 'bg-zinc-500/10 text-zinc-500',
                         isTodo && 'bg-muted/40 text-muted-foreground'
                       )}
                       title={nodePrompt}
@@ -80,6 +82,7 @@ export function WorkflowCard({
                         <span className="size-2 animate-pulse rounded-full bg-blue-500" />
                       )}
                       {isWaiting && <Clock className="size-3" />}
+                      {isCancelled && <Ban className="size-3" />}
                       {isTodo && (
                         <span className="size-2 rounded-full bg-muted-foreground/30" />
                       )}
@@ -99,14 +102,14 @@ export function WorkflowCard({
             </div>
           </div>
         )}
-        {currentWorkNode?.status === 'in_review' && (
+        {currentTaskNode?.status === 'in_review' && (
           <div className="border-amber-500/30 bg-amber-50/30 rounded-md border px-2 py-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-amber-700">
-                  {t.task.workNodeReviewTitle || 'Work node review'}
+                  {t.task.taskNodeReviewTitle || 'Task node review'}
                 </p>
-                <p className="text-muted-foreground truncate text-xs">{currentWorkNode.name}</p>
+                <p className="text-muted-foreground truncate text-xs">{currentTaskNode.name}</p>
               </div>
               <Button size="sm" className="h-7 px-2 text-xs" onClick={onApproveCurrent}>
                 {t.task.confirmComplete || 'Confirm complete'}

@@ -101,11 +101,11 @@ export interface Settings {
   defaultProvider: string;
   defaultModel: string;
   taskCompleteSoundEnabled: boolean;
-  workNodeCompleteSoundEnabled: boolean;
+  taskNodeCompleteSoundEnabled: boolean;
   taskCompleteNotificationsEnabled: boolean;
-  workNodeCompleteNotificationsEnabled: boolean;
+  taskNodeCompleteNotificationsEnabled: boolean;
   taskCompleteSound: SoundChoice;
-  workNodeCompleteSound: SoundChoice;
+  taskNodeCompleteSound: SoundChoice;
   mcpConfigPath: string;
   mcpUserDirEnabled: boolean;
   mcpAppDirEnabled: boolean;

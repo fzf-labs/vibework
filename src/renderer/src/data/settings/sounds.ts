@@ -24,7 +24,7 @@ export const getResourceSoundPath = (fileName: string): string =>
   `${RESOURCE_SOUND_PREFIX}${fileName}`;
 
 export const DEFAULT_TASK_COMPLETE_SOUND_FILE = 'bell.mp3';
-export const DEFAULT_WORKNODE_COMPLETE_SOUND_FILE = 'ding.mp3';
+export const DEFAULT_TASK_NODE_COMPLETE_SOUND_FILE = 'ding.mp3';
 
 export const DEFAULT_TASK_COMPLETE_SOUND: SoundChoice = {
   source: 'file',
@@ -32,8 +32,9 @@ export const DEFAULT_TASK_COMPLETE_SOUND: SoundChoice = {
   filePath: getResourceSoundPath(DEFAULT_TASK_COMPLETE_SOUND_FILE),
 };
 
-export const DEFAULT_WORKNODE_COMPLETE_SOUND: SoundChoice = {
+export const DEFAULT_TASK_NODE_COMPLETE_SOUND: SoundChoice = {
   source: 'file',
   presetId: 'pulse',
-  filePath: getResourceSoundPath(DEFAULT_WORKNODE_COMPLETE_SOUND_FILE),
+  filePath: getResourceSoundPath(DEFAULT_TASK_NODE_COMPLETE_SOUND_FILE),
 };
+

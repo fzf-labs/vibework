@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 
 interface Task {
   id: string
-  sessionId: string | null
   title: string
   prompt: string
   status: string

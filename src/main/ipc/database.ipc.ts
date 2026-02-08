@@ -1,14 +1,13 @@
 import type { IpcModuleContext } from './types'
 import type { DatabaseService } from '../services/DatabaseService'
+import type { TaskNodeStatus } from '../types/task'
 import { IPC_CHANNELS } from './channels'
 
 export const registerDatabaseIpc = ({
   handle,
   v,
   services,
-  workflowStatusValues,
-  workNodeStatusValues,
-  agentExecutionStatusValues
+  taskNodeStatusValues
 }: IpcModuleContext): void => {
   const { databaseService } = services
 
@@ -104,120 +103,77 @@ export const registerDatabaseIpc = ({
       databaseService.copyGlobalWorkflowToProject(globalTemplateId, projectId)
   )
 
-  handle(IPC_CHANNELS.database.createWorkflow, [v.string()], (_, taskId) =>
-    databaseService.createWorkflow(taskId)
+  handle(IPC_CHANNELS.database.getTaskNodes, [v.string()], (_, taskId) =>
+    databaseService.getTaskNodes(taskId)
   )
 
-  handle(IPC_CHANNELS.database.getWorkflow, [v.string()], (_, id) => databaseService.getWorkflow(id))
-
-  handle(IPC_CHANNELS.database.getWorkflowByTaskId, [v.string()], (_, taskId) =>
-    databaseService.getWorkflowByTaskId(taskId)
+  handle(IPC_CHANNELS.database.getTaskNode, [v.string()], (_, nodeId) =>
+    databaseService.getTaskNode(nodeId)
   )
 
-  handle(
-    IPC_CHANNELS.database.updateWorkflowStatus,
-    [v.string(), v.enum(workflowStatusValues), v.optional(v.number({ min: 0 }))],
-    (_, id, status, nodeIndex) => databaseService.updateWorkflowStatus(id, status, nodeIndex)
+  handle(IPC_CHANNELS.database.getCurrentTaskNode, [v.string()], (_, taskId) =>
+    databaseService.getCurrentTaskNode(taskId)
   )
 
   handle(
-    IPC_CHANNELS.database.createWorkNode,
-    [v.string(), v.string(), v.number({ min: 0 })],
-    (_, workflowId, templateId, nodeOrder) =>
-      databaseService.createWorkNode(workflowId, templateId, nodeOrder)
-  )
-
-  handle(IPC_CHANNELS.database.getWorkNodesByWorkflowId, [v.string()], (_, workflowId) =>
-    databaseService.getWorkNodesByWorkflowId(workflowId)
-  )
-
-  handle(
-    IPC_CHANNELS.database.updateWorkNodeStatus,
-    [v.string(), v.enum(workNodeStatusValues)],
-    (_, id, status) => databaseService.updateWorkNodeStatus(id, status)
-  )
-
-  handle(IPC_CHANNELS.database.approveWorkNode, [v.string()], (_, id) =>
-    databaseService.approveWorkNode(id)
-  )
-
-  handle(IPC_CHANNELS.database.rejectWorkNode, [v.string()], (_, id) =>
-    databaseService.rejectWorkNode(id)
-  )
-
-  handle(IPC_CHANNELS.database.approveTask, [v.string()], (_, id) =>
-    databaseService.approveTask(id)
-  )
-
-  handle(
-    IPC_CHANNELS.database.createTaskExecution,
+    IPC_CHANNELS.database.updateCurrentTaskNodeRuntime,
     [
       v.string(),
-      v.optional(v.string({ allowEmpty: true })),
-      v.optional(v.string({ allowEmpty: true })),
-      v.optional(v.string({ allowEmpty: true }))
+      v.shape({
+        session_id: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+        cli_tool_id: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+        agent_tool_config_id: v.optional(v.nullable(v.string({ allowEmpty: true })))
+      })
     ],
-    (_, taskId, sessionId, cliToolId, agentToolConfigId) =>
-      databaseService.createTaskExecution(
+    (_, taskId, updates) =>
+      databaseService.updateCurrentTaskNodeRuntime(
         taskId,
-        sessionId || undefined,
-        cliToolId || undefined,
-        agentToolConfigId || undefined
+        updates as unknown as Parameters<DatabaseService['updateCurrentTaskNodeRuntime']>[1]
       )
   )
 
   handle(
-    IPC_CHANNELS.database.createWorkNodeExecution,
-    [
-      v.string(),
-      v.string(),
-      v.optional(v.string({ allowEmpty: true })),
-      v.optional(v.string({ allowEmpty: true })),
-      v.optional(v.string({ allowEmpty: true }))
-    ],
-    (_, taskId, workNodeId, sessionId, cliToolId, agentToolConfigId) =>
-      databaseService.createWorkNodeExecution(
-        taskId,
-        workNodeId,
-        sessionId || undefined,
-        cliToolId || undefined,
-        agentToolConfigId || undefined
-      )
-  )
-
-  handle(IPC_CHANNELS.database.getAgentExecutionsByTaskId, [v.string()], (_, taskId) =>
-    databaseService.getAgentExecutionsByTaskId(taskId)
-  )
-
-  handle(IPC_CHANNELS.database.getAgentExecutionsByWorkNodeId, [v.string()], (_, workNodeId) =>
-    databaseService.getAgentExecutionsByWorkNodeId(workNodeId)
-  )
-
-  handle(IPC_CHANNELS.database.getLatestTaskExecution, [v.string()], (_, taskId) =>
-    databaseService.getLatestTaskExecution(taskId)
-  )
-
-  handle(IPC_CHANNELS.database.getLatestWorkNodeExecution, [v.string()], (_, workNodeId) =>
-    databaseService.getLatestWorkNodeExecution(workNodeId)
-  )
-
-  handle(IPC_CHANNELS.database.createAgentExecution, [v.string()], (_, workNodeId) =>
-    databaseService.createAgentExecution(workNodeId)
-  )
-
-  handle(IPC_CHANNELS.database.getLatestAgentExecution, [v.string()], (_, workNodeId) =>
-    databaseService.getLatestAgentExecution(workNodeId)
+    IPC_CHANNELS.database.getTaskNodesByStatus,
+    [v.string(), v.enum(taskNodeStatusValues)],
+    (_, taskId, status) => databaseService.getTaskNodesByStatus(taskId, status as TaskNodeStatus)
   )
 
   handle(
-    IPC_CHANNELS.database.updateAgentExecutionStatus,
+    IPC_CHANNELS.database.completeTaskNode,
     [
       v.string(),
-      v.enum(agentExecutionStatusValues),
-      v.optional(v.number({ min: 0 })),
-      v.optional(v.number({ min: 0 }))
+      v.optional(
+        v.shape({
+          resultSummary: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+          cost: v.optional(v.nullable(v.number())),
+          duration: v.optional(v.nullable(v.number())),
+          sessionId: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+          allowConversationCompletion: v.optional(v.boolean())
+        })
+      )
     ],
-    (_, id, status, cost, duration) =>
-      databaseService.updateAgentExecutionStatus(id, status, cost, duration)
+    (_, nodeId, result) => databaseService.completeTaskNode(nodeId, result || {})
+  )
+
+  handle(IPC_CHANNELS.database.markTaskNodeErrorReview, [v.string(), v.string()], (_, nodeId, error) =>
+    databaseService.markTaskNodeErrorReview(nodeId, error)
+  )
+
+  handle(IPC_CHANNELS.database.approveTaskNode, [v.string()], (_, nodeId) =>
+    databaseService.approveTaskNode(nodeId)
+  )
+
+  handle(
+    IPC_CHANNELS.database.rejectTaskNode,
+    [v.string(), v.optional(v.string({ allowEmpty: true }))],
+    (_, nodeId, reason) => databaseService.rejectTaskNode(nodeId, reason || undefined)
+  )
+
+  handle(IPC_CHANNELS.database.retryTaskNode, [v.string()], (_, nodeId) =>
+    databaseService.retryTaskNode(nodeId)
+  )
+
+  handle(IPC_CHANNELS.database.cancelTaskNode, [v.string()], (_, nodeId) =>
+    databaseService.cancelTaskNode(nodeId)
   )
 }

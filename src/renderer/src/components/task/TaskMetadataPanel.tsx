@@ -6,12 +6,14 @@ import {
   Clock,
   Play,
   CheckCircle,
+  Ban,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface TaskMetadataPanelProps {
   task: Task | null;
+  cliToolId?: string | null;
   onStatusChange?: (status: TaskStatus) => void;
   onOpenWorktree?: () => void;
   className?: string;
@@ -41,10 +43,16 @@ const statusConfig: Record<
     label: 'Done',
     color: 'text-green-500 bg-green-500/10',
   },
+  cancelled: {
+    icon: Ban,
+    label: 'Cancelled',
+    color: 'text-zinc-500 bg-zinc-500/10',
+  },
 };
 
 export function TaskMetadataPanel({
   task,
+  cliToolId,
   onStatusChange: _onStatusChange,
   onOpenWorktree,
   className,
@@ -133,12 +141,12 @@ export function TaskMetadataPanel({
       )}
 
       {/* CLI Tool */}
-      {task.cli_tool_id && (
+      {cliToolId && (
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground text-xs font-medium">
             CLI
           </span>
-          <div className="text-xs font-mono">{task.cli_tool_id}</div>
+          <div className="text-xs font-mono">{cliToolId}</div>
         </div>
       )}
 

@@ -238,7 +238,6 @@ export const registerFilesystemIpc = ({
     shell.showItemInFolder(path)
   })
 
-  handle(IPC_CHANNELS.path.appDataDir, [], () => app.getPath('appData'))
   handle(IPC_CHANNELS.path.appConfigDir, [], () => app.getPath('userData'))
   handle(IPC_CHANNELS.path.tempDir, [], () => app.getPath('temp'))
   handle(IPC_CHANNELS.path.resourcesDir, [], () => process.resourcesPath)

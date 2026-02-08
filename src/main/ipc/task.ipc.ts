@@ -1,9 +1,10 @@
 import type { IpcModuleContext } from './types'
 import type { TaskService } from '../services/TaskService'
+import type { TaskStatus } from '../types/task'
 import { IPC_CHANNELS } from './channels'
 
 export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcModuleContext): void => {
-  const { taskService } = services
+  const { taskService, databaseService } = services
 
   handle(
     IPC_CHANNELS.task.create,
@@ -42,10 +43,18 @@ export const registerTaskIpc = ({ handle, v, services, taskStatusValues }: IpcMo
   )
 
   handle(IPC_CHANNELS.task.updateStatus, [v.string(), v.enum(taskStatusValues)], (_, id, status) =>
-    taskService.updateTaskStatus(id, status)
+    taskService.updateTaskStatus(id, status as TaskStatus)
   )
 
   handle(IPC_CHANNELS.task.delete, [v.string(), v.optional(v.boolean())], async (_, id, removeWorktree) => {
     return await taskService.deleteTask(id, removeWorktree)
+  })
+
+  handle(IPC_CHANNELS.task.startExecution, [v.string()], (_, taskId) => {
+    return databaseService.startTaskExecution(taskId)
+  })
+
+  handle(IPC_CHANNELS.task.stopExecution, [v.string()], (_, taskId) => {
+    return databaseService.stopTaskExecution(taskId)
   })
 }

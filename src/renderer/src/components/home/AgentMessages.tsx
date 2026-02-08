@@ -15,6 +15,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { Button } from '@/components/ui/button';
+import { shell } from '@/lib/electron-api';
 
 interface AgentMessagesProps {
   messages: AgentMessage[];
@@ -142,7 +143,6 @@ function ErrorMessage({ message }: { message: string }) {
     const openLogFile = async () => {
       try {
         // Try to open the log file with the system's default application
-        const { shell } = await import('@/lib/electron-api');
         await shell.showItemInFolder(logPath);
       } catch {
         console.error('Failed to open log file');
@@ -220,8 +220,6 @@ export function AgentMessages({ messages, isRunning }: AgentMessagesProps) {
                             e.preventDefault();
                             if (href) {
                               try {
-                                const { shell } =
-                                  await import('@/lib/electron-api');
                                 await shell.openUrl(href);
                               } catch {
                                 window.open(href, '_blank');

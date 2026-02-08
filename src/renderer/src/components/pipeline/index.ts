@@ -1,5 +1,5 @@
 export { WorkflowTemplateDialog } from './WorkflowTemplateDialog';
 export type {
   WorkflowTemplateFormValues,
-  WorkNodeTemplateDraft,
+  TaskNodeTemplateDraft,
 } from './WorkflowTemplateDialog';

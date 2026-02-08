@@ -4,8 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import JSZip from 'jszip';
-import type { fs as ElectronFs } from '@/lib/electron-api';
-import { getDisplayPath, getVibeworkDataDir } from '@/lib/paths';
+import { dialog, fs } from '@/lib/electron-api';
+import { getDataRootDir, getDisplayPath } from '@/lib/paths';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
 import {
@@ -17,7 +17,7 @@ import {
   Upload,
 } from 'lucide-react';
 
-type FsApi = typeof ElectronFs;
+type FsApi = typeof fs;
 
 interface FileEntry {
   name: string;
@@ -171,7 +171,7 @@ export function DataSettings() {
   useEffect(() => {
     const loadDisplayPath = async () => {
       try {
-        const dirPath = await getVibeworkDataDir();
+        const dirPath = await getDataRootDir();
         const resolvedPath = await resolvePath(dirPath);
         const displayPath = await getDisplayPath(resolvedPath);
         setVibeworkDisplayPath(displayPath);
@@ -184,7 +184,7 @@ export function DataSettings() {
   }, []);
 
   const getResolvedVibeworkDir = async () => {
-    const dirPath = await getVibeworkDataDir();
+    const dirPath = await getDataRootDir();
     return resolvePath(dirPath);
   };
 
@@ -212,7 +212,6 @@ export function DataSettings() {
 
     try {
       ensureElectron();
-      const { dialog, fs } = await import('@/lib/electron-api');
       const vibeworkDir = await getResolvedVibeworkDir();
       const exists = await fs.exists(vibeworkDir);
       if (!exists) {
@@ -249,7 +248,6 @@ export function DataSettings() {
 
     try {
       ensureElectron();
-      const { dialog, fs } = await import('@/lib/electron-api');
       const filePath = await dialog.open({
         filters: [{ name: 'Zip', extensions: ['zip'] }],
         multiple: false,
@@ -288,7 +286,6 @@ export function DataSettings() {
 
     try {
       ensureElectron();
-      const { fs } = await import('@/lib/electron-api');
       const vibeworkDir = await getResolvedVibeworkDir();
       const exists = await fs.exists(vibeworkDir);
 
@@ -328,7 +325,6 @@ export function DataSettings() {
 
     try {
       ensureElectron();
-      const { fs } = await import('@/lib/electron-api');
       const vibeworkDir = await getResolvedVibeworkDir();
       const exists = await fs.exists(vibeworkDir);
       if (exists) {

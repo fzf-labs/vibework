@@ -3,10 +3,8 @@ import { newUlid } from '../../utils/ids'
 import type {
   CreateWorkflowTemplateInput,
   UpdateWorkflowTemplateInput,
-  Workflow,
   WorkflowTemplate,
-  WorkNode,
-  WorkNodeTemplate
+  TaskNodeTemplate
 } from '../../types/workflow'
 
 export class WorkflowRepository {
@@ -76,7 +74,7 @@ export class WorkflowRepository {
       ...row,
       scope: 'global' as const,
       project_id: null,
-      nodes: this.getWorkNodeTemplates(row.id)
+      nodes: this.getTaskNodeTemplates(row.id)
     }))
   }
 
@@ -89,7 +87,7 @@ export class WorkflowRepository {
     return rows.map((row) => ({
       ...row,
       scope: 'project' as const,
-      nodes: this.getWorkNodeTemplates(row.id)
+      nodes: this.getTaskNodeTemplates(row.id)
     }))
   }
 
@@ -98,7 +96,7 @@ export class WorkflowRepository {
       .prepare('SELECT * FROM workflow_templates WHERE id = ?')
       .get(id) as WorkflowTemplate | undefined
     if (!template) return null
-    return { ...template, nodes: this.getWorkNodeTemplates(template.id) }
+    return { ...template, nodes: this.getTaskNodeTemplates(template.id) }
   }
 
   updateWorkflowTemplate(input: UpdateWorkflowTemplateInput): WorkflowTemplate {
@@ -191,168 +189,15 @@ export class WorkflowRepository {
     })
   }
 
-  getWorkNodeTemplate(templateNodeId: string): WorkNodeTemplate | null {
-    const template = this.db
-      .prepare('SELECT * FROM workflow_template_nodes WHERE id = ?')
-      .get(templateNodeId) as WorkNodeTemplate | undefined
-    if (!template) return null
-    return {
-      ...template,
-      requires_approval: Boolean(template.requires_approval),
-      continue_on_error: Boolean(template.continue_on_error)
-    }
-  }
 
-  createWorkflow(taskId: string): Workflow {
-    const now = new Date().toISOString()
-    const id = newUlid()
-    this.db
-      .prepare(`
-      INSERT INTO workflows (id, task_id, current_node_index, status, created_at, updated_at)
-      VALUES (?, ?, 0, 'todo', ?, ?)
-    `)
-      .run(id, taskId, now, now)
-    return this.getWorkflow(id)!
-  }
-
-  getWorkflow(id: string): Workflow | null {
-    return (this.db.prepare('SELECT * FROM workflows WHERE id = ?').get(id) as Workflow) || null
-  }
-
-  getWorkflowByTaskId(taskId: string): Workflow | null {
-    return (this.db.prepare('SELECT * FROM workflows WHERE task_id = ?').get(taskId) as Workflow) || null
-  }
-
-  updateWorkflowStatus(id: string, status: string, nodeIndex?: number): Workflow | null {
-    const now = new Date().toISOString()
-    if (nodeIndex !== undefined) {
-      this.db
-        .prepare('UPDATE workflows SET status = ?, current_node_index = ?, updated_at = ? WHERE id = ?')
-        .run(status, nodeIndex, now, id)
-    } else {
-      this.db
-        .prepare('UPDATE workflows SET status = ?, updated_at = ? WHERE id = ?')
-        .run(status, now, id)
-    }
-    return this.getWorkflow(id)
-  }
-
-  createWorkNodeFromTemplate(workflowId: string, template: WorkNodeTemplate): WorkNode {
-    return this.insertWorkNode(
-      workflowId,
-      template.node_order,
-      template.name,
-      template.prompt,
-      template.cli_tool_id ?? null,
-      template.agent_tool_config_id ?? null,
-      template.requires_approval,
-      template.continue_on_error
-    )
-  }
-
-  createWorkNode(workflowId: string, templateId: string, nodeOrder: number): WorkNode {
-    const template = this.getWorkNodeTemplate(templateId)
-    if (!template) {
-      throw new Error('Work node template not found')
-    }
-    const order = Number.isFinite(nodeOrder) ? nodeOrder : template.node_order
-    return this.insertWorkNode(
-      workflowId,
-      order,
-      template.name,
-      template.prompt,
-      template.cli_tool_id ?? null,
-      template.agent_tool_config_id ?? null,
-      template.requires_approval,
-      template.continue_on_error
-    )
-  }
-
-  getWorkNode(id: string): WorkNode | null {
-    const node = this.db.prepare('SELECT * FROM work_nodes WHERE id = ?').get(id) as WorkNode | null
-    if (!node) return null
-    return {
-      ...node,
-      requires_approval: Boolean((node as any).requires_approval),
-      continue_on_error: Boolean((node as any).continue_on_error)
-    }
-  }
-
-  getWorkNodesByWorkflowId(workflowId: string): WorkNode[] {
-    const nodes = this.db
-      .prepare('SELECT * FROM work_nodes WHERE workflow_id = ? ORDER BY node_order ASC')
-      .all(workflowId) as WorkNode[]
-    return nodes.map((node) => ({
-      ...node,
-      requires_approval: Boolean((node as any).requires_approval),
-      continue_on_error: Boolean((node as any).continue_on_error)
-    }))
-  }
-
-  updateWorkNodeStatus(id: string, status: string): WorkNode | null {
-    const now = new Date().toISOString()
-    if (status === 'in_progress') {
-      this.db
-        .prepare(
-          'UPDATE work_nodes SET status = ?, started_at = COALESCE(started_at, ?), updated_at = ? WHERE id = ?'
-        )
-        .run(status, now, now, id)
-    } else if (status === 'done') {
-      this.db
-        .prepare(
-          'UPDATE work_nodes SET status = ?, completed_at = COALESCE(completed_at, ?), updated_at = ? WHERE id = ?'
-        )
-        .run(status, now, now, id)
-    } else {
-      this.db.prepare('UPDATE work_nodes SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
-    }
-    return this.getWorkNode(id)
-  }
-
-  private getWorkNodeTemplates(templateId: string): WorkNodeTemplate[] {
+  private getTaskNodeTemplates(templateId: string): TaskNodeTemplate[] {
     const rows = this.db
       .prepare('SELECT * FROM workflow_template_nodes WHERE template_id = ? ORDER BY node_order ASC')
-      .all(templateId) as WorkNodeTemplate[]
+      .all(templateId) as TaskNodeTemplate[]
     return rows.map((node) => ({
       ...node,
       requires_approval: Boolean(node.requires_approval),
       continue_on_error: Boolean(node.continue_on_error)
     }))
-  }
-
-  private insertWorkNode(
-    workflowId: string,
-    nodeOrder: number,
-    name: string,
-    prompt: string,
-    cliToolId: string | null,
-    agentToolConfigId: string | null,
-    requiresApproval: boolean,
-    continueOnError: boolean
-  ): WorkNode {
-    const now = new Date().toISOString()
-    const id = newUlid()
-    this.db
-      .prepare(`
-      INSERT INTO work_nodes (
-        id, workflow_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id,
-        requires_approval, continue_on_error, status, created_at, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?)
-    `)
-      .run(
-        id,
-        workflowId,
-        nodeOrder,
-        name,
-        prompt,
-        cliToolId,
-        agentToolConfigId,
-        requiresApproval ? 1 : 0,
-        continueOnError ? 1 : 0,
-        now,
-        now
-      )
-    return this.getWorkNode(id)!
   }
 }

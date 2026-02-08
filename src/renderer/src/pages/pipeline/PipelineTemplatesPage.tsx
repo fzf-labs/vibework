@@ -15,10 +15,7 @@ import {
   type WorkflowTemplateFormValues,
 } from '@/components/pipeline';
 
-// Legacy type alias for backward compatibility
-type PipelineTemplateFormValues = WorkflowTemplateFormValues;
-
-interface WorkNodeTemplate {
+interface TaskNodeTemplate {
   id: string;
   template_id: string;
   node_order: number;
@@ -36,12 +33,12 @@ interface PipelineTemplate {
   description?: string | null;
   scope: 'global' | 'project';
   project_id?: string | null;
-  nodes: WorkNodeTemplate[];
+  nodes: TaskNodeTemplate[];
   created_at: string;
   updated_at: string;
 }
 
-const toNodeInputs = (values: PipelineTemplateFormValues) =>
+const toNodeInputs = (values: WorkflowTemplateFormValues) =>
   values.nodes.map((node, index) => ({
     name: node.name,
     prompt: node.prompt,
@@ -100,7 +97,7 @@ export function PipelineTemplatesPage() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = async (values: PipelineTemplateFormValues) => {
+  const handleSubmit = async (values: WorkflowTemplateFormValues) => {
     if (!projectId) return;
     if (editingTemplate) {
       await db.updateWorkflowTemplate({

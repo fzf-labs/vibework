@@ -75,8 +75,8 @@ export function TaskDetailContainer() {
   const handleAction = detail.isCliTaskReviewPending
     ? detail.handleApproveCliTask
     : detail.handleStartTask;
-  const cliSessionId = detail.task?.session_id || '';
-  const cliToolId = detail.task?.cli_tool_id || '';
+  const cliSessionId = detail.currentNodeRuntime.sessionId || '';
+  const cliToolId = detail.currentNodeRuntime.cliToolId || '';
 
   return (
     <ToolSelectionContext.Provider value={detail.toolSelectionValue}>
@@ -120,8 +120,8 @@ export function TaskDetailContainer() {
                   t={t}
                   nodes={detail.workflowNodesForDisplay}
                   templateNodeMap={detail.workflowTemplateNodeMap}
-                  currentWorkNode={detail.currentWorkNode}
-                  onApproveCurrent={detail.handleApproveWorkNode}
+                  currentTaskNode={detail.currentTaskNode}
+                  onApproveCurrent={detail.handleApproveTaskNode}
                 />
               )}
 

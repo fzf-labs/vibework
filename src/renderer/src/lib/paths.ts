@@ -1,3 +1,5 @@
+import { path as electronPath } from './electron-api';
+
 /**
  * Path utilities for VibeWork
  *
@@ -9,8 +11,7 @@
  */
 
 // Cache for resolved paths
-let cachedAppDataDir: string | null = null;
-let cachedVibeworkDataDir: string | null = null;
+let cachedDataRootDir: string | null = null;
 
 /**
  * Check if running in Electron environment
@@ -21,100 +22,74 @@ function isElectron(): boolean {
 }
 
 /**
- * Get the application data directory
+ * Get the data root directory
  * Returns ~/.vibework on all platforms
  */
-export async function getAppDataDir(): Promise<string> {
-  if (cachedAppDataDir) {
-    return cachedAppDataDir;
+export async function getDataRootDir(): Promise<string> {
+  if (cachedDataRootDir) {
+    return cachedDataRootDir;
   }
 
   if (isElectron()) {
     try {
-      const { path } = await import('./electron-api');
-      const appData = await path.appDataDir();
-      // Use appData/VibeWork as the data directory (legacy)
-      cachedAppDataDir = `${appData}/VibeWork`;
-      return cachedAppDataDir;
+      cachedDataRootDir = await electronPath.vibeworkDataDir();
+      return cachedDataRootDir;
     } catch (error) {
-      console.warn('[Paths] Failed to get app data dir:', error);
+      console.warn('[Paths] Failed to get data root dir:', error);
     }
   }
 
   // Fallback for browser mode
-  cachedAppDataDir = '~/.vibework';
-  return cachedAppDataDir;
-}
-
-/**
- * Get the VibeWork data directory
- * Returns ~/.vibework on all platforms
- */
-export async function getVibeworkDataDir(): Promise<string> {
-  if (cachedVibeworkDataDir) {
-    return cachedVibeworkDataDir;
-  }
-
-  if (isElectron()) {
-    try {
-      const { path } = await import('./electron-api');
-      cachedVibeworkDataDir = await path.vibeworkDataDir();
-      return cachedVibeworkDataDir;
-    } catch (error) {
-      console.warn('[Paths] Failed to get vibework data dir:', error);
-    }
-  }
-
-  cachedVibeworkDataDir = '~/.vibework';
-  return cachedVibeworkDataDir;
+  cachedDataRootDir = '~/.vibework';
+  return cachedDataRootDir;
 }
 
 /**
  * Get the default working directory for sessions
  */
 export async function getDefaultWorkDir(): Promise<string> {
-  const appDir = await getVibeworkDataDir();
-  return appDir;
+  const dataRootDir = await getDataRootDir();
+  return dataRootDir;
 }
 
 /**
  * Get the default sessions directory
  */
 export async function getSessionsDir(): Promise<string> {
-  const appDir = await getVibeworkDataDir();
-  return `${appDir}/data/sessions`;
+  const dataRootDir = await getDataRootDir();
+  return `${dataRootDir}/data/sessions`;
 }
 
 /**
  * Get the default MCP config path
  */
 export async function getMcpConfigPath(): Promise<string> {
-  const appDir = await getVibeworkDataDir();
-  return `${appDir}/mcp/mcp.json`;
+  const dataRootDir = await getDataRootDir();
+  return `${dataRootDir}/mcp/mcp.json`;
 }
 
 /**
  * Get the default skills directory
  */
 export async function getSkillsDir(): Promise<string> {
-  const appDir = await getVibeworkDataDir();
-  return `${appDir}/skills`;
+  const dataRootDir = await getDataRootDir();
+  return `${dataRootDir}/skills`;
 }
 
 /**
  * Get the default worktrees directory
  */
 export async function getWorktreesDir(): Promise<string> {
-  const appDir = await getVibeworkDataDir();
-  return `${appDir}/worktrees`;
+  const dataRootDir = await getDataRootDir();
+  return `${dataRootDir}/worktrees`;
 }
 
 /**
  * Get the default config file path
  */
 export async function getConfigPath(): Promise<string> {
-  const appDir = await getAppDataDir();
-  return `${appDir}/config.json`;
+  const dataRootDir = await getDataRootDir();
+  return `${dataRootDir}/config.json`;
 }
 
 /**
@@ -129,10 +104,7 @@ export async function expandPath(path: string): Promise<string> {
 
   if (isElectron()) {
     try {
-      const { path: pathApi } = await import('./electron-api');
-      const appData = await pathApi.appDataDir();
-      // Extract home directory from appData path
-      const home = appData.replace(/\/AppData\/Roaming$/, '').replace(/\/Library\/Application Support$/, '').replace(/\/\.config$/, '');
+      const home = await electronPath.homeDir();
       return path.replace(/^~/, home);
     } catch (error) {
       console.warn('[Paths] Failed to expand path:', error);
@@ -149,13 +121,7 @@ export async function expandPath(path: string): Promise<string> {
 export async function getDisplayPath(pathStr: string): Promise<string> {
   if (isElectron()) {
     try {
-      const { path } = await import('./electron-api');
-      const appData = await path.appDataDir();
-      // Extract home directory from appData path
-      const home = appData
-        .replace(/\/AppData\/Roaming$/, '')
-        .replace(/\/Library\/Application Support$/, '')
-        .replace(/\/\.config$/, '');
+      const home = await electronPath.homeDir();
       const homeWithoutSlash = home.replace(/\/$/, '');
       if (pathStr.startsWith(homeWithoutSlash)) {
         return pathStr.replace(homeWithoutSlash, '~');

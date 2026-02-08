@@ -1,17 +1,18 @@
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
+
 export interface DbTask {
   id: string
-  session_id: string | null
   title: string
   prompt: string
-  status: string
+  status: TaskStatus
   task_mode: 'conversation' | 'workflow'
   project_id: string | null
   worktree_path: string | null
   branch_name: string | null
   base_branch: string | null
   workspace_path: string | null
-  cli_tool_id: string | null
-  agent_tool_config_id: string | null
+  started_at: string | null
+  completed_at: string | null
   cost: number | null
   duration: number | null
   created_at: string
@@ -20,7 +21,6 @@ export interface DbTask {
 
 export interface CreateTaskInput {
   id: string
-  session_id?: string | null
   title: string
   prompt: string
   task_mode?: 'conversation' | 'workflow'
@@ -29,22 +29,19 @@ export interface CreateTaskInput {
   branch_name?: string
   base_branch?: string
   workspace_path?: string
-  cli_tool_id?: string
-  agent_tool_config_id?: string
 }
 
 export interface UpdateTaskInput {
-  session_id?: string | null
   title?: string
   prompt?: string
-  status?: string
+  status?: TaskStatus
   task_mode?: 'conversation' | 'workflow'
   worktree_path?: string | null
   branch_name?: string | null
   base_branch?: string | null
   workspace_path?: string | null
-  cli_tool_id?: string | null
-  agent_tool_config_id?: string | null
+  started_at?: string | null
+  completed_at?: string | null
   cost?: number | null
   duration?: number | null
 }

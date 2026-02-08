@@ -30,12 +30,12 @@ export default {
 
   // Sound Alerts
   soundAlertsTitle: 'Sound alerts',
-  soundAlertsDescription: 'Play sounds when tasks or work nodes enter review.',
+  soundAlertsDescription: 'Play sounds when tasks or task nodes enter review.',
   soundAlertsNote: 'Sound playback may be blocked until you interact with the app.',
   soundTaskCompleteLabel: 'Task sound',
   soundTaskCompleteDesc: 'Choose the sound for tasks entering review.',
-  soundWorkNodeCompleteLabel: 'Work node sound',
-  soundWorkNodeCompleteDesc: 'Choose the sound for work nodes entering review.',
+  soundTaskNodeCompleteLabel: 'Task node sound',
+  soundTaskNodeCompleteDesc: 'Choose the sound for task nodes entering review.',
   soundPreview: 'Preview',
   soundPresetChime: 'Chime',
   soundPresetDing: 'Ding',
@@ -57,9 +57,9 @@ export default {
   notificationTaskTitle: 'Task notifications',
   notificationTaskDescription:
     'Show a desktop notification when a task needs a reminder.',
-  notificationWorkNodeTitle: 'Work node notifications',
-  notificationWorkNodeDescription:
-    'Show a desktop notification when a work node needs a reminder.',
+  notificationTaskNodeTitle: 'Task node notifications',
+  notificationTaskNodeDescription:
+    'Show a desktop notification when a task node needs a reminder.',
   notificationPermissionLabel: 'Permission',
   notificationPermissionGranted: 'Granted',
   notificationPermissionDenied: 'Denied',

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { TaskStatus } from '@/data/types'
-import { db } from '@/data'
 
 export interface DashboardTask {
   id: string
@@ -18,6 +17,7 @@ export interface DashboardSummary {
   in_progress: number
   in_review: number
   done: number
+  cancelled: number
 }
 
 export interface DashboardActivityItem {
@@ -30,13 +30,14 @@ export interface DashboardActivityItem {
   branchName?: string | null
 }
 
-const STATUS_VALUES: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done']
+const STATUS_VALUES: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'cancelled']
 
 const emptySummary: DashboardSummary = {
   todo: 0,
   in_progress: 0,
   in_review: 0,
-  done: 0
+  done: 0,
+  cancelled: 0
 }
 
 function normalizeStatus(value?: string | null): TaskStatus {
@@ -46,27 +47,15 @@ function normalizeStatus(value?: string | null): TaskStatus {
   return 'todo'
 }
 
-function parseWorkflowStatus(value?: string | null): TaskStatus | null {
-  if (value && STATUS_VALUES.includes(value as TaskStatus)) {
-    return value as TaskStatus
-  }
-  return null
-}
-
 export function useDashboardData(projectId?: string | null) {
   const [tasks, setTasks] = useState<DashboardTask[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [workflowStatusByTaskId, setWorkflowStatusByTaskId] = useState<
-    Record<string, TaskStatus | null>
-  >({})
 
   const loadTasks = useCallback(async () => {
     setLoading(true)
     try {
-      const data = projectId
-        ? await window.api.task.getByProject(projectId)
-        : await window.api.task.getAll()
+      const data = projectId ? await window.api.task.getByProject(projectId) : await window.api.task.getAll()
       setTasks(Array.isArray(data) ? (data as DashboardTask[]) : [])
       setError(null)
     } catch (err) {
@@ -100,62 +89,20 @@ export function useDashboardData(projectId?: string | null) {
     return sorted.slice(0, 10)
   }, [tasks])
 
-  useEffect(() => {
-    let active = true
-
-    const loadWorkflowStatuses = async () => {
-      if (recentTasks.length === 0) {
-        if (active) setWorkflowStatusByTaskId({})
-        return
-      }
-
-      const entries = await Promise.all(
-        recentTasks.map(async (task) => {
-          try {
-            const workflow = (await db.getWorkflowByTaskId(task.id)) as
-              | { status?: string | null }
-              | null
-            return {
-              id: task.id,
-              status: parseWorkflowStatus(workflow?.status ?? null)
-            }
-          } catch (err) {
-            console.error('Failed to load workflow status:', err)
-            return { id: task.id, status: null }
-          }
-        })
-      )
-
-      if (!active) return
-      const next: Record<string, TaskStatus | null> = {}
-      for (const entry of entries) {
-        next[entry.id] = entry.status
-      }
-      setWorkflowStatusByTaskId(next)
-    }
-
-    void loadWorkflowStatuses()
-
-    return () => {
-      active = false
-    }
-  }, [recentTasks])
-
   const activityItems = useMemo(() => {
     return recentTasks.map((task) => {
       const taskStatus = normalizeStatus(task.status)
-      const workflowStatus = workflowStatusByTaskId[task.id]
       return {
         id: task.id,
         title: task.title,
         prompt: task.prompt,
         updatedAt: task.updatedAt,
         status: taskStatus,
-        displayStatus: workflowStatus ?? taskStatus,
+        displayStatus: taskStatus,
         branchName: task.branchName ?? null
       }
     })
-  }, [recentTasks, workflowStatusByTaskId])
+  }, [recentTasks])
 
   return {
     tasks,

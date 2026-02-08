@@ -8,6 +8,7 @@ export interface CliStartOptions {
   toolId: string
   workdir: string
   taskId?: string
+  taskNodeId?: string
   projectId?: string | null
   prompt?: string
   env?: NodeJS.ProcessEnv

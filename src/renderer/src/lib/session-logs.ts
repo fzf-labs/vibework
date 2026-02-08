@@ -1,5 +1,5 @@
 import { fs } from './electron-api'
-import { getVibeworkDataDir } from './paths'
+import { getDataRootDir } from './paths'
 
 export interface SessionLogEntry {
   id?: string
@@ -18,13 +18,13 @@ export async function getSessionLogPath(
   taskId: string,
   projectId?: string | null
 ): Promise<string> {
-  const root = await getVibeworkDataDir()
+  const root = await getDataRootDir()
   const projectKey = projectId?.trim() || 'project'
   return `${root}/data/sessions/${projectKey}/${taskId}.jsonl`
 }
 
 export async function ensureSessionDir(projectId?: string | null): Promise<string> {
-  const root = await getVibeworkDataDir()
+  const root = await getDataRootDir()
   const projectKey = projectId?.trim() || 'project'
   const dir = `${root}/data/sessions/${projectKey}`
   try {

@@ -132,6 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_task_nodes_task_id ON task_nodes(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_nodes_status ON task_nodes(status);
 CREATE INDEX IF NOT EXISTS idx_task_nodes_task_status_order
   ON task_nodes(task_id, status, node_order);
+CREATE INDEX IF NOT EXISTS idx_task_nodes_session_id ON task_nodes(session_id);
 
 -- 同一 task 同一时刻最多 1 个执行中的节点
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress
@@ -425,7 +426,7 @@ ORDER BY node_order ASC;
 ### 8.1 Session 与 TaskNode 绑定
 
 - 删除 `agent_executions` 后，session 的创建和状态同步改为绑定 `task_nodes`。
-- `startSession()` 接收 `taskNodeId` 而非 `taskId + workNodeId`。
+- `startSession()` 接收 `taskNodeId`，不再需要 `taskId + nodeId` 组合。
 - session 启动时写入 `task_nodes.session_id`。
 - session 结束时回调 `TaskExecutionService` 更新节点状态。
 
@@ -741,6 +742,7 @@ CREATE INDEX IF NOT EXISTS idx_task_nodes_task_id ON task_nodes(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_nodes_status ON task_nodes(status);
 CREATE INDEX IF NOT EXISTS idx_task_nodes_task_status_order
   ON task_nodes(task_id, status, node_order);
+CREATE INDEX IF NOT EXISTS idx_task_nodes_session_id ON task_nodes(session_id);
 
 -- 同一 task 同一时刻最多 1 个执行中的节点
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress

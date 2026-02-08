@@ -1,5 +1,7 @@
 import Database from 'better-sqlite3'
 
+const TARGET_SCHEMA_VERSION = 2
+
 export class DatabaseConnection {
   private dbPath: string
   private db?: Database.Database
@@ -19,186 +21,39 @@ export class DatabaseConnection {
 
   initTables(): void {
     const db = this.assertDb()
-    console.log('[DatabaseService] Creating tables...')
+    console.log('[DatabaseService] Initializing tables...')
 
-    // 创建 agent_tool_configs 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS agent_tool_configs (
-        id TEXT PRIMARY KEY,
-        tool_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        config_json TEXT NOT NULL,
-        is_default INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+    this.createBaseTables(db)
+    this.createBaseIndexes(db)
+
+    const userVersion = Number(db.pragma('user_version', { simple: true }) ?? 0)
+    if (userVersion < TARGET_SCHEMA_VERSION) {
+      console.log(
+        `[DatabaseService] Rebuilding runtime schema: v${userVersion} -> v${TARGET_SCHEMA_VERSION}`
       )
-    `)
+      const rebuildRuntimeSchema = db.transaction(() => {
+        db.exec(`
+          DROP TABLE IF EXISTS task_node_runs;
+          DROP TABLE IF EXISTS agent_executions;
+          DROP TABLE IF EXISTS work_nodes;
+          DROP TABLE IF EXISTS workflows;
+          DROP TABLE IF EXISTS project_settings;
+          DROP TABLE IF EXISTS task_nodes;
+          DROP TABLE IF EXISTS tasks;
+        `)
 
-    // 创建 projects 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        path TEXT NOT NULL UNIQUE,
-        description TEXT,
-        project_type TEXT NOT NULL DEFAULT 'normal',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `)
+        this.createRuntimeTables(db)
+        this.createRuntimeIndexes(db)
+        db.pragma(`user_version = ${TARGET_SCHEMA_VERSION}`)
+      })
 
-    // 移除废弃的 project_settings 表
-    db.exec(`
-      DROP TABLE IF EXISTS project_settings
-    `)
+      rebuildRuntimeSchema()
+    } else {
+      this.createRuntimeTables(db)
+      this.createRuntimeIndexes(db)
+    }
 
-    // 创建 tasks 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        session_id TEXT UNIQUE,
-        title TEXT NOT NULL,
-        prompt TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo', 'in_progress', 'in_review', 'done')),
-        task_mode TEXT NOT NULL DEFAULT 'conversation' CHECK(task_mode IN ('conversation', 'workflow')),
-        project_id TEXT,
-        worktree_path TEXT,
-        branch_name TEXT,
-        base_branch TEXT,
-        workspace_path TEXT,
-        cli_tool_id TEXT,
-        agent_tool_config_id TEXT,
-        cost REAL,
-        duration REAL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
-        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
-        CHECK (
-          (task_mode = 'conversation' AND cli_tool_id IS NOT NULL)
-          OR
-          (task_mode = 'workflow')
-        ),
-        CHECK (
-          (worktree_path IS NULL AND branch_name IS NULL AND base_branch IS NULL)
-          OR
-          (worktree_path IS NOT NULL AND branch_name IS NOT NULL AND base_branch IS NOT NULL)
-        )
-      )
-    `)
-
-    this.migrateTasksSessionIdNullable(db)
-    this.ensureColumn(db, 'tasks', 'agent_tool_config_id', 'TEXT')
-    this.ensureColumn(
-      db,
-      'tasks',
-      'task_mode',
-      "TEXT NOT NULL DEFAULT 'conversation' CHECK(task_mode IN ('conversation', 'workflow'))"
-    )
-
-    // 创建 workflow_templates 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS workflow_templates (
-        id TEXT PRIMARY KEY,
-        scope TEXT NOT NULL CHECK(scope IN ('global', 'project')),
-        project_id TEXT,
-        name TEXT NOT NULL,
-        description TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-      )
-    `)
-
-    // 创建 workflow_template_nodes 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS workflow_template_nodes (
-        id TEXT PRIMARY KEY,
-        template_id TEXT NOT NULL,
-        node_order INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        prompt TEXT NOT NULL,
-        cli_tool_id TEXT,
-        agent_tool_config_id TEXT,
-        requires_approval INTEGER DEFAULT 0,
-        continue_on_error INTEGER DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE,
-        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
-        UNIQUE (template_id, node_order)
-      )
-    `)
-
-    // 创建 workflows 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS workflows (
-        id TEXT PRIMARY KEY,
-        task_id TEXT NOT NULL UNIQUE,
-        current_node_index INTEGER DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'todo',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-      )
-    `)
-
-    // 创建 work_nodes 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS work_nodes (
-        id TEXT PRIMARY KEY,
-        workflow_id TEXT NOT NULL,
-        node_order INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        prompt TEXT NOT NULL,
-        cli_tool_id TEXT,
-        agent_tool_config_id TEXT,
-        requires_approval INTEGER DEFAULT 0,
-        continue_on_error INTEGER DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'todo',
-        started_at TEXT,
-        completed_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
-        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
-        UNIQUE (workflow_id, node_order)
-      )
-    `)
-
-    // 创建 agent_executions 表
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS agent_executions (
-        id TEXT PRIMARY KEY,
-        task_id TEXT NOT NULL,
-        work_node_id TEXT,
-        execution_scope TEXT NOT NULL CHECK (execution_scope IN ('conversation', 'workflow')),
-        execution_index INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT 'idle',
-        session_id TEXT,
-        cli_tool_id TEXT,
-        agent_tool_config_id TEXT,
-        started_at TEXT,
-        completed_at TEXT,
-        cost REAL,
-        duration REAL,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-        FOREIGN KEY (work_node_id) REFERENCES work_nodes(id) ON DELETE CASCADE,
-        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
-        CHECK (
-          (execution_scope = 'conversation' AND work_node_id IS NULL)
-          OR
-          (execution_scope = 'workflow' AND work_node_id IS NOT NULL)
-        )
-      )
-    `)
-
-    this.purgeDeletedAgentToolConfigs(db)
-    this.createIndexes(db)
-
-    console.log('[DatabaseService] Tables created successfully')
+    console.log('[DatabaseService] Tables initialized successfully')
   }
 
   close(): void {
@@ -219,51 +74,156 @@ export class DatabaseConnection {
     return this.db
   }
 
-  private createIndexes(db: Database.Database): void {
+  private createBaseTables(db: Database.Database): void {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_tool_configs (
+        id TEXT PRIMARY KEY,
+        tool_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        config_json TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        path TEXT NOT NULL UNIQUE,
+        description TEXT,
+        project_type TEXT NOT NULL DEFAULT 'normal'
+          CHECK (project_type IN ('normal', 'git')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS workflow_templates (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL CHECK (scope IN ('global', 'project')),
+        project_id TEXT,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS workflow_template_nodes (
+        id TEXT PRIMARY KEY,
+        template_id TEXT NOT NULL,
+        node_order INTEGER NOT NULL CHECK (node_order >= 1),
+        name TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        cli_tool_id TEXT,
+        agent_tool_config_id TEXT,
+        requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
+        continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
+        UNIQUE (template_id, node_order)
+      );
+    `)
+  }
+
+  private createRuntimeTables(db: Database.Database): void {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'todo'
+          CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
+        task_mode TEXT NOT NULL DEFAULT 'conversation'
+          CHECK (task_mode IN ('conversation', 'workflow')),
+
+        project_id TEXT,
+        worktree_path TEXT,
+        branch_name TEXT,
+        base_branch TEXT,
+        workspace_path TEXT,
+
+        started_at TEXT,
+        completed_at TEXT,
+        cost REAL,
+        duration REAL,
+
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+
+        CHECK (
+          (worktree_path IS NULL AND branch_name IS NULL AND base_branch IS NULL)
+          OR
+          (worktree_path IS NOT NULL AND branch_name IS NOT NULL AND base_branch IS NOT NULL)
+        )
+      );
+
+      CREATE TABLE IF NOT EXISTS task_nodes (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+
+        node_order INTEGER NOT NULL CHECK (node_order >= 1),
+
+        name TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        cli_tool_id TEXT
+          CHECK (cli_tool_id IS NULL OR cli_tool_id IN (
+            'claude-code', 'cursor-agent', 'gemini-cli', 'codex', 'opencode'
+          )),
+        agent_tool_config_id TEXT,
+
+        requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
+        continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
+
+        status TEXT NOT NULL DEFAULT 'todo'
+          CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
+
+        review_reason TEXT
+          CHECK (
+            (status = 'in_review' AND review_reason IN ('approval', 'error', 'rejected'))
+            OR
+            (status <> 'in_review' AND review_reason IS NULL)
+          ),
+
+        session_id TEXT,
+        result_summary TEXT,
+        error_message TEXT,
+        cost REAL,
+        duration REAL,
+
+        started_at TEXT,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
+        UNIQUE (task_id, node_order)
+      );
+    `)
+  }
+
+  private createBaseIndexes(db: Database.Database): void {
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_projects_path ON projects(path);
-      CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id);
-      CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
-      CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
-      CREATE INDEX IF NOT EXISTS idx_agent_tool_configs_tool_id ON agent_tool_configs(tool_id);
-      CREATE INDEX IF NOT EXISTS idx_workflows_task_id ON workflows(task_id);
-      CREATE INDEX IF NOT EXISTS idx_work_nodes_workflow_id ON work_nodes(workflow_id);
-      CREATE INDEX IF NOT EXISTS idx_work_nodes_status ON work_nodes(status);
-      CREATE INDEX IF NOT EXISTS idx_agent_exec_task_id ON agent_executions(task_id);
-      CREATE INDEX IF NOT EXISTS idx_agent_exec_work_node_id ON agent_executions(work_node_id);
-      CREATE INDEX IF NOT EXISTS idx_agent_exec_session_id ON agent_executions(session_id);
-      CREATE INDEX IF NOT EXISTS idx_agent_exec_scope ON agent_executions(execution_scope);
-    `)
 
-    db.exec(`
-      CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_worktree_path
-        ON tasks(worktree_path)
-        WHERE worktree_path IS NOT NULL;
-      CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_project_branch
-        ON tasks(project_id, branch_name)
-        WHERE project_id IS NOT NULL AND branch_name IS NOT NULL;
-    `)
-
-    db.exec(`
-      CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_exec_task_idx
-        ON agent_executions(task_id, execution_index)
-        WHERE work_node_id IS NULL;
-      CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_exec_work_node_idx
-        ON agent_executions(work_node_id, execution_index)
-        WHERE work_node_id IS NOT NULL;
-    `)
-
-    // workflow_templates 唯一性索引（部分索引）
-    db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS uniq_global_template_name
         ON workflow_templates(name)
         WHERE scope = 'global';
       CREATE UNIQUE INDEX IF NOT EXISTS uniq_project_template_name
         ON workflow_templates(project_id, name)
         WHERE scope = 'project';
-    `)
 
-    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_workflow_template_nodes_template_id
+        ON workflow_template_nodes(template_id);
+
+      CREATE INDEX IF NOT EXISTS idx_agent_tool_configs_tool_id ON agent_tool_configs(tool_id);
+
       DROP INDEX IF EXISTS uniq_agent_tool_config;
       DROP INDEX IF EXISTS uniq_agent_tool_default;
       CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_tool_config
@@ -274,110 +234,27 @@ export class DatabaseConnection {
     `)
   }
 
-  private purgeDeletedAgentToolConfigs(db: Database.Database): void {
-    if (!this.hasColumn(db, 'agent_tool_configs', 'deleted_at')) return
-    db.exec(`DELETE FROM agent_tool_configs WHERE deleted_at IS NOT NULL`)
-  }
+  private createRuntimeIndexes(db: Database.Database): void {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 
-  private hasColumn(db: Database.Database, table: string, column: string): boolean {
-    try {
-      const info = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-      return info.some((entry) => entry.name === column)
-    } catch (error) {
-      console.error('[DatabaseService] Failed to inspect column:', table, column, error)
-      return false
-    }
-  }
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_worktree_path
+        ON tasks(worktree_path)
+        WHERE worktree_path IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_tasks_project_branch
+        ON tasks(project_id, branch_name)
+        WHERE project_id IS NOT NULL AND branch_name IS NOT NULL;
 
-  private ensureColumn(
-    db: Database.Database,
-    table: string,
-    column: string,
-    definition: string
-  ): void {
-    try {
-      const info = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-      const exists = info.some((entry) => entry.name === column)
-      if (!exists) {
-        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
-      }
-    } catch (error) {
-      console.error('[DatabaseService] Failed to ensure column:', table, column, error)
-    }
-  }
-
-  private migrateTasksSessionIdNullable(db: Database.Database): void {
-    let needsMigration = false
-    try {
-      const info = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{
-        name: string
-        notnull: number
-      }>
-      const sessionIdInfo = info.find((entry) => entry.name === 'session_id')
-      needsMigration = Boolean(sessionIdInfo?.notnull)
-    } catch (error) {
-      console.error('[DatabaseService] Failed to inspect tasks.session_id:', error)
-      return
-    }
-
-    if (!needsMigration) return
-
-    let createSql: string | null | undefined
-    try {
-      const row = db
-        .prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='tasks'`)
-        .get() as { sql?: string | null } | undefined
-      createSql = row?.sql
-    } catch (error) {
-      console.error('[DatabaseService] Failed to read tasks table SQL:', error)
-      return
-    }
-
-    if (!createSql) {
-      console.error('[DatabaseService] Missing tasks table SQL; cannot migrate safely')
-      return
-    }
-
-    const tempTable = 'tasks__tmp_session_id_nullable'
-    const tempCreateSql = this.makeTasksCreateSqlSessionIdNullable(createSql, tempTable)
-    if (!tempCreateSql) {
-      console.error('[DatabaseService] Failed to rewrite tasks schema for nullable session_id')
-      return
-    }
-
-    const fkRow = db.prepare('PRAGMA foreign_keys').get() as { foreign_keys?: number } | undefined
-    const shouldRestoreForeignKeys = Boolean(fkRow?.foreign_keys)
-
-    try {
-      db.exec('PRAGMA foreign_keys = OFF')
-      const migrate = db.transaction(() => {
-        db.exec(`DROP TABLE IF EXISTS ${tempTable}`)
-        db.exec(tempCreateSql)
-        db.exec(`INSERT INTO ${tempTable} SELECT * FROM tasks`)
-        db.exec('DROP TABLE tasks')
-        db.exec(`ALTER TABLE ${tempTable} RENAME TO tasks`)
-      })
-      migrate()
-      console.log('[DatabaseService] Migrated tasks.session_id to be nullable')
-    } catch (error) {
-      console.error('[DatabaseService] Failed to migrate tasks.session_id to nullable:', error)
-    } finally {
-      if (shouldRestoreForeignKeys) {
-        db.exec('PRAGMA foreign_keys = ON')
-      }
-    }
-  }
-
-  private makeTasksCreateSqlSessionIdNullable(createSql: string, tableName: string): string | null {
-    const renamed = createSql.replace(
-      /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`\\[]?tasks["'`\\]]?/i,
-      `CREATE TABLE ${tableName}`
-    )
-
-    const sessionIdDef = renamed.match(/\bsession_id\b[^,)]*/i)?.[0]
-    if (!sessionIdDef) return null
-
-    const rewrittenSessionIdDef = sessionIdDef.replace(/\bNOT\s+NULL\b/gi, ' ').replace(/\s+/g, ' ')
-    return renamed.replace(sessionIdDef, rewrittenSessionIdDef)
+      CREATE INDEX IF NOT EXISTS idx_task_nodes_task_id ON task_nodes(task_id);
+      CREATE INDEX IF NOT EXISTS idx_task_nodes_status ON task_nodes(status);
+      CREATE INDEX IF NOT EXISTS idx_task_nodes_task_status_order
+        ON task_nodes(task_id, status, node_order);
+      CREATE INDEX IF NOT EXISTS idx_task_nodes_session_id ON task_nodes(session_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress
+        ON task_nodes(task_id)
+        WHERE status = 'in_progress';
+    `)
   }
 }

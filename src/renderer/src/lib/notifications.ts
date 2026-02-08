@@ -303,7 +303,7 @@ export const showTaskCompleteNotification = async (
   }
 };
 
-export const showWorkNodeCompleteNotification = async (
+export const showTaskNodeCompleteNotification = async (
   nodeName?: string
 ): Promise<void> => {
   const title = nodeName?.trim() || '任务节点完成';
@@ -344,15 +344,15 @@ export const notifyTaskCompleted = async (taskTitle?: string): Promise<void> => 
   await showTaskCompleteNotification(taskTitle);
 };
 
-export const notifyWorkNodeCompleted = async (nodeName?: string): Promise<void> => {
+export const notifyTaskNodeCompleted = async (nodeName?: string): Promise<void> => {
   const settings = getSettings();
 
-  if (!settings.workNodeCompleteNotificationsEnabled) return;
+  if (!settings.taskNodeCompleteNotificationsEnabled) return;
 
   const permissionState = getNotificationPermissionState();
   if (permissionState !== 'granted') return;
 
-  await showWorkNodeCompleteNotification(nodeName);
+  await showTaskNodeCompleteNotification(nodeName);
 };
 
 export const playTaskReviewSound = async (): Promise<void> => {
@@ -361,8 +361,8 @@ export const playTaskReviewSound = async (): Promise<void> => {
   await playSoundChoice(settings.taskCompleteSound);
 };
 
-export const playWorkNodeReviewSound = async (): Promise<void> => {
+export const playTaskNodeReviewSound = async (): Promise<void> => {
   const settings = getSettings();
-  if (!settings.workNodeCompleteSoundEnabled) return;
-  void playSoundChoice(settings.workNodeCompleteSound);
+  if (!settings.taskNodeCompleteSoundEnabled) return;
+  void playSoundChoice(settings.taskNodeCompleteSound);
 };

@@ -22,6 +22,7 @@ export const registerCliSessionIpc = ({
           model: v.optional(v.string()),
           projectId: v.optional(v.nullable(v.string({ allowEmpty: true }))),
           taskId: v.optional(v.string()),
+          taskNodeId: v.optional(v.string()),
           configId: v.optional(v.nullable(v.string({ allowEmpty: true })))
         })
       )
@@ -31,11 +32,20 @@ export const registerCliSessionIpc = ({
       sessionId,
       toolId,
       workdir,
-      options?: { prompt?: string; model?: string; projectId?: string | null; taskId?: string; configId?: string | null }
+      options?: {
+        prompt?: string
+        model?: string
+        projectId?: string | null
+        taskId?: string
+        taskNodeId?: string
+        configId?: string | null
+      }
     ) => {
-      const task = options?.taskId ? databaseService.getTask(options.taskId) : null
-      const projectId =
-        options?.projectId ?? task?.project_id ?? resolveProjectIdForSession(sessionId)
+      const taskNode = options?.taskNodeId ? databaseService.getTaskNode(options.taskNodeId) : null
+      const resolvedTaskId = options?.taskId ?? taskNode?.task_id
+      const task = resolvedTaskId ? databaseService.getTask(resolvedTaskId) : null
+      const projectId = options?.projectId ?? task?.project_id ?? resolveProjectIdForSession(sessionId)
+
       await cliSessionService.startSession(
         sessionId,
         toolId,
@@ -44,8 +54,9 @@ export const registerCliSessionIpc = ({
         undefined,
         options?.model,
         projectId,
-        options?.taskId,
-        options?.configId ?? null
+        resolvedTaskId,
+        options?.configId ?? null,
+        options?.taskNodeId
       )
     }
   )
@@ -58,8 +69,9 @@ export const registerCliSessionIpc = ({
     IPC_CHANNELS.cliSession.sendInput,
     [v.string(), v.string({ allowEmpty: true })],
     (_, sessionId, input) => {
-    cliSessionService.sendInput(sessionId, input)
-  })
+      cliSessionService.sendInput(sessionId, input)
+    }
+  )
 
   handle(IPC_CHANNELS.cliSession.getSessions, [], () => cliSessionService.getAllSessions())
 
@@ -70,7 +82,6 @@ export const registerCliSessionIpc = ({
   })
 
   handle(IPC_CHANNELS.logStream.subscribe, [v.string()], (event, sessionId) => {
-    console.log('[IPC] logStream:subscribe called:', sessionId)
     const webContents = event.sender
     const key = `${webContents.id}-${sessionId}`
     const existing = logStreamSubscriptions.get(key)
@@ -80,14 +91,12 @@ export const registerCliSessionIpc = ({
     }
 
     const unsubscribe = cliSessionService.subscribeToSession(sessionId, (msg) => {
-      console.log('[IPC] logStream:message sending:', sessionId, msg.type)
       if (!webContents.isDestroyed()) {
         webContents.send(IPC_EVENTS.logStream.message, sessionId, msg)
       }
     })
 
     if (!unsubscribe) {
-      console.log('[IPC] logStream:subscribe failed - session not found')
       throw new Error('Session not found')
     }
 
@@ -99,7 +108,7 @@ export const registerCliSessionIpc = ({
         logStreamSubscriptions.delete(key)
       }
     })
-    console.log('[IPC] logStream:subscribe success')
+
     return { success: true }
   })
 
@@ -117,10 +126,7 @@ export const registerCliSessionIpc = ({
     IPC_CHANNELS.logStream.getHistory,
     [v.string(), v.optional(v.nullable(v.string({ allowEmpty: true })))],
     (_, taskId, sessionId) => {
-      console.log('[IPC] logStream:getHistory called:', { taskId, sessionId })
-      const history = cliSessionService.getSessionLogHistory(sessionId ?? null, taskId)
-      console.log('[IPC] logStream:getHistory returning:', history.length, 'messages')
-      return history
+      return cliSessionService.getSessionLogHistory(sessionId ?? null, taskId)
     }
   )
 }

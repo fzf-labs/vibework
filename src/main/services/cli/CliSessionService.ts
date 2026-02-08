@@ -15,6 +15,9 @@ interface SessionRecord {
   toolId: string
   workdir: string
   startTime: Date
+  taskId?: string
+  taskNodeId?: string
+  projectId?: string | null
 }
 
 export class CliSessionService extends EventEmitter {
@@ -49,7 +52,8 @@ export class CliSessionService extends EventEmitter {
     model?: string,
     projectId?: string | null,
     taskId?: string,
-    configId?: string | null
+    configId?: string | null,
+    taskNodeId?: string
   ): Promise<void> {
     if (this.sessions.has(sessionId)) {
       throw new Error(`Session ${sessionId} already exists`)
@@ -59,6 +63,9 @@ export class CliSessionService extends EventEmitter {
     if (!adapter) {
       throw new Error(`Unsupported CLI tool: ${toolId}`)
     }
+
+    const taskNode = taskNodeId ? this.databaseService.getTaskNode(taskNodeId) : null
+    const resolvedTaskId = taskId ?? taskNode?.task_id
 
     const baseConfig = this.configService.getConfig(toolId)
     const normalizedBase: Record<string, unknown> = { ...baseConfig }
@@ -70,9 +77,12 @@ export class CliSessionService extends EventEmitter {
     }
 
     let resolvedConfigId = configId ?? null
-    if (!resolvedConfigId && taskId) {
-      const task = this.databaseService.getTask(taskId)
-      resolvedConfigId = task?.agent_tool_config_id ?? null
+    if (!resolvedConfigId && taskNode?.agent_tool_config_id) {
+      resolvedConfigId = taskNode.agent_tool_config_id
+    }
+    if (!resolvedConfigId && resolvedTaskId) {
+      const currentNode = this.databaseService.getCurrentTaskNode(resolvedTaskId)
+      resolvedConfigId = currentNode?.agent_tool_config_id ?? null
     }
 
     let profileConfig: Record<string, unknown> = {}
@@ -95,9 +105,10 @@ export class CliSessionService extends EventEmitter {
       ...profileConfig
     }
 
-    const envFromConfig = (toolConfig.env && typeof toolConfig.env === 'object' && !Array.isArray(toolConfig.env))
-      ? (toolConfig.env as Record<string, string>)
-      : undefined
+    const envFromConfig =
+      toolConfig.env && typeof toolConfig.env === 'object' && !Array.isArray(toolConfig.env)
+        ? (toolConfig.env as Record<string, string>)
+        : undefined
     const mergedEnv = {
       ...process.env,
       ...(envFromConfig ?? {}),
@@ -109,12 +120,14 @@ export class CliSessionService extends EventEmitter {
 
     const pendingMsgStore = this.pendingMsgStores.get(sessionId)
     const msgStore =
-      pendingMsgStore ?? new MsgStoreService(undefined, taskId, sessionId, projectId)
+      pendingMsgStore ?? new MsgStoreService(undefined, resolvedTaskId, sessionId, projectId)
+
     const handle = await adapter.startSession({
       sessionId,
       toolId,
       workdir,
-      taskId,
+      taskId: resolvedTaskId,
+      taskNodeId,
       projectId,
       prompt,
       env: mergedEnv,
@@ -128,8 +141,16 @@ export class CliSessionService extends EventEmitter {
       handle,
       toolId,
       workdir,
-      startTime: new Date()
+      startTime: new Date(),
+      taskId: resolvedTaskId,
+      taskNodeId,
+      projectId
     })
+
+    if (taskNodeId) {
+      this.databaseService.updateTaskNodeSession(taskNodeId, sessionId)
+    }
+
     if (pendingMsgStore) {
       this.pendingMsgStores.delete(sessionId)
     }
@@ -145,13 +166,44 @@ export class CliSessionService extends EventEmitter {
     handle.on(
       'close',
       (data: { sessionId: string; code: number | null; forcedStatus?: CliSessionStatus }) => {
-        this.emit('close', data)
-        this.sessions.delete(sessionId)
+        const sessionRecord = this.sessions.get(data.sessionId)
+        const durationSeconds = sessionRecord
+          ? (Date.now() - sessionRecord.startTime.getTime()) / 1000
+          : undefined
+
+        if (sessionRecord?.taskNodeId) {
+          if (data.code === 0) {
+            this.databaseService.completeTaskNode(sessionRecord.taskNodeId, {
+              sessionId: data.sessionId,
+              duration: durationSeconds
+            })
+          } else if (typeof data.code === 'number') {
+            this.databaseService.markTaskNodeErrorReview(
+              sessionRecord.taskNodeId,
+              `CLI exited with code ${data.code}`
+            )
+          }
+        }
+
+        this.emit('close', {
+          ...data,
+          taskId: sessionRecord?.taskId,
+          taskNodeId: sessionRecord?.taskNodeId
+        })
+        this.sessions.delete(data.sessionId)
       }
     )
 
     handle.on('error', (data: { sessionId: string; error: string }) => {
-      this.emit('error', data)
+      const sessionRecord = this.sessions.get(data.sessionId)
+      if (sessionRecord?.taskNodeId) {
+        this.databaseService.markTaskNodeErrorReview(sessionRecord.taskNodeId, data.error)
+      }
+      this.emit('error', {
+        ...data,
+        taskId: sessionRecord?.taskId,
+        taskNodeId: sessionRecord?.taskNodeId
+      })
     })
   }
 
@@ -169,12 +221,22 @@ export class CliSessionService extends EventEmitter {
       throw new Error(`Session ${sessionId} not found`)
     }
     if (!session.handle.sendInput) {
-      throw new Error(`Session ${sessionId} does not support input`) 
+      throw new Error(`Session ${sessionId} does not support input`)
     }
     session.handle.sendInput(input)
   }
 
-  getSession(sessionId: string): { id: string; status: CliSessionStatus; workdir: string; toolId: string; startTime: Date } | null {
+  getSession(
+    sessionId: string
+  ): {
+    id: string
+    status: CliSessionStatus
+    workdir: string
+    toolId: string
+    startTime: Date
+    taskId?: string
+    taskNodeId?: string
+  } | null {
     const session = this.sessions.get(sessionId)
     if (!session) return null
     return {
@@ -182,17 +244,29 @@ export class CliSessionService extends EventEmitter {
       status: session.handle.status,
       workdir: session.workdir,
       toolId: session.toolId,
-      startTime: session.startTime
+      startTime: session.startTime,
+      taskId: session.taskId,
+      taskNodeId: session.taskNodeId
     }
   }
 
-  getAllSessions(): Array<{ id: string; status: CliSessionStatus; workdir: string; toolId: string; startTime: Date }> {
+  getAllSessions(): Array<{
+    id: string
+    status: CliSessionStatus
+    workdir: string
+    toolId: string
+    startTime: Date
+    taskId?: string
+    taskNodeId?: string
+  }> {
     return Array.from(this.sessions.entries()).map(([id, session]) => ({
       id,
       status: session.handle.status,
       workdir: session.workdir,
       toolId: session.toolId,
-      startTime: session.startTime
+      startTime: session.startTime,
+      taskId: session.taskId,
+      taskNodeId: session.taskNodeId
     }))
   }
 
@@ -231,9 +305,7 @@ export class CliSessionService extends EventEmitter {
 
   getSessionOutput(sessionId: string, taskId?: string | null): string[] {
     const history = this.getSessionLogHistory(sessionId, taskId)
-    return history
-      .filter(msg => msg.type === 'stdout')
-      .map(msg => (msg as { content: string }).content)
+    return history.filter((msg) => msg.type === 'stdout').map((msg) => (msg as { content: string }).content)
   }
 
   dispose(): void {

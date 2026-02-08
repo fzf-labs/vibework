@@ -157,7 +157,7 @@ const api = {
       sessionId: string,
       toolId: string,
       workdir: string,
-      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }
+      options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string; taskNodeId?: string; configId?: string | null }
     ) => invoke(IPC_CHANNELS.cliSession.startSession, sessionId, toolId, workdir, options),
     stopSession: (sessionId: string) => invoke(IPC_CHANNELS.cliSession.stopSession, sessionId),
     sendInput: (sessionId: string, input: string) =>
@@ -198,16 +198,21 @@ const api = {
       return () => ipcRenderer.removeListener(IPC_EVENTS.logStream.message, listener)
     }
   },
-  workNode: {
-    onCompleted: (callback: (data: { id: string; name?: string }) => void) => {
-      const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
-      ipcRenderer.on(IPC_EVENTS.workNode.completed, listener)
-      return () => ipcRenderer.removeListener(IPC_EVENTS.workNode.completed, listener)
+  taskNode: {
+    onCompleted: (callback: (data: { id: string; name?: string; taskId: string }) => void) => {
+      const listener = (_: unknown, data: { id: string; name?: string; taskId: string }) => callback(data)
+      ipcRenderer.on(IPC_EVENTS.taskNode.completed, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.taskNode.completed, listener)
     },
-    onReview: (callback: (data: { id: string; name?: string }) => void) => {
-      const listener = (_: unknown, data: { id: string; name?: string }) => callback(data)
-      ipcRenderer.on(IPC_EVENTS.workNode.review, listener)
-      return () => ipcRenderer.removeListener(IPC_EVENTS.workNode.review, listener)
+    onReview: (callback: (data: { id: string; name?: string; taskId: string }) => void) => {
+      const listener = (_: unknown, data: { id: string; name?: string; taskId: string }) => callback(data)
+      ipcRenderer.on(IPC_EVENTS.taskNode.review, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.taskNode.review, listener)
+    },
+    onCancelled: (callback: (data: { id: string; name?: string; taskId: string }) => void) => {
+      const listener = (_: unknown, data: { id: string; name?: string; taskId: string }) => callback(data)
+      ipcRenderer.on(IPC_EVENTS.taskNode.cancelled, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.taskNode.cancelled, listener)
     }
   },
   cliTools: {
@@ -282,7 +287,6 @@ const api = {
     getSoundSettings: () => invoke(IPC_CHANNELS.notification.getSoundSettings)
   },
   database: {
-    // Task operations
     createTask: (input: unknown) => invoke(IPC_CHANNELS.database.createTask, input),
     getTask: (id: string) => invoke(IPC_CHANNELS.database.getTask, id),
     getAllTasks: () => invoke(IPC_CHANNELS.database.getAllTasks),
@@ -293,18 +297,16 @@ const api = {
       invoke(IPC_CHANNELS.database.getTasksByProjectId, projectId),
     listAgentToolConfigs: (toolId?: string) =>
       invoke(IPC_CHANNELS.database.listAgentToolConfigs, toolId),
-    getAgentToolConfig: (id: string) =>
-      invoke(IPC_CHANNELS.database.getAgentToolConfig, id),
+    getAgentToolConfig: (id: string) => invoke(IPC_CHANNELS.database.getAgentToolConfig, id),
     createAgentToolConfig: (input: unknown) =>
       invoke(IPC_CHANNELS.database.createAgentToolConfig, input),
     updateAgentToolConfig: (id: string, updates: unknown) =>
       invoke(IPC_CHANNELS.database.updateAgentToolConfig, id, updates),
-    deleteAgentToolConfig: (id: string) =>
-      invoke(IPC_CHANNELS.database.deleteAgentToolConfig, id),
+    deleteAgentToolConfig: (id: string) => invoke(IPC_CHANNELS.database.deleteAgentToolConfig, id),
     setDefaultAgentToolConfig: (id: string) =>
       invoke(IPC_CHANNELS.database.setDefaultAgentToolConfig, id),
-    // Workflow template operations
-    getGlobalWorkflowTemplates: () => invoke(IPC_CHANNELS.database.getGlobalWorkflowTemplates),
+    getGlobalWorkflowTemplates: () =>
+      invoke(IPC_CHANNELS.database.getGlobalWorkflowTemplates),
     getWorkflowTemplatesByProject: (projectId: string) =>
       invoke(IPC_CHANNELS.database.getWorkflowTemplatesByProject, projectId),
     getWorkflowTemplate: (templateId: string) =>
@@ -317,67 +319,36 @@ const api = {
       invoke(IPC_CHANNELS.database.deleteWorkflowTemplate, templateId, scope),
     copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) =>
       invoke(IPC_CHANNELS.database.copyGlobalWorkflowToProject, globalTemplateId, projectId),
-    // Workflow instance operations
-    createWorkflow: (taskId: string) =>
-      invoke(IPC_CHANNELS.database.createWorkflow, taskId),
-    getWorkflow: (id: string) => invoke(IPC_CHANNELS.database.getWorkflow, id),
-    getWorkflowByTaskId: (taskId: string) =>
-      invoke(IPC_CHANNELS.database.getWorkflowByTaskId, taskId),
-    updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) =>
-      invoke(IPC_CHANNELS.database.updateWorkflowStatus, id, status, nodeIndex),
-    // WorkNode instance operations
-    createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) =>
-      invoke(IPC_CHANNELS.database.createWorkNode, workflowId, templateId, nodeOrder),
-    getWorkNodesByWorkflowId: (workflowId: string) =>
-      invoke(IPC_CHANNELS.database.getWorkNodesByWorkflowId, workflowId),
-    updateWorkNodeStatus: (id: string, status: string) =>
-      invoke(IPC_CHANNELS.database.updateWorkNodeStatus, id, status),
-    approveWorkNode: (id: string) => invoke(IPC_CHANNELS.database.approveWorkNode, id),
-    rejectWorkNode: (id: string) => invoke(IPC_CHANNELS.database.rejectWorkNode, id),
-    approveTask: (id: string) => invoke(IPC_CHANNELS.database.approveTask, id),
-    // AgentExecution operations
-    createTaskExecution: (
+    getTaskNodes: (taskId: string) => invoke(IPC_CHANNELS.database.getTaskNodes, taskId),
+    getTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.getTaskNode, nodeId),
+    getCurrentTaskNode: (taskId: string) =>
+      invoke(IPC_CHANNELS.database.getCurrentTaskNode, taskId),
+    updateCurrentTaskNodeRuntime: (
       taskId: string,
-      sessionId?: string,
-      cliToolId?: string,
-      agentToolConfigId?: string
-    ) =>
-      invoke(
-        IPC_CHANNELS.database.createTaskExecution,
-        taskId,
-        sessionId,
-        cliToolId,
-        agentToolConfigId
-      ),
-    createWorkNodeExecution: (
-      taskId: string,
-      workNodeId: string,
-      sessionId?: string,
-      cliToolId?: string,
-      agentToolConfigId?: string
-    ) =>
-      invoke(
-        IPC_CHANNELS.database.createWorkNodeExecution,
-        taskId,
-        workNodeId,
-        sessionId,
-        cliToolId,
-        agentToolConfigId
-      ),
-    getAgentExecutionsByTaskId: (taskId: string) =>
-      invoke(IPC_CHANNELS.database.getAgentExecutionsByTaskId, taskId),
-    getAgentExecutionsByWorkNodeId: (workNodeId: string) =>
-      invoke(IPC_CHANNELS.database.getAgentExecutionsByWorkNodeId, workNodeId),
-    getLatestTaskExecution: (taskId: string) =>
-      invoke(IPC_CHANNELS.database.getLatestTaskExecution, taskId),
-    getLatestWorkNodeExecution: (workNodeId: string) =>
-      invoke(IPC_CHANNELS.database.getLatestWorkNodeExecution, workNodeId),
-    createAgentExecution: (workNodeId: string) =>
-      invoke(IPC_CHANNELS.database.createAgentExecution, workNodeId),
-    getLatestAgentExecution: (workNodeId: string) =>
-      invoke(IPC_CHANNELS.database.getLatestAgentExecution, workNodeId),
-    updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) =>
-      invoke(IPC_CHANNELS.database.updateAgentExecutionStatus, id, status, cost, duration)
+      updates: {
+        session_id?: string | null
+        cli_tool_id?: string | null
+        agent_tool_config_id?: string | null
+      }
+    ) => invoke(IPC_CHANNELS.database.updateCurrentTaskNodeRuntime, taskId, updates),
+    getTaskNodesByStatus: (taskId: string, status: string) =>
+      invoke(IPC_CHANNELS.database.getTaskNodesByStatus, taskId, status),
+    completeTaskNode: (
+      nodeId: string,
+      result?: {
+        resultSummary?: string | null
+        cost?: number | null
+        duration?: number | null
+        sessionId?: string | null
+      }
+    ) => invoke(IPC_CHANNELS.database.completeTaskNode, nodeId, result),
+    markTaskNodeErrorReview: (nodeId: string, error: string) =>
+      invoke(IPC_CHANNELS.database.markTaskNodeErrorReview, nodeId, error),
+    approveTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.approveTaskNode, nodeId),
+    rejectTaskNode: (nodeId: string, reason?: string) =>
+      invoke(IPC_CHANNELS.database.rejectTaskNode, nodeId, reason),
+    retryTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.retryTaskNode, nodeId),
+    cancelTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.cancelTaskNode, nodeId)
   },
   fs: {
     readFile: (path: string) => invoke(IPC_CHANNELS.fs.readFile, path),
@@ -405,7 +376,6 @@ const api = {
     showItemInFolder: (path: string) => invoke(IPC_CHANNELS.shell.showItemInFolder, path)
   },
   path: {
-    appDataDir: () => invoke(IPC_CHANNELS.path.appDataDir),
     appConfigDir: () => invoke(IPC_CHANNELS.path.appConfigDir),
     tempDir: () => invoke(IPC_CHANNELS.path.tempDir),
     resourcesDir: () => invoke(IPC_CHANNELS.path.resourcesDir),
@@ -442,9 +412,12 @@ const api = {
     updateStatus: (id: string, status: string) =>
       invoke(IPC_CHANNELS.task.updateStatus, id, status),
     delete: (id: string, removeWorktree?: boolean) =>
-      invoke(IPC_CHANNELS.task.delete, id, removeWorktree)
+      invoke(IPC_CHANNELS.task.delete, id, removeWorktree),
+    startExecution: (taskId: string) => invoke(IPC_CHANNELS.task.startExecution, taskId),
+    stopExecution: (taskId: string) => invoke(IPC_CHANNELS.task.stopExecution, taskId)
   }
 }
+
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise

@@ -140,25 +140,17 @@ export const IPC_CHANNELS = {
     updateWorkflowTemplate: 'db:updateWorkflowTemplate',
     deleteWorkflowTemplate: 'db:deleteWorkflowTemplate',
     copyGlobalWorkflowToProject: 'db:copyGlobalWorkflowToProject',
-    createWorkflow: 'db:createWorkflow',
-    getWorkflow: 'db:getWorkflow',
-    getWorkflowByTaskId: 'db:getWorkflowByTaskId',
-    updateWorkflowStatus: 'db:updateWorkflowStatus',
-    createWorkNode: 'db:createWorkNode',
-    getWorkNodesByWorkflowId: 'db:getWorkNodesByWorkflowId',
-    updateWorkNodeStatus: 'db:updateWorkNodeStatus',
-    approveWorkNode: 'db:approveWorkNode',
-    rejectWorkNode: 'db:rejectWorkNode',
-    approveTask: 'db:approveTask',
-    createTaskExecution: 'db:createTaskExecution',
-    createWorkNodeExecution: 'db:createWorkNodeExecution',
-    getAgentExecutionsByTaskId: 'db:getAgentExecutionsByTaskId',
-    getAgentExecutionsByWorkNodeId: 'db:getAgentExecutionsByWorkNodeId',
-    getLatestTaskExecution: 'db:getLatestTaskExecution',
-    getLatestWorkNodeExecution: 'db:getLatestWorkNodeExecution',
-    createAgentExecution: 'db:createAgentExecution',
-    getLatestAgentExecution: 'db:getLatestAgentExecution',
-    updateAgentExecutionStatus: 'db:updateAgentExecutionStatus'
+    getTaskNodes: 'db:getTaskNodes',
+    getTaskNode: 'db:getTaskNode',
+    getCurrentTaskNode: 'db:getCurrentTaskNode',
+    updateCurrentTaskNodeRuntime: 'db:updateCurrentTaskNodeRuntime',
+    getTaskNodesByStatus: 'db:getTaskNodesByStatus',
+    completeTaskNode: 'db:completeTaskNode',
+    markTaskNodeErrorReview: 'db:markTaskNodeErrorReview',
+    approveTaskNode: 'db:approveTaskNode',
+    rejectTaskNode: 'db:rejectTaskNode',
+    retryTaskNode: 'db:retryTaskNode',
+    cancelTaskNode: 'db:cancelTaskNode'
   },
   fs: {
     readFile: 'fs:readFile',
@@ -182,7 +174,6 @@ export const IPC_CHANNELS = {
     showItemInFolder: 'shell:showItemInFolder'
   },
   path: {
-    appDataDir: 'path:appDataDir',
     appConfigDir: 'path:appConfigDir',
     tempDir: 'path:tempDir',
     resourcesDir: 'path:resourcesDir',
@@ -201,7 +192,9 @@ export const IPC_CHANNELS = {
     getAll: 'task:getAll',
     getByProject: 'task:getByProject',
     updateStatus: 'task:updateStatus',
-    delete: 'task:delete'
+    delete: 'task:delete',
+    startExecution: 'task:startExecution',
+    stopExecution: 'task:stopExecution'
   }
 } as const
 
@@ -220,9 +213,10 @@ export const IPC_EVENTS = {
   logStream: {
     message: 'logStream:message'
   },
-  workNode: {
-    completed: 'workNode:completed',
-    review: 'workNode:review'
+  taskNode: {
+    completed: 'taskNode:completed',
+    review: 'taskNode:review',
+    cancelled: 'taskNode:cancelled'
   }
 } as const
 
@@ -303,7 +297,19 @@ export interface IpcContracts {
   'terminal:killByWorkspaceId': IpcContract<[string], { killed: number; failed: number }>
 
   'cliSession:startSession': IpcContract<
-    [string, string, string, { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }?],
+    [
+      string,
+      string,
+      string,
+      {
+        model?: string
+        prompt?: string
+        projectId?: string | null
+        taskId?: string
+        taskNodeId?: string
+        configId?: string | null
+      }?
+    ],
     unknown
   >
   'cliSession:stopSession': IpcContract<[string], unknown>
@@ -381,28 +387,39 @@ export interface IpcContracts {
   'db:updateWorkflowTemplate': IpcContract<[UnknownRecord], unknown>
   'db:deleteWorkflowTemplate': IpcContract<[string, 'global' | 'project'], unknown>
   'db:copyGlobalWorkflowToProject': IpcContract<[string, string], unknown>
-  'db:createWorkflow': IpcContract<[string], unknown>
-  'db:getWorkflow': IpcContract<[string], unknown>
-  'db:getWorkflowByTaskId': IpcContract<[string], unknown>
-  'db:updateWorkflowStatus': IpcContract<[string, string, number?], unknown>
-  'db:createWorkNode': IpcContract<[string, string, number], unknown>
-  'db:getWorkNodesByWorkflowId': IpcContract<[string], unknown[]>
-  'db:updateWorkNodeStatus': IpcContract<[string, string], unknown>
-  'db:approveWorkNode': IpcContract<[string], unknown>
-  'db:rejectWorkNode': IpcContract<[string], unknown>
-  'db:approveTask': IpcContract<[string], unknown>
-  'db:createTaskExecution': IpcContract<[string, string?, string?, string?], unknown>
-  'db:createWorkNodeExecution': IpcContract<[string, string, string?, string?, string?], unknown>
-  'db:getAgentExecutionsByTaskId': IpcContract<[string], unknown[]>
-  'db:getAgentExecutionsByWorkNodeId': IpcContract<[string], unknown[]>
-  'db:getLatestTaskExecution': IpcContract<[string], unknown>
-  'db:getLatestWorkNodeExecution': IpcContract<[string], unknown>
-  'db:createAgentExecution': IpcContract<[string], unknown>
-  'db:getLatestAgentExecution': IpcContract<[string], unknown>
-  'db:updateAgentExecutionStatus': IpcContract<
-    [string, 'idle' | 'running' | 'completed', number?, number?],
+  'db:getTaskNodes': IpcContract<[string], unknown[]>
+  'db:getTaskNode': IpcContract<[string], unknown>
+  'db:getCurrentTaskNode': IpcContract<[string], unknown>
+  'db:updateCurrentTaskNodeRuntime': IpcContract<
+    [
+      string,
+      {
+        session_id?: string | null
+        cli_tool_id?: string | null
+        agent_tool_config_id?: string | null
+      }
+    ],
     unknown
   >
+  'db:getTaskNodesByStatus': IpcContract<[string, string], unknown[]>
+  'db:completeTaskNode': IpcContract<
+    [
+      string,
+      {
+        resultSummary?: string | null
+        cost?: number | null
+        duration?: number | null
+        sessionId?: string | null
+        allowConversationCompletion?: boolean
+      }?
+    ],
+    unknown
+  >
+  'db:markTaskNodeErrorReview': IpcContract<[string, string], unknown>
+  'db:approveTaskNode': IpcContract<[string], unknown>
+  'db:rejectTaskNode': IpcContract<[string, string?], unknown>
+  'db:retryTaskNode': IpcContract<[string], unknown>
+  'db:cancelTaskNode': IpcContract<[string], unknown>
 
   'fs:readFile': IpcContract<[string], Uint8Array>
   'fs:readTextFile': IpcContract<[string], string>
@@ -422,7 +439,6 @@ export interface IpcContracts {
   'shell:openPath': IpcContract<[string], unknown>
   'shell:showItemInFolder': IpcContract<[string], unknown>
 
-  'path:appDataDir': IpcContract<[], string>
   'path:appConfigDir': IpcContract<[], string>
   'path:tempDir': IpcContract<[], string>
   'path:resourcesDir': IpcContract<[], string>
@@ -458,6 +474,8 @@ export interface IpcContracts {
   'task:getByProject': IpcContract<[string], unknown[]>
   'task:updateStatus': IpcContract<[string, string], unknown>
   'task:delete': IpcContract<[string, boolean?], unknown>
+  'task:startExecution': IpcContract<[string], unknown>
+  'task:stopExecution': IpcContract<[string], unknown>
 }
 
 export type IpcContractChannel = keyof IpcContracts

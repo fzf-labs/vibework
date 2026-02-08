@@ -12,14 +12,14 @@ export class TaskRepository {
     const now = new Date().toISOString()
     const stmt = this.db.prepare(`
       INSERT INTO tasks (
-        id, session_id, title, prompt, status, task_mode, project_id, worktree_path, branch_name,
-        base_branch, workspace_path, cli_tool_id, agent_tool_config_id, cost, duration, created_at, updated_at
+        id, title, prompt, status, task_mode, project_id, worktree_path, branch_name,
+        base_branch, workspace_path, started_at, completed_at, cost, duration, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      VALUES (?, ?, ?, 'todo', ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
     `)
+
     stmt.run(
       input.id,
-      input.session_id ?? null,
       input.title,
       input.prompt,
       input.task_mode ?? 'conversation',
@@ -28,11 +28,10 @@ export class TaskRepository {
       input.branch_name || null,
       input.base_branch || null,
       input.workspace_path || null,
-      input.cli_tool_id || null,
-      input.agent_tool_config_id || null,
       now,
       now
     )
+
     return this.getTask(input.id)!
   }
 
@@ -41,20 +40,13 @@ export class TaskRepository {
     return (stmt.get(id) as Task) || null
   }
 
-  getTaskBySessionId(sessionId: string): Task | null {
-    const stmt = this.db.prepare('SELECT * FROM tasks WHERE session_id = ?')
-    return (stmt.get(sessionId) as Task) || null
-  }
-
   getAllTasks(): Task[] {
     const stmt = this.db.prepare('SELECT * FROM tasks ORDER BY created_at DESC')
     return stmt.all() as Task[]
   }
 
   getTasksByProjectId(projectId: string): Task[] {
-    const stmt = this.db.prepare(
-      'SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at DESC'
-    )
+    const stmt = this.db.prepare('SELECT * FROM tasks WHERE project_id = ? ORDER BY created_at DESC')
     return stmt.all(projectId) as Task[]
   }
 
@@ -70,10 +62,6 @@ export class TaskRepository {
     if (updates.task_mode !== undefined) {
       fields.push('task_mode = ?')
       values.push(updates.task_mode)
-    }
-    if (updates.session_id !== undefined) {
-      fields.push('session_id = ?')
-      values.push(updates.session_id)
     }
     if (updates.title !== undefined) {
       fields.push('title = ?')
@@ -99,13 +87,13 @@ export class TaskRepository {
       fields.push('workspace_path = ?')
       values.push(updates.workspace_path)
     }
-    if (updates.cli_tool_id !== undefined) {
-      fields.push('cli_tool_id = ?')
-      values.push(updates.cli_tool_id)
+    if (updates.started_at !== undefined) {
+      fields.push('started_at = ?')
+      values.push(updates.started_at)
     }
-    if (updates.agent_tool_config_id !== undefined) {
-      fields.push('agent_tool_config_id = ?')
-      values.push(updates.agent_tool_config_id)
+    if (updates.completed_at !== undefined) {
+      fields.push('completed_at = ?')
+      values.push(updates.completed_at)
     }
     if (updates.cost !== undefined) {
       fields.push('cost = ?')
@@ -129,9 +117,82 @@ export class TaskRepository {
 
   updateTaskStatus(id: string, status: string): void {
     const now = new Date().toISOString()
+    this.db.prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id)
+  }
+
+  syncTaskFromNodes(taskId: string): Task | null {
+    const now = new Date().toISOString()
+    const aggregate = this.db
+      .prepare(
+        `
+          SELECT
+            CASE
+              WHEN SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) > 0
+                THEN 'in_progress'
+              WHEN SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) > 0
+                THEN 'in_review'
+              WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) > 0
+                   AND SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) > 0
+                THEN 'in_progress'
+              WHEN SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) > 0
+                THEN 'done'
+              WHEN SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) = COUNT(*)
+                   AND COUNT(*) > 0
+                THEN 'cancelled'
+              WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) = COUNT(*)
+                   AND COUNT(*) > 0
+                THEN 'todo'
+              WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) > 0
+                   AND SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) > 0
+                   AND SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) = 0
+                THEN 'todo'
+              ELSE 'todo'
+            END AS task_status,
+            MIN(started_at) AS started_at,
+            MAX(completed_at) AS completed_at,
+            SUM(cost) AS cost,
+            CASE
+              WHEN MIN(started_at) IS NOT NULL AND MAX(completed_at) IS NOT NULL
+                THEN CAST((julianday(MAX(completed_at)) - julianday(MIN(started_at))) * 86400 AS REAL)
+              ELSE NULL
+            END AS duration
+          FROM task_nodes
+          WHERE task_id = ?
+        `
+      )
+      .get(taskId) as {
+      task_status: string | null
+      started_at: string | null
+      completed_at: string | null
+      cost: number | null
+      duration: number | null
+    }
+
     this.db
-      .prepare('UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?')
-      .run(status, now, id)
+      .prepare(
+        `
+          UPDATE tasks
+          SET
+            status = ?,
+            started_at = ?,
+            completed_at = ?,
+            cost = ?,
+            duration = ?,
+            updated_at = ?
+          WHERE id = ?
+        `
+      )
+      .run(
+        aggregate.task_status ?? 'todo',
+        aggregate.started_at ?? null,
+        aggregate.completed_at ?? null,
+        aggregate.cost ?? null,
+        aggregate.duration ?? null,
+        now,
+        taskId
+      )
+
+    return this.getTask(taskId)
   }
 
   deleteTasksByProjectId(projectId: string): number {

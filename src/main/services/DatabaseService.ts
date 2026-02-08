@@ -1,84 +1,60 @@
 import type Database from 'better-sqlite3'
-import { dialog } from 'electron'
 import { getAppPaths } from '../app/AppPaths'
+import { newUlid } from '../utils/ids'
+import { TaskExecutionService } from './TaskExecutionService'
 import { DatabaseConnection } from './database/DatabaseConnection'
-import { DatabaseMaintenance } from './database/DatabaseMaintenance'
 import { TaskRepository } from './database/TaskRepository'
 import { ProjectRepository } from './database/ProjectRepository'
 import { WorkflowRepository } from './database/WorkflowRepository'
-import { AgentRepository } from './database/AgentRepository'
+import { TaskNodeRepository } from './database/TaskNodeRepository'
 import { AgentToolConfigRepository } from './database/AgentToolConfigRepository'
 import type { CreateProjectInput, Project, UpdateProjectInput } from '../types/project'
-import type { CreateTaskInput, Task, UpdateTaskInput } from '../types/task'
-import type { AgentExecution } from '../types/agent'
+import type {
+  CreateTaskInput,
+  Task,
+  TaskNode,
+  TaskNodeStatus,
+  UpdateTaskInput
+} from '../types/task'
 import type {
   CreateWorkflowTemplateInput,
   UpdateWorkflowTemplateInput,
-  Workflow,
-  WorkflowTemplate,
-  WorkNode,
-  WorkNodeTemplate
+  WorkflowTemplate
 } from '../types/workflow'
 
 export class DatabaseService {
   private db: Database.Database
   private connection: DatabaseConnection
-  private maintenance: DatabaseMaintenance
   private taskRepo: TaskRepository
+  private taskNodeRepo: TaskNodeRepository
   private projectRepo: ProjectRepository
   private workflowRepo: WorkflowRepository
-  private agentRepo: AgentRepository
   private agentToolConfigRepo: AgentToolConfigRepository
-  private workNodeStatusListeners: Array<(node: WorkNode) => void> = []
+  private taskExecutionService: TaskExecutionService
+  private taskNodeStatusListeners: Array<(node: TaskNode) => void> = []
   private dbPath: string
 
   constructor() {
     const appPaths = getAppPaths()
     this.dbPath = appPaths.getDatabaseFile()
-    this.maintenance = new DatabaseMaintenance(appPaths)
-    this.maintenance.handleLegacyDatabase(this.dbPath)
     console.log('[DatabaseService] Initializing database at:', this.dbPath)
 
     this.connection = new DatabaseConnection(this.dbPath)
-    try {
-      this.db = this.connection.open()
-    } catch (error) {
-      if (this.maintenance.hasBackup()) {
-        console.error('[DatabaseService] Failed to open database, restoring backup:', error)
-        this.maintenance.restoreBackup()
-        dialog.showErrorBox(
-          'Database Open Failed',
-          'Failed to open the database after migration. The backup has been restored.'
-        )
-      }
-      throw error
-    }
-
-    try {
-      this.connection.initTables()
-    } catch (error) {
-      if (this.maintenance.hasBackup()) {
-        console.error('[DatabaseService] Failed to initialize tables, restoring backup:', error)
-        this.maintenance.restoreBackup()
-        dialog.showErrorBox(
-          'Database Initialization Failed',
-          'Failed to initialize the database. The backup has been restored.'
-        )
-      }
-      throw error
-    }
+    this.db = this.connection.open()
+    this.connection.initTables()
 
     this.taskRepo = new TaskRepository(this.db)
+    this.taskNodeRepo = new TaskNodeRepository(this.db)
     this.projectRepo = new ProjectRepository(this.db)
     this.workflowRepo = new WorkflowRepository(this.db)
-    this.agentRepo = new AgentRepository(this.db)
     this.agentToolConfigRepo = new AgentToolConfigRepository(this.db)
+    this.taskExecutionService = new TaskExecutionService(this.taskRepo, this.taskNodeRepo)
   }
 
-  onWorkNodeStatusChange(listener: (node: WorkNode) => void): () => void {
-    this.workNodeStatusListeners.push(listener)
+  onTaskNodeStatusChange(listener: (node: TaskNode) => void): () => void {
+    this.taskNodeStatusListeners.push(listener)
     return () => {
-      this.workNodeStatusListeners = this.workNodeStatusListeners.filter(
+      this.taskNodeStatusListeners = this.taskNodeStatusListeners.filter(
         (registered) => registered !== listener
       )
     }
@@ -86,15 +62,23 @@ export class DatabaseService {
 
   // ============ Task 操作 ============
   createTask(input: CreateTaskInput): Task {
-    return this.taskRepo.createTask(input)
+    const task = this.taskRepo.createTask(input)
+
+    const existingNodes = this.taskNodeRepo.getTaskNodes(task.id)
+    if (existingNodes.length === 0 && task.task_mode === 'conversation') {
+      this.taskNodeRepo.createConversationNode({
+        task_id: task.id,
+        prompt: task.prompt
+      })
+
+      this.taskExecutionService.syncTaskStatus(task.id)
+    }
+
+    return this.taskRepo.getTask(task.id)!
   }
 
   getTask(id: string): Task | null {
     return this.taskRepo.getTask(id)
-  }
-
-  getTaskBySessionId(sessionId: string): Task | null {
-    return this.taskRepo.getTaskBySessionId(sessionId)
   }
 
   getAllTasks(): Task[] {
@@ -106,24 +90,172 @@ export class DatabaseService {
   }
 
   updateTask(id: string, updates: UpdateTaskInput): Task | null {
-    const currentTask = this.taskRepo.getTask(id)
-    if (!currentTask) return null
-
-    const oldStatus = currentTask.status
-    const newStatus = updates.status
-
-    const updated = this.taskRepo.updateTask(id, updates)
-
-    // 状态变更触发：todo → in_progress 时自动实例化工作流
-    if (oldStatus === 'todo' && newStatus === 'in_progress') {
-      this.onTaskStarted(id, currentTask)
-    }
-
-    return updated
+    return this.taskRepo.updateTask(id, updates)
   }
 
   deleteTask(id: string): boolean {
     return this.taskRepo.deleteTask(id)
+  }
+
+  // ============ Task Node 操作 ============
+  createConversationNode(
+    taskId: string,
+    prompt: string,
+    cliToolId?: string | null,
+    agentToolConfigId?: string | null
+  ): TaskNode {
+    const node = this.taskNodeRepo.createConversationNode({
+      task_id: taskId,
+      prompt,
+      cli_tool_id: cliToolId ?? null,
+      agent_tool_config_id: agentToolConfigId ?? null
+    })
+    this.taskExecutionService.syncTaskStatus(taskId)
+    this.notifyTaskNodeStatusChange(node)
+    return node
+  }
+
+  createTaskNodesFromTemplate(taskId: string, templateId: string): TaskNode[] {
+    const template = this.getWorkflowTemplate(templateId)
+    if (!template) {
+      throw new Error(`Workflow template not found: ${templateId}`)
+    }
+
+    const nodes = template.nodes
+      .slice()
+      .sort((left, right) => left.node_order - right.node_order)
+      .map((node, index) => ({
+        id: newUlid(),
+        task_id: taskId,
+        node_order: Number.isFinite(node.node_order) ? node.node_order : index + 1,
+        name: node.name,
+        prompt: node.prompt,
+        cli_tool_id: node.cli_tool_id ?? null,
+        agent_tool_config_id: node.agent_tool_config_id ?? null,
+        requires_approval: Boolean(node.requires_approval),
+        continue_on_error: Boolean(node.continue_on_error)
+      }))
+
+    const createdNodes = this.taskNodeRepo.createNodesFromTemplate(taskId, nodes)
+    this.taskExecutionService.syncTaskStatus(taskId)
+    return createdNodes
+  }
+
+  getTaskNodes(taskId: string): TaskNode[] {
+    return this.taskNodeRepo.getTaskNodes(taskId)
+  }
+
+  getTaskNode(nodeId: string): TaskNode | null {
+    return this.taskNodeRepo.getTaskNode(nodeId)
+  }
+
+  getCurrentTaskNode(taskId: string): TaskNode | null {
+    return this.taskNodeRepo.getCurrentTaskNode(taskId)
+  }
+
+  updateCurrentTaskNodeRuntime(
+    taskId: string,
+    updates: {
+      session_id?: string | null
+      cli_tool_id?: string | null
+      agent_tool_config_id?: string | null
+    }
+  ): TaskNode | null {
+    const updated = this.taskNodeRepo.updateTaskNodeRuntime(taskId, updates)
+    if (updated) {
+      this.taskExecutionService.syncTaskStatus(updated.task_id)
+      this.notifyTaskNodeStatusChange(updated)
+    }
+    return updated
+  }
+
+  getTaskNodesByStatus(taskId: string, status: TaskNodeStatus): TaskNode[] {
+    return this.taskNodeRepo.getTaskNodesByStatus(taskId, status)
+  }
+
+  updateTaskNodeSession(nodeId: string, sessionId: string | null): TaskNode | null {
+    const updated = this.taskNodeRepo.setNodeSessionId(nodeId, sessionId)
+    if (updated) {
+      this.taskExecutionService.syncTaskStatus(updated.task_id)
+      this.notifyTaskNodeStatusChange(updated)
+    }
+    return updated
+  }
+
+  startTaskExecution(taskId: string): TaskNode | null {
+    const updated = this.taskExecutionService.startTaskExecution(taskId)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  stopTaskExecution(taskId: string): TaskNode | null {
+    const updated = this.taskExecutionService.stopTaskExecution(taskId)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  completeTaskNode(
+    nodeId: string,
+    result: {
+      resultSummary?: string | null
+      cost?: number | null
+      duration?: number | null
+      sessionId?: string | null
+      manualConversationStop?: boolean
+      allowConversationCompletion?: boolean
+    } = {}
+  ): TaskNode | null {
+    const updated = this.taskExecutionService.completeTaskNode(nodeId, result)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  markTaskNodeErrorReview(nodeId: string, error: string): TaskNode | null {
+    const updated = this.taskExecutionService.markTaskNodeErrorReview(nodeId, error)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  approveTaskNode(nodeId: string): TaskNode | null {
+    const updated = this.taskExecutionService.approveTaskNode(nodeId)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  rejectTaskNode(nodeId: string, reason?: string): TaskNode | null {
+    const updated = this.taskExecutionService.rejectTaskNode(nodeId, reason)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  retryTaskNode(nodeId: string): TaskNode | null {
+    const updated = this.taskExecutionService.retryTaskNode(nodeId)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  cancelTaskNode(nodeId: string): TaskNode | null {
+    const updated = this.taskExecutionService.cancelTaskNode(nodeId)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
+  getTaskIdBySessionId(sessionId: string): string | null {
+    return this.taskNodeRepo.getTaskIdBySessionId(sessionId)
+  }
+
+  getCombinedPromptForTaskNode(taskNodeId: string): string | null {
+    const node = this.getTaskNode(taskNodeId)
+    if (!node) return null
+
+    const task = this.getTask(node.task_id)
+    if (!task) return null
+
+    const nodePrompt = node.prompt || ''
+    if (nodePrompt) {
+      return `${task.prompt}\n\n${nodePrompt}`
+    }
+    return task.prompt
   }
 
   // ============ Agent Tool Config 操作 ============
@@ -139,11 +271,26 @@ export class DatabaseService {
     return this.agentToolConfigRepo.getDefault(toolId)
   }
 
-  createAgentToolConfig(input: { id: string; tool_id: string; name: string; description?: string | null; config_json: string; is_default?: number }) {
+  createAgentToolConfig(input: {
+    id: string
+    tool_id: string
+    name: string
+    description?: string | null
+    config_json: string
+    is_default?: number
+  }) {
     return this.agentToolConfigRepo.create(input)
   }
 
-  updateAgentToolConfig(id: string, updates: { name?: string; description?: string | null; config_json?: string; is_default?: number }) {
+  updateAgentToolConfig(
+    id: string,
+    updates: {
+      name?: string
+      description?: string | null
+      config_json?: string
+      is_default?: number
+    }
+  ) {
     return this.agentToolConfigRepo.update(id, updates)
   }
 
@@ -153,143 +300,6 @@ export class DatabaseService {
 
   setDefaultAgentToolConfig(id: string) {
     return this.agentToolConfigRepo.setDefault(id)
-  }
-
-  // ============ 任务状态变更触发 ============
-  private onTaskStarted(taskId: string, task: Task): void {
-    if (task.task_mode !== 'workflow') return
-
-    const workflow = this.getWorkflowByTaskId(taskId)
-    if (!workflow) return
-
-    // 启动第一个节点
-    this.updateWorkflowStatus(workflow.id, 'in_progress')
-    const nodes = this.getWorkNodesByWorkflowId(workflow.id)
-    if (nodes.length > 0) {
-      this.startWorkNode(nodes[0].id)
-    }
-  }
-
-  private ensureWorkflowFromTemplate(taskId: string, templateId: string): Workflow | null {
-    const template = this.getWorkflowTemplate(templateId)
-    if (!template) return null
-
-    const workflow = this.createWorkflow(taskId)
-    for (const nodeTemplate of template.nodes) {
-      this.createWorkNodeFromTemplate(workflow.id, nodeTemplate)
-    }
-
-    return this.getWorkflow(workflow.id)
-  }
-
-  seedWorkflowForTask(taskId: string, templateId: string): Workflow | null {
-    const existing = this.getWorkflowByTaskId(taskId)
-    if (existing) return existing
-    return this.ensureWorkflowFromTemplate(taskId, templateId)
-  }
-
-  private startWorkNode(workNodeId: string): void {
-    this.updateWorkNodeStatus(workNodeId, 'in_progress')
-
-    const node = this.getWorkNode(workNodeId)
-    if (!node) return
-
-    const workflow = this.getWorkflow(node.workflow_id)
-    if (!workflow) return
-
-    this.createWorkNodeExecution(
-      workflow.task_id,
-      workNodeId,
-      undefined,
-      node.cli_tool_id ?? null,
-      node.agent_tool_config_id ?? null
-    )
-  }
-
-  syncTaskStatusFromWorkflow(workflowId: string): void {
-    const workflow = this.getWorkflow(workflowId)
-    if (!workflow) return
-
-    const taskStatus = this.deriveTaskStatusFromWorkflow(workflow)
-    if (taskStatus) {
-      this.taskRepo.updateTaskStatus(workflow.task_id, taskStatus)
-    }
-  }
-
-  private deriveTaskStatusFromWorkflow(workflow: Workflow): string | null {
-    const nodes = this.getWorkNodesByWorkflowId(workflow.id)
-    if (nodes.length === 0) return null
-
-    // 原则2: Work Node → Task 自动联动
-    // 1. 任意 Work Node = in_progress → Task in_progress
-    const hasInProgressNode = nodes.some(n => n.status === 'in_progress')
-    if (hasInProgressNode) return 'in_progress'
-
-    // 2. 任意 Work Node = in_review 且无 in_progress → Task in_progress
-    const hasReviewNode = nodes.some(n => n.status === 'in_review')
-    if (hasReviewNode) return 'in_progress'
-
-    // All nodes completed → Task in_review (await final approval)
-    const allDone = nodes.every(n => n.status === 'done')
-    if (allDone || workflow.status === 'done') return 'in_review'
-
-    return null
-  }
-
-  completeWorkNode(workNodeId: string, requiresApproval: boolean): void {
-    if (requiresApproval) {
-      this.updateWorkNodeStatus(workNodeId, 'in_review')
-    } else {
-      this.finalizeWorkNode(workNodeId)
-    }
-  }
-
-  private finalizeWorkNode(workNodeId: string): void {
-    this.updateWorkNodeStatus(workNodeId, 'done')
-
-    const node = this.getWorkNode(workNodeId)
-    if (!node) return
-
-    const workflow = this.getWorkflow(node.workflow_id)
-    if (!workflow) return
-
-    this.advanceToNextNode(workflow)
-  }
-
-  private advanceToNextNode(workflow: Workflow): void {
-    const nodes = this.getWorkNodesByWorkflowId(workflow.id)
-    const nextIndex = workflow.current_node_index + 1
-
-    if (nextIndex >= nodes.length) {
-      // 所有节点完成
-      this.updateWorkflowStatus(workflow.id, 'done')
-      this.syncTaskStatusFromWorkflow(workflow.id)
-      return
-    }
-
-    // 推进到下一个节点
-    this.updateWorkflowStatus(workflow.id, 'in_progress', nextIndex)
-    this.startWorkNode(nodes[nextIndex].id)
-    this.syncTaskStatusFromWorkflow(workflow.id)
-  }
-
-  approveWorkNode(workNodeId: string): void {
-    this.finalizeWorkNode(workNodeId)
-  }
-
-  rejectWorkNode(workNodeId: string): void {
-    this.startWorkNode(workNodeId)
-  }
-
-  /**
-   * 原则3: 用户审核任务通过 → Task: in_review → done
-   */
-  approveTask(taskId: string): boolean {
-    const task = this.getTask(taskId)
-    if (!task || task.status !== 'in_review') return false
-
-    this.taskRepo.updateTaskStatus(taskId, 'done')
-    return true
   }
 
   // ============ Project 操作 ============
@@ -352,174 +362,6 @@ export class DatabaseService {
     return this.workflowRepo.copyGlobalWorkflowToProject(globalTemplateId, projectId)
   }
 
-  getWorkNodeTemplate(templateNodeId: string): WorkNodeTemplate | null {
-    return this.workflowRepo.getWorkNodeTemplate(templateNodeId)
-  }
-
-  /**
-   * 获取工作节点的组合提示词（任务提示词 + 节点提示词）
-   */
-  getCombinedPromptForWorkNode(workNodeId: string): string | null {
-    const workNode = this.getWorkNode(workNodeId)
-    if (!workNode) return null
-
-    const workflow = this.getWorkflow(workNode.workflow_id)
-    if (!workflow) return null
-
-    const task = this.getTask(workflow.task_id)
-    if (!task) return null
-
-    const nodePrompt = workNode.prompt || ''
-    if (nodePrompt) {
-      return `${task.prompt}\n\n${nodePrompt}`
-    }
-    return task.prompt
-  }
-
-  // ============ Workflow 实例操作 ============
-  createWorkflow(taskId: string): Workflow {
-    return this.workflowRepo.createWorkflow(taskId)
-  }
-
-  getWorkflow(id: string): Workflow | null {
-    return this.workflowRepo.getWorkflow(id)
-  }
-
-  getWorkflowByTaskId(taskId: string): Workflow | null {
-    return this.workflowRepo.getWorkflowByTaskId(taskId)
-  }
-
-  updateWorkflowStatus(id: string, status: string, nodeIndex?: number): Workflow | null {
-    return this.workflowRepo.updateWorkflowStatus(id, status, nodeIndex)
-  }
-
-  // ============ WorkNode 实例操作 ============
-  createWorkNodeFromTemplate(workflowId: string, template: WorkNodeTemplate): WorkNode {
-    return this.workflowRepo.createWorkNodeFromTemplate(workflowId, template)
-  }
-
-  createWorkNode(workflowId: string, templateId: string, nodeOrder: number): WorkNode {
-    return this.workflowRepo.createWorkNode(workflowId, templateId, nodeOrder)
-  }
-
-  getWorkNode(id: string): WorkNode | null {
-    return this.workflowRepo.getWorkNode(id)
-  }
-
-  getWorkNodesByWorkflowId(workflowId: string): WorkNode[] {
-    return this.workflowRepo.getWorkNodesByWorkflowId(workflowId)
-  }
-
-  updateWorkNodeStatus(id: string, status: string): WorkNode | null {
-    const updatedNode = this.workflowRepo.updateWorkNodeStatus(id, status)
-    if (updatedNode) {
-      this.workNodeStatusListeners.forEach((listener) => {
-        try {
-          listener(updatedNode)
-        } catch (error) {
-          console.error('[DatabaseService] Work node status listener failed:', error)
-        }
-      })
-    }
-    return updatedNode
-  }
-
-  // ============ AgentExecution 操作 ============
-  createTaskExecution(
-    taskId: string,
-    sessionId?: string | null,
-    cliToolId?: string | null,
-    agentToolConfigId?: string | null
-  ): AgentExecution {
-    return this.agentRepo.createTaskExecution(taskId, sessionId, cliToolId, agentToolConfigId)
-  }
-
-  createWorkNodeExecution(
-    taskId: string,
-    workNodeId: string,
-    sessionId?: string | null,
-    cliToolId?: string | null,
-    agentToolConfigId?: string | null
-  ): AgentExecution {
-    return this.agentRepo.createWorkNodeExecution(
-      taskId,
-      workNodeId,
-      sessionId,
-      cliToolId,
-      agentToolConfigId
-    )
-  }
-
-  createAgentExecution(workNodeId: string): AgentExecution {
-    const node = this.getWorkNode(workNodeId)
-    if (!node) {
-      throw new Error(`Work node not found: ${workNodeId}`)
-    }
-
-    const workflow = this.getWorkflow(node.workflow_id)
-    if (!workflow) {
-      throw new Error(`Workflow not found for work node: ${workNodeId}`)
-    }
-
-    return this.createWorkNodeExecution(workflow.task_id, workNodeId)
-  }
-
-  getAgentExecution(id: string): AgentExecution | null {
-    return this.agentRepo.getAgentExecution(id)
-  }
-
-  getAgentExecutionsByTaskId(taskId: string): AgentExecution[] {
-    return this.agentRepo.getAgentExecutionsByTaskId(taskId)
-  }
-
-  getAgentExecutionsByWorkNodeId(workNodeId: string): AgentExecution[] {
-    return this.agentRepo.getAgentExecutionsByWorkNodeId(workNodeId)
-  }
-
-  getLatestTaskExecution(taskId: string): AgentExecution | null {
-    return this.agentRepo.getLatestTaskExecution(taskId)
-  }
-
-  getLatestWorkNodeExecution(workNodeId: string): AgentExecution | null {
-    return this.agentRepo.getLatestWorkNodeExecution(workNodeId)
-  }
-
-  getLatestAgentExecution(workNodeId: string): AgentExecution | null {
-    return this.getLatestWorkNodeExecution(workNodeId)
-  }
-
-  updateAgentExecutionStatus(
-    id: string,
-    status: 'idle' | 'running' | 'completed',
-    cost?: number,
-    duration?: number
-  ): AgentExecution | null {
-    const execution = this.agentRepo.updateAgentExecutionStatus(id, status, cost, duration)
-
-    // 原则1: Agent CLI → Work Node 自动联动（idle 除外）
-    if (execution && status !== 'idle' && execution.work_node_id) {
-      this.syncWorkNodeFromAgentStatus(execution.work_node_id, status)
-    }
-
-    return execution
-  }
-
-  /**
-   * 原则1: Agent CLI 状态同步到 Work Node
-   * - running → in_progress
-   * - completed → in_review
-   */
-  private syncWorkNodeFromAgentStatus(workNodeId: string, agentStatus: 'running' | 'completed'): void {
-    const workNode = this.getWorkNode(workNodeId)
-    if (!workNode) return
-    if (workNode.status === 'done') return
-
-    const workNodeStatus = agentStatus === 'running' ? 'in_progress' : 'in_review'
-    this.updateWorkNodeStatus(workNodeId, workNodeStatus)
-
-    // 同步更新 Task 状态
-    this.syncTaskStatusFromWorkflow(workNode.workflow_id)
-  }
 
   // ============ 清理和关闭 ============
   close(): void {
@@ -530,4 +372,15 @@ export class DatabaseService {
   dispose(): void {
     this.close()
   }
+
+  private notifyTaskNodeStatusChange(node: TaskNode): void {
+    this.taskNodeStatusListeners.forEach((listener) => {
+      try {
+        listener(node)
+      } catch (error) {
+        console.error('[DatabaseService] Task node status listener failed:', error)
+      }
+    })
+  }
+
 }

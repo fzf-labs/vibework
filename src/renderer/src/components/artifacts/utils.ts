@@ -331,7 +331,7 @@ export function parseFrontmatter(content: string): {
   };
 }
 
-// Strip YAML frontmatter from markdown content (legacy, kept for compatibility)
+// Strip YAML frontmatter from markdown content
 export function stripFrontmatter(content: string): string {
   return parseFrontmatter(content).content;
 }

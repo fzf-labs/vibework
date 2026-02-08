@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { useLanguage } from '@/providers/language-provider';
 
-export interface WorkNodeTemplateDraft {
+export interface TaskNodeTemplateDraft {
   name: string;
   prompt: string;
   requiresApproval: boolean;
@@ -20,7 +20,7 @@ export interface WorkNodeTemplateDraft {
 export interface WorkflowTemplateFormValues {
   name: string;
   description?: string;
-  nodes: WorkNodeTemplateDraft[];
+  nodes: TaskNodeTemplateDraft[];
 }
 
 interface WorkflowTemplateDialogProps {
@@ -31,7 +31,7 @@ interface WorkflowTemplateDialogProps {
   onSubmit: (values: WorkflowTemplateFormValues) => Promise<void>;
 }
 
-const DEFAULT_NODE: WorkNodeTemplateDraft = {
+const DEFAULT_NODE: TaskNodeTemplateDraft = {
   name: '',
   prompt: '',
   requiresApproval: true,
@@ -48,7 +48,7 @@ export function WorkflowTemplateDialog({
   const { t } = useLanguage();
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
-  const [templateNodes, setTemplateNodes] = useState<WorkNodeTemplateDraft[]>([
+  const [templateNodes, setTemplateNodes] = useState<TaskNodeTemplateDraft[]>([
     { ...DEFAULT_NODE },
   ]);
   const [error, setError] = useState<string | null>(null);

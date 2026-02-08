@@ -107,12 +107,6 @@ export class AppPaths {
     return join(this.getDataDir(), 'vibework.db')
   }
 
-  /**
-   * 获取数据库备份目录
-   */
-  getDatabaseBackupsDir(): string {
-    return join(this.getDataDir(), 'db-backups')
-  }
 
   /**
    * 获取 CLI 输出日志目录
@@ -159,7 +153,6 @@ export class AppPaths {
       this.getDataDir(),
       this.getLogsDir(),
       this.getSessionsDir(),
-      this.getDatabaseBackupsDir(),
       this.getCliOutputDir(),
       this.getPipelineOutputDir(),
       this.getCacheDir(),

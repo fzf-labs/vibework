@@ -11,7 +11,7 @@ import {
   type BackgroundTask,
 } from '@/lib/background-tasks';
 import { newUlid, newUuid } from '@/lib/ids';
-import { getSessionsDir, getVibeworkDataDir } from '@/lib/paths';
+import { getDataRootDir, getSessionsDir } from '@/lib/paths';
 import { getProjectMcpConfigPath } from '@/lib/mcp';
 
 // Import from agent modules
@@ -97,7 +97,7 @@ console.log(
   `[API] Environment: ${import.meta.env.PROD ? 'production' : 'development'}, Port: ${API_PORT}`
 );
 
-// Re-export types for backward compatibility
+// Re-export agent types
 export type {
   PermissionRequest,
   QuestionOption,
@@ -198,6 +198,43 @@ export function useAgent(): UseAgentReturn {
     setCurrentSessionId(sessionId);
   }, []);
 
+  const getCurrentTaskNodeRuntime = useCallback(async (currentTaskId: string): Promise<{
+    id: string
+    sessionId: string | null
+    cliToolId: string | null
+  } | null> => {
+    try {
+      const currentNode = await db.getCurrentTaskNode(currentTaskId) as {
+        id: string
+        session_id?: string | null
+        cli_tool_id?: string | null
+      } | null
+      if (currentNode?.id) {
+        return {
+          id: currentNode.id,
+          sessionId: currentNode.session_id ?? null,
+          cliToolId: currentNode.cli_tool_id ?? null
+        }
+      }
+
+      const nodes = await db.getTaskNodes(currentTaskId) as Array<{
+        id: string
+        session_id?: string | null
+        cli_tool_id?: string | null
+      }>
+      const first = nodes[0]
+      if (!first) return null
+      return {
+        id: first.id,
+        sessionId: first.session_id ?? null,
+        cliToolId: first.cli_tool_id ?? null
+      }
+    } catch (error) {
+      console.error('[useAgent] Failed to resolve task node runtime:', error)
+      return null
+    }
+  }, [])
+
   // Load existing task from database
   // This function handles task switching (moving running task to background)
   // and loading task metadata. Message loading and background restoration is done by loadMessages.
@@ -250,13 +287,14 @@ export function useAgent(): UseAgentReturn {
       if (task) {
         setInitialPrompt(task.prompt);
 
-        // Set session info if available from the task
-        if (task.session_id) {
-          setCurrentSessionId(task.session_id);
-          sessionIdRef.current = task.session_id;
+        const nodeRuntime = await getCurrentTaskNodeRuntime(id)
+        const sessionId = nodeRuntime?.sessionId ?? null
+        if (sessionId) {
+          setCurrentSessionId(sessionId)
+          sessionIdRef.current = sessionId
         } else {
-          setCurrentSessionId(null);
-          sessionIdRef.current = null;
+          setCurrentSessionId(null)
+          sessionIdRef.current = null
         }
 
         // Compute and set session folder (task-based)
@@ -278,7 +316,7 @@ export function useAgent(): UseAgentReturn {
       console.error('Failed to load task:', error);
       return null;
     }
-  }, []);
+  }, [getCurrentTaskNodeRuntime]);
 
   // Load existing messages (message persistence removed)
   const loadMessages = useCallback(async (id: string): Promise<void> => {
@@ -314,51 +352,43 @@ export function useAgent(): UseAgentReturn {
     abortControllerRef.current = null;
   }, []);
 
-  const getCurrentWorkNodeExecutionId = useCallback(async (currentTaskId: string): Promise<string | null> => {
+  const getCurrentTaskNodeId = useCallback(async (currentTaskId: string): Promise<string | null> => {
     try {
-      const workflow = await db.getWorkflowByTaskId(currentTaskId) as {
-        id: string;
-        current_node_index: number;
-      } | null;
-      if (!workflow) return null;
-
-      const nodes = await db.getWorkNodesByWorkflowId(workflow.id) as Array<{
-        id: string;
-      }>;
-      const currentNode = nodes[workflow.current_node_index];
-      if (!currentNode) return null;
-
-      const latestExecution = await db.getLatestAgentExecution(currentNode.id) as {
-        id: string;
-      } | null;
-      return latestExecution?.id ?? null;
+      const currentNode = await db.getCurrentTaskNode(currentTaskId) as { id: string } | null;
+      if (currentNode?.id) return currentNode.id;
+      const nodes = await db.getTaskNodes(currentTaskId) as Array<{ id: string }>;
+      return nodes[0]?.id ?? null;
     } catch (error) {
-      console.error('[useAgent] Failed to resolve agent execution:', error);
+      console.error('[useAgent] Failed to resolve task node:', error);
       return null;
     }
   }, []);
 
-  const startAgentExecutionForTask = useCallback(async (currentTaskId: string): Promise<string | null> => {
-    const executionId = await getCurrentWorkNodeExecutionId(currentTaskId);
-    if (!executionId) return null;
+  const startTaskNodeExecutionForTask = useCallback(async (currentTaskId: string): Promise<string | null> => {
+    const taskNodeId = await getCurrentTaskNodeId(currentTaskId);
+    if (!taskNodeId) return null;
     try {
-      await db.updateAgentExecutionStatus(executionId, 'running');
+      await db.startTaskExecution(currentTaskId);
     } catch (error) {
-      console.error('[useAgent] Failed to mark agent execution running:', error);
+      console.error('[useAgent] Failed to mark task node running:', error);
     }
-    return executionId;
-  }, [getCurrentWorkNodeExecutionId]);
+    return taskNodeId;
+  }, [getCurrentTaskNodeId]);
 
-  const completeAgentExecution = useCallback(async (
-    executionId: string | null,
+  const completeTaskNodeExecution = useCallback(async (
+    taskNodeId: string | null,
     cost?: number,
     duration?: number
   ): Promise<void> => {
-    if (!executionId) return;
+    if (!taskNodeId) return;
     try {
-      await db.updateAgentExecutionStatus(executionId, 'completed', cost, duration);
+      await db.completeTaskNode(taskNodeId, {
+        cost,
+        duration,
+        sessionId: sessionIdRef.current
+      });
     } catch (error) {
-      console.error('[useAgent] Failed to mark agent execution completed:', error);
+      console.error('[useAgent] Failed to mark task node completed:', error);
     }
   }, []);
 
@@ -368,7 +398,7 @@ export function useAgent(): UseAgentReturn {
       response: Response,
       currentTaskId: string,
       _abortController: AbortController,
-      agentExecutionId?: string | null
+      taskNodeId?: string | null
     ) => {
       const reader = response.body?.getReader();
       if (!reader) {
@@ -388,9 +418,14 @@ export function useAgent(): UseAgentReturn {
       // Helper to check if this stream is still for the active task
       const isActiveTask = () => activeTaskIdRef.current === currentTaskId;
       const markExecutionCompleted = async (cost?: number, duration?: number) => {
-        if (!agentExecutionId || executionCompleted) return;
+        if (!taskNodeId || executionCompleted) return;
         executionCompleted = true;
-        await completeAgentExecution(agentExecutionId, cost, duration);
+        await completeTaskNodeExecution(taskNodeId, cost, duration);
+      };
+      const markExecutionErrorReview = async (errorMessage?: string) => {
+        if (!taskNodeId || executionCompleted) return;
+        executionCompleted = true;
+        await db.markTaskNodeErrorReview(taskNodeId, errorMessage || 'Agent execution failed');
       };
 
       while (true) {
@@ -454,7 +489,11 @@ export function useAgent(): UseAgentReturn {
                   lastDuration = normalizedData.duration ?? lastDuration;
                   await markExecutionCompleted(normalizedData.cost, normalizedData.duration);
                 } else if (normalizedData.type === 'error') {
-                  await markExecutionCompleted(normalizedData.cost, normalizedData.duration);
+                  const errorMessage =
+                    normalizeMessageContent(normalizedData.message) ||
+                    normalizeMessageContent(normalizedData.content) ||
+                    'Agent execution failed';
+                  await markExecutionErrorReview(errorMessage);
                 }
 
                 // Track tool_use messages for plan progress
@@ -550,7 +589,7 @@ export function useAgent(): UseAgentReturn {
       }
       await markExecutionCompleted(lastCost, lastDuration);
     },
-    [completeAgentExecution]
+    [completeTaskNodeExecution]
   );
 
   const resolveTaskWorkDir = useCallback(
@@ -571,7 +610,7 @@ export function useAgent(): UseAgentReturn {
       }
       if (sessionFolderValue) return sessionFolderValue;
       const settings = getSettings();
-      return settings.workDir || (await getVibeworkDataDir());
+      return settings.workDir || (await getDataRootDir());
     },
     []
   );
@@ -584,14 +623,19 @@ export function useAgent(): UseAgentReturn {
         if (!projectId || !window.api?.projects?.get) return undefined;
         const project = await window.api.projects.get(projectId) as { path?: string } | null;
         if (!project?.path) return undefined;
-        const cliToolId = taskRecord?.cli_tool_id || getSettings().defaultCliToolId;
+        let cliToolId: string | null = null
+        if (taskIdValue) {
+          const nodeRuntime = await getCurrentTaskNodeRuntime(taskIdValue)
+          cliToolId = nodeRuntime?.cliToolId ?? null
+        }
+        if (!cliToolId) cliToolId = getSettings().defaultCliToolId
         return getProjectMcpConfigPath(project.path, cliToolId || undefined);
       } catch (error) {
         console.warn('[useAgent] Failed to resolve project MCP config path:', error);
         return undefined;
       }
     },
-    []
+    [getCurrentTaskNodeRuntime]
   );
 
   // Phase 1: Planning - get a plan from the agent
@@ -641,8 +685,11 @@ export function useAgent(): UseAgentReturn {
       let existingTask: Task | null = null;
       try {
         existingTask = await db.getTask(currentTaskId);
-        if (existingTask?.session_id) {
-          sessId = existingTask.session_id;
+        if (existingTask) {
+          const nodeRuntime = await getCurrentTaskNodeRuntime(currentTaskId)
+          if (nodeRuntime?.sessionId) {
+            sessId = nodeRuntime.sessionId
+          }
         }
       } catch (error) {
         console.error('Failed to load existing task:', error);
@@ -652,15 +699,6 @@ export function useAgent(): UseAgentReturn {
 
       // Compute session folder path
       let computedSessionFolder: string | null = null;
-      try {
-        if (existingTask && !existingTask.session_id) {
-          const updatedTask = await db.updateTask(currentTaskId, { session_id: sessId });
-          if (updatedTask) existingTask = updatedTask;
-        }
-      } catch (error) {
-        console.error('[useAgent] Failed to persist session_id:', error);
-      }
-
       try {
         const sessionsDir = await getSessionsDir();
         const projectKey = existingTask?.project_id || 'project';
@@ -689,9 +727,11 @@ export function useAgent(): UseAgentReturn {
           }
           await db.createTask({
             id: currentTaskId,
-            session_id: sessId,
             title: prompt,
             prompt,
+          });
+          await db.updateCurrentTaskNodeRuntime(currentTaskId, {
+            session_id: sessId,
             cli_tool_id: settings.defaultCliToolId || null,
             agent_tool_config_id: agentToolConfigId,
           });
@@ -732,7 +772,7 @@ export function useAgent(): UseAgentReturn {
         console.log('[useAgent] Valid images for API:', images?.length || 0);
       }
 
-      let executionId: string | null = null;
+      let taskNodeId: string | null = null;
       try {
         const modelConfig = getModelConfig();
         const projectMcpConfigPath = await resolveProjectMcpConfigPath(
@@ -763,7 +803,7 @@ export function useAgent(): UseAgentReturn {
           const sandboxConfig = getSandboxConfig();
           const skillsConfig = await getSkillsConfig();
 
-          executionId = await startAgentExecutionForTask(currentTaskId);
+          taskNodeId = await startTaskNodeExecutionForTask(currentTaskId);
           // Use direct execution endpoint with images
           const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
             method: 'POST',
@@ -787,7 +827,7 @@ export function useAgent(): UseAgentReturn {
             throw new Error(`Server error: ${response.status}`);
           }
 
-          await processStream(response, currentTaskId, abortController, executionId);
+          await processStream(response, currentTaskId, abortController, taskNodeId);
           return currentTaskId;
         }
 
@@ -864,9 +904,9 @@ export function useAgent(): UseAgentReturn {
                     setPhase('idle');
                   }
 
-                  const executionId = await startAgentExecutionForTask(currentTaskId);
-                  await completeAgentExecution(
-                    executionId,
+                  const taskNodeId = await startTaskNodeExecutionForTask(currentTaskId);
+                  await completeTaskNodeExecution(
+                    taskNodeId,
                     normalizedData.cost,
                     normalizedData.duration
                   );
@@ -910,7 +950,7 @@ export function useAgent(): UseAgentReturn {
             setPhase('idle');
           }
 
-          await completeAgentExecution(executionId);
+          await completeTaskNodeExecution(taskNodeId);
         }
       } finally {
         // Only update running state if this is still the active task
@@ -923,13 +963,14 @@ export function useAgent(): UseAgentReturn {
       return currentTaskId;
     },
     [
-      completeAgentExecution,
+      completeTaskNodeExecution,
+      getCurrentTaskNodeRuntime,
       initialPrompt,
       isRunning,
       processStream,
       resolveProjectMcpConfigPath,
       resolveTaskWorkDir,
-      startAgentExecutionForTask,
+      startTaskNodeExecutionForTask,
       taskId,
     ]
   );
@@ -954,7 +995,7 @@ export function useAgent(): UseAgentReturn {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    let executionId: string | null = null;
+    let taskNodeId: string | null = null;
     try {
       const workDir = await resolveTaskWorkDir(taskId, sessionFolder);
       const modelConfig = getModelConfig();
@@ -970,7 +1011,7 @@ export function useAgent(): UseAgentReturn {
           : undefined
       );
 
-      executionId = await startAgentExecutionForTask(taskId);
+      taskNodeId = await startTaskNodeExecutionForTask(taskId);
       const response = await fetchWithRetry(
         `${AGENT_SERVER_URL}/agent/execute`,
         {
@@ -996,7 +1037,7 @@ export function useAgent(): UseAgentReturn {
         throw new Error(`Server error: ${response.status}`);
       }
 
-      await processStream(response, taskId, abortController, executionId);
+      await processStream(response, taskId, abortController, taskNodeId);
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         const errorMessage = formatFetchError(error, '/agent/execute');
@@ -1010,7 +1051,7 @@ export function useAgent(): UseAgentReturn {
           ]);
         }
 
-        await completeAgentExecution(executionId);
+        await completeTaskNodeExecution(taskNodeId);
       }
     } finally {
       // Only update running state if this is still the active task
@@ -1031,8 +1072,8 @@ export function useAgent(): UseAgentReturn {
     sessionFolder,
     resolveProjectMcpConfigPath,
     resolveTaskWorkDir,
-    startAgentExecutionForTask,
-    completeAgentExecution,
+    startTaskNodeExecutionForTask,
+    completeTaskNodeExecution,
   ]);
 
   // Reject the plan
@@ -1065,7 +1106,7 @@ export function useAgent(): UseAgentReturn {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      let executionId: string | null = null;
+      let taskNodeId: string | null = null;
       try {
         // Build conversation history including the new reply
         const currentMessages = [...messages, userMessage];
@@ -1115,7 +1156,7 @@ export function useAgent(): UseAgentReturn {
         }
 
         // Send conversation with full history
-        executionId = await startAgentExecutionForTask(taskId);
+        taskNodeId = await startTaskNodeExecutionForTask(taskId);
         const response = await fetchWithRetry(`${AGENT_SERVER_URL}/agent`, {
           method: 'POST',
           headers: {
@@ -1139,7 +1180,7 @@ export function useAgent(): UseAgentReturn {
           throw new Error(`Server error: ${response.status}`);
         }
 
-        await processStream(response, taskId, abortController, executionId);
+        await processStream(response, taskId, abortController, taskNodeId);
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
           const errorMessage = formatFetchError(error, '/agent');
@@ -1156,7 +1197,7 @@ export function useAgent(): UseAgentReturn {
             ]);
           }
 
-          await completeAgentExecution(executionId);
+          await completeTaskNodeExecution(taskNodeId);
         }
       } finally {
         // Only update running state if this is still the active task
@@ -1175,8 +1216,8 @@ export function useAgent(): UseAgentReturn {
       sessionFolder,
       resolveProjectMcpConfigPath,
       resolveTaskWorkDir,
-      startAgentExecutionForTask,
-      completeAgentExecution,
+      startTaskNodeExecutionForTask,
+      completeTaskNodeExecution,
     ]
   );
 
@@ -1206,10 +1247,10 @@ export function useAgent(): UseAgentReturn {
     // Keep task in in_progress status when stopped - user can continue
     setIsRunning(false);
     if (taskId) {
-      const executionId = await getCurrentWorkNodeExecutionId(taskId);
-      await completeAgentExecution(executionId);
+      const taskNodeId = await getCurrentTaskNodeId(taskId);
+      await completeTaskNodeExecution(taskNodeId);
     }
-  }, [taskId, completeAgentExecution, getCurrentWorkNodeExecutionId]);
+  }, [taskId, completeTaskNodeExecution, getCurrentTaskNodeId]);
 
   const clearMessages = useCallback(() => {
     // Stop polling if active

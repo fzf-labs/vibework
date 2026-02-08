@@ -1,15 +1,15 @@
 import { cn } from '@/lib/utils';
-import { Check, Circle, Clock, AlertCircle } from 'lucide-react';
+import { Ban, Check, Circle, Clock } from 'lucide-react';
 
-interface WorkNode {
+interface TaskNode {
   id: string;
   name: string;
-  status: 'todo' | 'in_progress' | 'in_review' | 'done';
+  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
   node_order: number;
 }
 
 interface WorkflowProgressBarProps {
-  nodes: WorkNode[];
+  nodes: TaskNode[];
   currentNodeIndex: number;
 }
 
@@ -38,7 +38,7 @@ export function WorkflowProgressBar({
       {/* Node Status Badges */}
       <div className="flex gap-1 flex-wrap">
         {nodes.map((node, index) => (
-          <WorkNodeStatusBadge
+          <TaskNodeStatusBadge
             key={node.id}
             node={node}
             isCurrent={index === currentNodeIndex}
@@ -49,12 +49,12 @@ export function WorkflowProgressBar({
   );
 }
 
-interface WorkNodeStatusBadgeProps {
-  node: WorkNode;
+interface TaskNodeStatusBadgeProps {
+  node: TaskNode;
   isCurrent: boolean;
 }
 
-function WorkNodeStatusBadge({ node, isCurrent }: WorkNodeStatusBadgeProps) {
+function TaskNodeStatusBadge({ node, isCurrent }: TaskNodeStatusBadgeProps) {
   const statusConfig = {
     todo: {
       icon: Circle,
@@ -80,10 +80,10 @@ function WorkNodeStatusBadge({ node, isCurrent }: WorkNodeStatusBadgeProps) {
       text: 'text-emerald-600 dark:text-emerald-400',
       ring: '',
     },
-    error: {
-      icon: AlertCircle,
-      bg: 'bg-red-100 dark:bg-red-900/30',
-      text: 'text-red-600 dark:text-red-400',
+    cancelled: {
+      icon: Ban,
+      bg: 'bg-zinc-100 dark:bg-zinc-900/30',
+      text: 'text-zinc-500 dark:text-zinc-400',
       ring: '',
     },
   };

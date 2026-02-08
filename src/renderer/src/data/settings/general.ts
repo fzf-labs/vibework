@@ -2,7 +2,7 @@
 
 import { API_BASE_URL } from '@/config';
 import {
-  getAppDataDir,
+  getDataRootDir,
   getMcpConfigPath,
   getSkillsDir,
   getWorktreesDir,
@@ -19,7 +19,7 @@ import type {
 } from './types';
 import {
   DEFAULT_TASK_COMPLETE_SOUND,
-  DEFAULT_WORKNODE_COMPLETE_SOUND,
+  DEFAULT_TASK_NODE_COMPLETE_SOUND,
 } from './sounds';
 
 // ============ Default Values ============
@@ -133,11 +133,11 @@ export const defaultSettings: Settings = {
   defaultProvider: 'default',
   defaultModel: '',
   taskCompleteSoundEnabled: false,
-  workNodeCompleteSoundEnabled: false,
+  taskNodeCompleteSoundEnabled: false,
   taskCompleteNotificationsEnabled: false,
-  workNodeCompleteNotificationsEnabled: false,
+  taskNodeCompleteNotificationsEnabled: false,
   taskCompleteSound: DEFAULT_TASK_COMPLETE_SOUND,
-  workNodeCompleteSound: DEFAULT_WORKNODE_COMPLETE_SOUND,
+  taskNodeCompleteSound: DEFAULT_TASK_NODE_COMPLETE_SOUND,
   mcpConfigPath: '',
   mcpUserDirEnabled: true,
   mcpAppDirEnabled: true,
@@ -239,188 +239,126 @@ const normalizeSoundChoice = (value: unknown, fallback: SoundChoice): SoundChoic
 
 // ============ Core Functions ============
 
-export async function getSettingsAsync(): Promise<Settings> {
-  if (settingsCache) return settingsCache;
-
+const loadGeneralSettingsFromMain = async (): Promise<Partial<Settings>> => {
   const isElectron = typeof window !== 'undefined' && 'api' in window;
-  let generalSettings: Partial<Settings> = {};
-
-  if (isElectron && window.api.settings) {
-    try {
-      const appSettings = await window.api.settings.get();
-      generalSettings = {
-        theme: appSettings.theme,
-        accentColor: appSettings.accentColor as AccentColor,
-        backgroundStyle: appSettings.backgroundStyle as BackgroundStyle,
-        language: appSettings.language,
-      };
-    } catch (error) {
-      console.error('[Settings] Failed to load from main process:', error);
-    }
+  if (!isElectron || !window.api.settings) {
+    return {};
   }
 
   try {
-    const stored = localStorage.getItem('VibeWork_settings');
-    if (stored) {
-      const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
-      if ('mcpEnabled' in loadedSettings) {
-        delete (loadedSettings as { mcpEnabled?: boolean }).mcpEnabled;
-      }
-      if (loadedSettings.profile && typeof loadedSettings.profile === 'object') {
-        delete (loadedSettings.profile as { avatar?: string }).avatar;
-      }
-      if (!loadedSettings.gitWorktreeBranchPrefix?.trim()) {
-        loadedSettings.gitWorktreeBranchPrefix =
-          defaultSettings.gitWorktreeBranchPrefix;
-      }
-      if (!loadedSettings.gitWorktreeDir?.trim()) {
-        loadedSettings.gitWorktreeDir = defaultSettings.gitWorktreeDir;
-      }
-      if (typeof loadedSettings.desktopNotificationsEnabled === 'boolean') {
-        loadedSettings.taskCompleteNotificationsEnabled =
-          loadedSettings.taskCompleteNotificationsEnabled ??
-          loadedSettings.desktopNotificationsEnabled;
-        loadedSettings.workNodeCompleteNotificationsEnabled =
-          loadedSettings.workNodeCompleteNotificationsEnabled ??
-          loadedSettings.desktopNotificationsEnabled;
-        delete (loadedSettings as { desktopNotificationsEnabled?: boolean })
-          .desktopNotificationsEnabled;
-      }
-      if (typeof loadedSettings.soundAlertsEnabled === 'boolean') {
-        loadedSettings.taskCompleteSoundEnabled =
-          loadedSettings.taskCompleteSoundEnabled ??
-          loadedSettings.soundAlertsEnabled;
-        loadedSettings.workNodeCompleteSoundEnabled =
-          loadedSettings.workNodeCompleteSoundEnabled ??
-          loadedSettings.soundAlertsEnabled;
-        delete (loadedSettings as { soundAlertsEnabled?: boolean })
-          .soundAlertsEnabled;
-      }
-      if (
-        typeof loadedSettings.taskCompleteNotificationsEnabled !== 'boolean'
-      ) {
-        loadedSettings.taskCompleteNotificationsEnabled =
-          defaultSettings.taskCompleteNotificationsEnabled;
-      }
-      if (
-        typeof loadedSettings.workNodeCompleteNotificationsEnabled !== 'boolean'
-      ) {
-        loadedSettings.workNodeCompleteNotificationsEnabled =
-          defaultSettings.workNodeCompleteNotificationsEnabled;
-      }
-      if (typeof loadedSettings.taskCompleteSoundEnabled !== 'boolean') {
-        loadedSettings.taskCompleteSoundEnabled =
-          defaultSettings.taskCompleteSoundEnabled;
-      }
-      if (typeof loadedSettings.workNodeCompleteSoundEnabled !== 'boolean') {
-        loadedSettings.workNodeCompleteSoundEnabled =
-          defaultSettings.workNodeCompleteSoundEnabled;
-      }
-      loadedSettings.taskCompleteSound = normalizeSoundChoice(
-        loadedSettings.taskCompleteSound,
-        defaultSettings.taskCompleteSound
-      );
-      loadedSettings.workNodeCompleteSound = normalizeSoundChoice(
-        loadedSettings.workNodeCompleteSound,
-        defaultSettings.workNodeCompleteSound
-      );
-      for (const defaultProvider of defaultProviders) {
-        if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
-          loadedSettings.providers.push(defaultProvider);
-        }
-      }
-      settingsCache = { ...loadedSettings, ...generalSettings };
-      return settingsCache!;
-    }
+    const appSettings = await window.api.settings.get();
+    return {
+      theme: appSettings.theme,
+      accentColor: appSettings.accentColor as AccentColor,
+      backgroundStyle: appSettings.backgroundStyle as BackgroundStyle,
+      language: appSettings.language,
+    };
   } catch (error) {
-    console.error('[Settings] Failed to load from localStorage:', error);
+    console.error('[Settings] Failed to load from main process:', error);
+    return {};
+  }
+};
+
+const normalizeLoadedSettings = (value: unknown): Settings => {
+  const loadedSettings = {
+    ...defaultSettings,
+    ...(value as Partial<Settings>),
+  } as Settings & {
+    mcpEnabled?: boolean;
+    profile?: { avatar?: string };
+    providers?: unknown;
+  };
+
+  if ('mcpEnabled' in loadedSettings) {
+    delete loadedSettings.mcpEnabled;
   }
 
-  settingsCache = { ...defaultSettings, ...generalSettings };
+  if (!loadedSettings.profile || typeof loadedSettings.profile !== 'object') {
+    loadedSettings.profile = { ...defaultSettings.profile };
+  } else {
+    delete loadedSettings.profile.avatar;
+  }
+
+  if (!loadedSettings.gitWorktreeBranchPrefix?.trim()) {
+    loadedSettings.gitWorktreeBranchPrefix = defaultSettings.gitWorktreeBranchPrefix;
+  }
+
+  if (!loadedSettings.gitWorktreeDir?.trim()) {
+    loadedSettings.gitWorktreeDir = defaultSettings.gitWorktreeDir;
+  }
+
+  if (typeof loadedSettings.taskCompleteNotificationsEnabled !== 'boolean') {
+    loadedSettings.taskCompleteNotificationsEnabled = defaultSettings.taskCompleteNotificationsEnabled;
+  }
+
+  if (typeof loadedSettings.taskNodeCompleteNotificationsEnabled !== 'boolean') {
+    loadedSettings.taskNodeCompleteNotificationsEnabled =
+      defaultSettings.taskNodeCompleteNotificationsEnabled;
+  }
+
+  if (typeof loadedSettings.taskCompleteSoundEnabled !== 'boolean') {
+    loadedSettings.taskCompleteSoundEnabled = defaultSettings.taskCompleteSoundEnabled;
+  }
+
+  if (typeof loadedSettings.taskNodeCompleteSoundEnabled !== 'boolean') {
+    loadedSettings.taskNodeCompleteSoundEnabled = defaultSettings.taskNodeCompleteSoundEnabled;
+  }
+
+  loadedSettings.taskCompleteSound = normalizeSoundChoice(
+    loadedSettings.taskCompleteSound,
+    defaultSettings.taskCompleteSound
+  );
+
+  loadedSettings.taskNodeCompleteSound = normalizeSoundChoice(
+    loadedSettings.taskNodeCompleteSound,
+    defaultSettings.taskNodeCompleteSound
+  );
+
+  if (!Array.isArray(loadedSettings.providers)) {
+    loadedSettings.providers = [...defaultProviders];
+  }
+
+  for (const defaultProvider of defaultProviders) {
+    if (!loadedSettings.providers.find((provider: { id: string }) => provider.id === defaultProvider.id)) {
+      loadedSettings.providers.push(defaultProvider);
+    }
+  }
+
+  return loadedSettings;
+};
+
+const loadSettingsFromStorage = (): Settings | null => {
+  try {
+    const stored = localStorage.getItem('VibeWork_settings');
+    if (!stored) return null;
+    return normalizeLoadedSettings(JSON.parse(stored));
+  } catch (error) {
+    console.error('[Settings] Failed to load from localStorage:', error);
+    return null;
+  }
+};
+
+export async function getSettingsAsync(): Promise<Settings> {
+  if (settingsCache) return settingsCache;
+
+  const [storedSettings, generalSettings] = await Promise.all([
+    Promise.resolve(loadSettingsFromStorage()),
+    loadGeneralSettingsFromMain(),
+  ]);
+
+  settingsCache = {
+    ...(storedSettings ?? defaultSettings),
+    ...generalSettings,
+  };
+
   return settingsCache;
 }
 
 export function getSettings(): Settings {
   if (settingsCache) return settingsCache;
 
-  try {
-    const stored = localStorage.getItem('VibeWork_settings');
-    if (stored) {
-      const loadedSettings = { ...defaultSettings, ...JSON.parse(stored) };
-      if ('mcpEnabled' in loadedSettings) {
-        delete (loadedSettings as { mcpEnabled?: boolean }).mcpEnabled;
-      }
-      if (loadedSettings.profile && typeof loadedSettings.profile === 'object') {
-        delete (loadedSettings.profile as { avatar?: string }).avatar;
-      }
-      if (!loadedSettings.gitWorktreeBranchPrefix?.trim()) {
-        loadedSettings.gitWorktreeBranchPrefix =
-          defaultSettings.gitWorktreeBranchPrefix;
-      }
-      if (!loadedSettings.gitWorktreeDir?.trim()) {
-        loadedSettings.gitWorktreeDir = defaultSettings.gitWorktreeDir;
-      }
-      if (typeof loadedSettings.desktopNotificationsEnabled === 'boolean') {
-        loadedSettings.taskCompleteNotificationsEnabled =
-          loadedSettings.taskCompleteNotificationsEnabled ??
-          loadedSettings.desktopNotificationsEnabled;
-        loadedSettings.workNodeCompleteNotificationsEnabled =
-          loadedSettings.workNodeCompleteNotificationsEnabled ??
-          loadedSettings.desktopNotificationsEnabled;
-        delete (loadedSettings as { desktopNotificationsEnabled?: boolean })
-          .desktopNotificationsEnabled;
-      }
-      if (typeof loadedSettings.soundAlertsEnabled === 'boolean') {
-        loadedSettings.taskCompleteSoundEnabled =
-          loadedSettings.taskCompleteSoundEnabled ??
-          loadedSettings.soundAlertsEnabled;
-        loadedSettings.workNodeCompleteSoundEnabled =
-          loadedSettings.workNodeCompleteSoundEnabled ??
-          loadedSettings.soundAlertsEnabled;
-        delete (loadedSettings as { soundAlertsEnabled?: boolean })
-          .soundAlertsEnabled;
-      }
-      if (
-        typeof loadedSettings.taskCompleteNotificationsEnabled !== 'boolean'
-      ) {
-        loadedSettings.taskCompleteNotificationsEnabled =
-          defaultSettings.taskCompleteNotificationsEnabled;
-      }
-      if (
-        typeof loadedSettings.workNodeCompleteNotificationsEnabled !== 'boolean'
-      ) {
-        loadedSettings.workNodeCompleteNotificationsEnabled =
-          defaultSettings.workNodeCompleteNotificationsEnabled;
-      }
-      if (typeof loadedSettings.taskCompleteSoundEnabled !== 'boolean') {
-        loadedSettings.taskCompleteSoundEnabled =
-          defaultSettings.taskCompleteSoundEnabled;
-      }
-      if (typeof loadedSettings.workNodeCompleteSoundEnabled !== 'boolean') {
-        loadedSettings.workNodeCompleteSoundEnabled =
-          defaultSettings.workNodeCompleteSoundEnabled;
-      }
-      loadedSettings.taskCompleteSound = normalizeSoundChoice(
-        loadedSettings.taskCompleteSound,
-        defaultSettings.taskCompleteSound
-      );
-      loadedSettings.workNodeCompleteSound = normalizeSoundChoice(
-        loadedSettings.workNodeCompleteSound,
-        defaultSettings.workNodeCompleteSound
-      );
-      for (const defaultProvider of defaultProviders) {
-        if (!loadedSettings.providers.find((p: { id: string }) => p.id === defaultProvider.id)) {
-          loadedSettings.providers.push(defaultProvider);
-        }
-      }
-      settingsCache = loadedSettings;
-      return loadedSettings;
-    }
-  } catch (error) {
-    console.error('[Settings] Failed to load from localStorage:', error);
-  }
-
-  return defaultSettings;
+  settingsCache = loadSettingsFromStorage() ?? defaultSettings;
+  return settingsCache;
 }
 
 export function saveSettings(settings: Settings): void {
@@ -441,12 +379,12 @@ export function saveSettings(settings: Settings): void {
   if (isElectron && window.api.notification) {
     const notificationsEnabled =
       settings.taskCompleteNotificationsEnabled ||
-      settings.workNodeCompleteNotificationsEnabled;
+      settings.taskNodeCompleteNotificationsEnabled;
     window.api.notification.setEnabled(notificationsEnabled).catch((error) => {
       console.error('[Settings] Failed to sync notification state:', error);
     });
     const soundEnabled =
-      settings.taskCompleteSoundEnabled || settings.workNodeCompleteSoundEnabled;
+      settings.taskCompleteSoundEnabled || settings.taskNodeCompleteSoundEnabled;
     window.api.notification.setSoundEnabled(soundEnabled).catch((error) => {
       console.error('[Settings] Failed to sync sound alert state:', error);
     });
@@ -474,8 +412,8 @@ export async function saveSettingItem(key: string, value: string): Promise<void>
 }
 
 export async function initializeSettings(): Promise<Settings> {
-  const [appDataDir, mcpConfigPath, skillsDir, worktreesDir] = await Promise.all([
-    getAppDataDir(),
+  const [dataRootDir, mcpConfigPath, skillsDir, worktreesDir] = await Promise.all([
+    getDataRootDir(),
     getMcpConfigPath(),
     getSkillsDir(),
     getWorktreesDir(),
@@ -483,13 +421,11 @@ export async function initializeSettings(): Promise<Settings> {
 
   const settings = await getSettingsAsync();
 
-  if (!settings.workDir) settings.workDir = appDataDir;
-  const legacyMcpPath = `${appDataDir}/mcp.json`;
-  if (!settings.mcpConfigPath || settings.mcpConfigPath === legacyMcpPath) {
+  if (!settings.workDir) settings.workDir = dataRootDir;
+  if (!settings.mcpConfigPath) {
     settings.mcpConfigPath = mcpConfigPath;
   }
-  const legacySkillsDir = `${settings.workDir}/skills`;
-  if (!settings.skillsPath || settings.skillsPath === legacySkillsDir) {
+  if (!settings.skillsPath) {
     settings.skillsPath = skillsDir;
   }
   if (!settings.gitWorktreeDir) {

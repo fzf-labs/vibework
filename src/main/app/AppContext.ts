@@ -55,7 +55,9 @@ export class AppContext {
 
   resolveProjectIdForSession(sessionId: string): string | null {
     try {
-      return this.services.taskService.getTaskBySessionId(sessionId)?.projectId ?? null
+      const taskId = this.services.databaseService.getTaskIdBySessionId(sessionId)
+      if (!taskId) return null
+      return this.services.databaseService.getTask(taskId)?.project_id ?? null
     } catch {
       return null
     }

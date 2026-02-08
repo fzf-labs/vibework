@@ -12,7 +12,7 @@ export type TaskMetaRow = {
   visible: boolean
 }
 
-export type PipelineDisplayStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
+export type PipelineDisplayStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
 
 export const filterVisibleMetaRows = (rows: TaskMetaRow[]) =>
   rows.filter((row) => row.visible)
@@ -23,7 +23,7 @@ export type LocationState = {
   attachments?: MessageAttachment[]
 }
 
-export type WorkNodeTemplate = {
+export type TaskNodeTemplate = {
   id: string
   template_id: string
   node_order: number
@@ -43,7 +43,7 @@ export type PipelineTemplate = {
   project_id: string | null
   created_at: string
   updated_at: string
-  nodes: WorkNodeTemplate[]
+  nodes: TaskNodeTemplate[]
 }
 
 export type CLIToolInfo = {
@@ -79,4 +79,10 @@ export type WorkflowReviewNode = {
   id: string
   name: string
   status: PipelineDisplayStatus
+}
+
+export type CurrentNodeRuntime = {
+  sessionId: string | null
+  cliToolId: string | null
+  agentToolConfigId: string | null
 }

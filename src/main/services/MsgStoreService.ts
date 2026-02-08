@@ -188,10 +188,7 @@ export class MsgStoreService extends EventEmitter {
   }
 
   private normalizeMessage(msg: LogMsgInput): LogMsg {
-    const legacyExitCode = (msg as { exitCode?: number }).exitCode
-    const normalizedInput = legacyExitCode !== undefined && (msg as any).exit_code === undefined
-      ? ({ ...msg, exit_code: legacyExitCode } as LogMsgInput)
-      : msg
+    const normalizedInput = msg
 
     const sessionId = normalizedInput.session_id ?? this._sessionId ?? 'unknown'
     const taskId =

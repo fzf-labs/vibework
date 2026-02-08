@@ -6,7 +6,6 @@ export { TaskList } from './TaskList';
 export { CreateTaskDialog } from './CreateTaskDialog';
 export { TaskMetadataPanel } from './TaskMetadataPanel';
 export { RightPanel } from './RightPanel';
-export { WorkNodeReviewPanel } from './WorkNodeReviewPanel';
 export { WorkflowProgressBar } from './WorkflowProgressBar';
 export { FileListPanel } from './FileListPanel';
 
@@ -22,5 +21,5 @@ export { TaskGroupComponent } from './TaskGroupComponent';
 // Utils
 export { getArtifactTypeFromExt } from './utils';
 
-// Re-export ArtifactPreview from its new location for backwards compatibility
+// Re-export ArtifactPreview from its new location
 export { ArtifactPreview } from '@/components/artifacts';

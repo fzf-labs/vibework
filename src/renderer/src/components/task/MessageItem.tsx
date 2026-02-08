@@ -5,6 +5,7 @@ import { Logo } from '@/components/shared/Logo';
 import { PlanApproval } from '@/components/task/PlanApproval';
 import { UserMessage } from './UserMessage';
 import { ErrorMessage } from './ErrorMessage';
+import { shell } from '@/lib/electron-api';
 
 interface MessageItemProps {
   message: AgentMessage;
@@ -99,7 +100,6 @@ function TextMessage({ content }: { content: string }) {
           e.preventDefault();
           if (href) {
             try {
-              const { shell } = await import('@/lib/electron-api');
               await shell.openUrl(href);
             } catch {
               window.open(href, '_blank');

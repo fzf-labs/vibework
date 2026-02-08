@@ -130,7 +130,7 @@ interface CliSessionAPI {
     sessionId: string,
     toolId: string,
     workdir: string,
-    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string; configId?: string | null }
+    options?: { model?: string; prompt?: string; projectId?: string | null; taskId?: string; taskNodeId?: string; configId?: string | null }
   ) => Promise<unknown>
   stopSession: (sessionId: string) => Promise<unknown>
   sendInput: (sessionId: string, input: string) => Promise<unknown>
@@ -230,27 +230,25 @@ interface NotificationAPI {
   }>
 }
 
-interface WorkNodeAPI {
-  onCompleted: (callback: (data: { id: string; name?: string }) => void) => () => void
-  onReview: (callback: (data: { id: string; name?: string }) => void) => () => void
+interface TaskNodeAPI {
+  onCompleted: (callback: (data: { id: string; name?: string; taskId: string }) => void) => () => void
+  onReview: (callback: (data: { id: string; name?: string; taskId: string }) => void) => () => void
+  onCancelled: (callback: (data: { id: string; name?: string; taskId: string }) => void) => () => void
 }
 
 interface DatabaseAPI {
-  // Task
   createTask: (input: unknown) => Promise<unknown>
   getTask: (id: string) => Promise<unknown>
   getAllTasks: () => Promise<unknown[]>
   updateTask: (id: string, updates: unknown) => Promise<unknown>
   deleteTask: (id: string) => Promise<boolean>
   getTasksByProjectId: (projectId: string) => Promise<unknown[]>
-  // Agent tool configs
   listAgentToolConfigs: (toolId?: string) => Promise<unknown[]>
   getAgentToolConfig: (id: string) => Promise<unknown>
   createAgentToolConfig: (input: unknown) => Promise<unknown>
   updateAgentToolConfig: (id: string, updates: unknown) => Promise<unknown>
   deleteAgentToolConfig: (id: string) => Promise<unknown>
   setDefaultAgentToolConfig: (id: string) => Promise<unknown>
-  // Workflow template
   getGlobalWorkflowTemplates: () => Promise<unknown[]>
   getWorkflowTemplatesByProject: (projectId: string) => Promise<unknown[]>
   getWorkflowTemplate: (templateId: string) => Promise<unknown>
@@ -258,28 +256,32 @@ interface DatabaseAPI {
   updateWorkflowTemplate: (input: unknown) => Promise<unknown>
   deleteWorkflowTemplate: (templateId: string, scope: string) => Promise<boolean>
   copyGlobalWorkflowToProject: (globalTemplateId: string, projectId: string) => Promise<unknown>
-  // Workflow instance
-  createWorkflow: (taskId: string) => Promise<unknown>
-  getWorkflow: (id: string) => Promise<unknown>
-  getWorkflowByTaskId: (taskId: string) => Promise<unknown>
-  updateWorkflowStatus: (id: string, status: string, nodeIndex?: number) => Promise<unknown>
-  // WorkNode instance
-  createWorkNode: (workflowId: string, templateId: string, nodeOrder: number) => Promise<unknown>
-  getWorkNodesByWorkflowId: (workflowId: string) => Promise<unknown[]>
-  updateWorkNodeStatus: (id: string, status: string) => Promise<unknown>
-  approveWorkNode: (id: string) => Promise<void>
-  rejectWorkNode: (id: string) => Promise<void>
-  approveTask: (id: string) => Promise<boolean>
-  // AgentExecution
-  createTaskExecution: (taskId: string, sessionId?: string, cliToolId?: string, agentToolConfigId?: string) => Promise<unknown>
-  createWorkNodeExecution: (taskId: string, workNodeId: string, sessionId?: string, cliToolId?: string, agentToolConfigId?: string) => Promise<unknown>
-  getAgentExecutionsByTaskId: (taskId: string) => Promise<unknown[]>
-  getAgentExecutionsByWorkNodeId: (workNodeId: string) => Promise<unknown[]>
-  getLatestTaskExecution: (taskId: string) => Promise<unknown>
-  getLatestWorkNodeExecution: (workNodeId: string) => Promise<unknown>
-  createAgentExecution: (workNodeId: string) => Promise<unknown>
-  getLatestAgentExecution: (workNodeId: string) => Promise<unknown>
-  updateAgentExecutionStatus: (id: string, status: string, cost?: number, duration?: number) => Promise<unknown>
+  getTaskNodes: (taskId: string) => Promise<unknown[]>
+  getTaskNode: (nodeId: string) => Promise<unknown>
+  getCurrentTaskNode: (taskId: string) => Promise<unknown>
+  updateCurrentTaskNodeRuntime: (
+    taskId: string,
+    updates: {
+      session_id?: string | null
+      cli_tool_id?: string | null
+      agent_tool_config_id?: string | null
+    }
+  ) => Promise<unknown>
+  getTaskNodesByStatus: (taskId: string, status: string) => Promise<unknown[]>
+  completeTaskNode: (
+    nodeId: string,
+    result?: {
+      resultSummary?: string | null
+      cost?: number | null
+      duration?: number | null
+      sessionId?: string | null
+    }
+  ) => Promise<unknown>
+  markTaskNodeErrorReview: (nodeId: string, error: string) => Promise<unknown>
+  approveTaskNode: (nodeId: string) => Promise<unknown>
+  rejectTaskNode: (nodeId: string, reason?: string) => Promise<unknown>
+  retryTaskNode: (nodeId: string) => Promise<unknown>
+  cancelTaskNode: (nodeId: string) => Promise<unknown>
 }
 
 interface FSAPI {
@@ -310,7 +312,6 @@ interface ShellAPI {
 }
 
 interface PathAPI {
-  appDataDir: () => Promise<string>
   appConfigDir: () => Promise<string>
   tempDir: () => Promise<string>
   resourcesDir: () => Promise<string>
@@ -342,7 +343,6 @@ interface SettingsAPI {
 
 interface TaskWithWorktree {
   id: string
-  sessionId: string | null
   title: string
   prompt: string
   status: string
@@ -352,8 +352,8 @@ interface TaskWithWorktree {
   branchName: string | null
   baseBranch?: string | null
   workspacePath?: string | null
-  cliToolId?: string | null
-  agentToolConfigId?: string | null
+  startedAt?: string | null
+  completedAt?: string | null
   cost: number | null
   duration: number | null
   createdAt: string
@@ -380,6 +380,8 @@ interface TaskAPI {
   getByProject: (projectId: string) => Promise<TaskWithWorktree[]>
   updateStatus: (id: string, status: string) => Promise<TaskWithWorktree | null>
   delete: (id: string, removeWorktree?: boolean) => Promise<boolean>
+  startExecution: (taskId: string) => Promise<unknown>
+  stopExecution: (taskId: string) => Promise<unknown>
 }
 
 interface API {
@@ -389,7 +391,7 @@ interface API {
   terminal: TerminalAPI
   cliSession: CliSessionAPI
   logStream: LogStreamAPI
-  workNode: WorkNodeAPI
+  taskNode: TaskNodeAPI
   cliTools: CLIToolsAPI
   cliToolConfig: CLIToolConfigAPI
   editor: EditorAPI

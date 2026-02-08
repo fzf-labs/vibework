@@ -6,10 +6,10 @@ export interface DbWorkflowTemplate {
   project_id: string | null
   created_at: string
   updated_at: string
-  nodes: DbWorkNodeTemplate[]
+  nodes: DbTaskNodeTemplate[]
 }
 
-export interface DbWorkNodeTemplate {
+export interface DbTaskNodeTemplate {
   id: string
   template_id: string
   node_order: number
@@ -23,33 +23,7 @@ export interface DbWorkNodeTemplate {
   updated_at: string
 }
 
-export interface DbWorkflow {
-  id: string
-  task_id: string
-  current_node_index: number
-  status: 'todo' | 'in_progress' | 'done'
-  created_at: string
-  updated_at: string
-}
-
-export interface DbWorkNode {
-  id: string
-  workflow_id: string
-  node_order: number
-  name: string
-  prompt: string
-  cli_tool_id: string | null
-  agent_tool_config_id: string | null
-  requires_approval: boolean
-  continue_on_error: boolean
-  status: 'todo' | 'in_progress' | 'in_review' | 'done'
-  started_at: string | null
-  completed_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface CreateWorkNodeTemplateInput {
+export interface CreateTaskNodeTemplateInput {
   name: string
   prompt: string
   node_order: number
@@ -64,7 +38,7 @@ export interface CreateWorkflowTemplateInput {
   description?: string
   scope: 'global' | 'project'
   project_id?: string
-  nodes: CreateWorkNodeTemplateInput[]
+  nodes: CreateTaskNodeTemplateInput[]
 }
 
 export interface UpdateWorkflowTemplateInput {
@@ -73,5 +47,5 @@ export interface UpdateWorkflowTemplateInput {
   description?: string
   scope: 'global' | 'project'
   project_id?: string
-  nodes: CreateWorkNodeTemplateInput[]
+  nodes: CreateTaskNodeTemplateInput[]
 }

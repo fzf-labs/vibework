@@ -7,10 +7,11 @@ import {
 import {
   RESOURCE_SOUNDS,
   DEFAULT_TASK_COMPLETE_SOUND_FILE,
-  DEFAULT_WORKNODE_COMPLETE_SOUND_FILE,
+  DEFAULT_TASK_NODE_COMPLETE_SOUND_FILE,
   getResourceSoundPath,
 } from '@/data/settings/sounds';
 import { useLanguage } from '@/providers/language-provider';
+import { dialog, fs } from '@/lib/electron-api';
 import { Switch } from '../components/Switch';
 import type { SettingsTabProps } from '../types';
 import type { SoundChoice } from '@/data/settings';
@@ -52,8 +53,8 @@ export function SoundSettings({
     DEFAULT_TASK_COMPLETE_SOUND_FILE
   );
   const nodeChoice = normalizeChoice(
-    settings.workNodeCompleteSound,
-    DEFAULT_WORKNODE_COMPLETE_SOUND_FILE
+    settings.taskNodeCompleteSound,
+    DEFAULT_TASK_NODE_COMPLETE_SOUND_FILE
   );
 
   const handleTaskSoundChange = (pathValue: string) => {
@@ -67,10 +68,10 @@ export function SoundSettings({
     });
   };
 
-  const handleWorkNodeSoundChange = (pathValue: string) => {
+  const handleTaskNodeSoundChange = (pathValue: string) => {
     onSettingsChange({
       ...settings,
-      workNodeCompleteSound: {
+      taskNodeCompleteSound: {
         ...nodeChoice,
         source: 'file',
         filePath: pathValue,
@@ -88,7 +89,6 @@ export function SoundSettings({
 
   const pickAudioFile = async () => {
     ensureElectron();
-    const { dialog, fs } = await import('@/lib/electron-api');
     const filePath = await dialog.open({
       filters: [
         {
@@ -137,7 +137,7 @@ export function SoundSettings({
       if (!path) return;
       onSettingsChange({
         ...settings,
-        workNodeCompleteSound: {
+        taskNodeCompleteSound: {
           ...nodeChoice,
           source: 'file',
           filePath: path,
@@ -158,7 +158,7 @@ export function SoundSettings({
   const handleNodeFileClear = () => {
     onSettingsChange({
       ...settings,
-      workNodeCompleteSound: { ...nodeChoice, source: 'file', filePath: nodeSelectValue },
+      taskNodeCompleteSound: { ...nodeChoice, source: 'file', filePath: nodeSelectValue },
     });
   };
 
@@ -193,7 +193,7 @@ export function SoundSettings({
   );
   const nodeSelectValue = resolveResourceSelectValue(
     nodeChoice,
-    DEFAULT_WORKNODE_COMPLETE_SOUND_FILE
+    DEFAULT_TASK_NODE_COMPLETE_SOUND_FILE
   );
   const taskIsCustomFile =
     taskChoice.source === 'file' &&
@@ -321,20 +321,20 @@ export function SoundSettings({
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-sm font-medium">
-                  {t.settings?.soundWorkNodeCompleteLabel ||
-                    'Work node sound'}
+                  {t.settings?.soundTaskNodeCompleteLabel ||
+                    'Task node sound'}
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  {t.settings?.soundWorkNodeCompleteDesc ||
-                    'Choose the sound for work nodes entering review.'}
+                  {t.settings?.soundTaskNodeCompleteDesc ||
+                    'Choose the sound for task nodes entering review.'}
                 </p>
               </div>
               <Switch
-                checked={settings.workNodeCompleteSoundEnabled}
+                checked={settings.taskNodeCompleteSoundEnabled}
                 onChange={(enabled) =>
                   onSettingsChange({
                     ...settings,
-                    workNodeCompleteSoundEnabled: enabled,
+                    taskNodeCompleteSoundEnabled: enabled,
                   })
                 }
               />
@@ -343,8 +343,8 @@ export function SoundSettings({
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={nodeSelectValue}
-              onChange={(e) => handleWorkNodeSoundChange(e.target.value)}
-              disabled={!settings.workNodeCompleteSoundEnabled}
+              onChange={(e) => handleTaskNodeSoundChange(e.target.value)}
+              disabled={!settings.taskNodeCompleteSoundEnabled}
               className="border-input bg-background text-foreground block h-10 w-full max-w-xs cursor-pointer rounded-lg border px-3 text-sm focus:border-transparent focus:ring-2 focus:ring-ring focus:outline-none"
             >
               {RESOURCE_SOUND_OPTIONS.map((sound) => (
@@ -364,7 +364,7 @@ export function SoundSettings({
                   filePath: nodeSelectValue,
                 })
               }
-              disabled={!settings.workNodeCompleteSoundEnabled || previewLocks.node}
+              disabled={!settings.taskNodeCompleteSoundEnabled || previewLocks.node}
             >
               {t.settings?.soundPreview || 'Preview'}
             </Button>
@@ -384,7 +384,7 @@ export function SoundSettings({
               variant="outline"
               size="sm"
               onClick={handleNodeFilePick}
-              disabled={filePickerDisabled || !settings.workNodeCompleteSoundEnabled}
+              disabled={filePickerDisabled || !settings.taskNodeCompleteSoundEnabled}
             >
               {nodeIsCustomFile
                 ? t.settings?.soundReplaceFile || 'Replace file'
@@ -396,7 +396,7 @@ export function SoundSettings({
                 variant="ghost"
                 size="sm"
                 onClick={handleNodeFileClear}
-                disabled={filePickerDisabled || !settings.workNodeCompleteSoundEnabled}
+                disabled={filePickerDisabled || !settings.taskNodeCompleteSoundEnabled}
               >
                 {t.settings?.soundClearFile || 'Clear'}
               </Button>
@@ -408,7 +408,7 @@ export function SoundSettings({
                 size="sm"
                 onClick={() => void handlePreview('node', nodeChoice)}
                 disabled={
-                  filePickerDisabled || !settings.workNodeCompleteSoundEnabled || previewLocks.node
+                  filePickerDisabled || !settings.taskNodeCompleteSoundEnabled || previewLocks.node
                 }
               >
                 {t.settings?.soundPreview || 'Preview'}
