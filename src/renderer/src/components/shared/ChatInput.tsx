@@ -5,7 +5,7 @@
  * Supports text input, file attachments, image paste, and keyboard shortcuts.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MessageAttachment } from '@/hooks/useAgent';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/providers/language-provider';
@@ -51,6 +51,16 @@ export interface ChatInputProps {
   disabled?: boolean;
   /** Auto focus on mount */
   autoFocus?: boolean;
+  /** Extra operation controls shown in home variant */
+  operationBar?: ReactNode;
+  /** Optional title value for task creation mode */
+  titleValue?: string;
+  /** Optional title change callback for task creation mode */
+  onTitleChange?: (value: string) => void;
+  /** Title placeholder for task creation mode */
+  titlePlaceholder?: string;
+  /** Whether title is required before submit */
+  requireTitle?: boolean;
 }
 
 // Generate unique ID for attachments
@@ -96,21 +106,35 @@ export function ChatInput({
   className,
   disabled = false,
   autoFocus = false,
+  operationBar,
+  titleValue,
+  onTitleChange,
+  titlePlaceholder = '请输入标题',
+  requireTitle = false,
 }: ChatInputProps) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposingRef = useRef(false);
   const prevIsRunningRef = useRef(isRunning);
+  const isHome = variant === 'home';
+  const hasTitleField = isHome && typeof onTitleChange === 'function';
+  const isTaskCreateLayout = isHome && hasTitleField;
 
   // Auto focus on mount if autoFocus is true
   useEffect(() => {
-    if (autoFocus && textareaRef.current) {
+    if (!autoFocus) return;
+    if (isTaskCreateLayout && titleInputRef.current) {
+      titleInputRef.current.focus();
+      return;
+    }
+    if (textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [autoFocus]);
+  }, [autoFocus, isTaskCreateLayout]);
 
   // Auto focus when agent stops running (reply completed)
   useEffect(() => {
@@ -256,7 +280,10 @@ export function ChatInput({
   };
 
   const handleSubmit = async () => {
-    if ((value.trim() || attachments.length > 0) && !isRunning && !disabled) {
+    const hasContent = value.trim() || attachments.length > 0;
+    const hasRequiredTitle = !requireTitle || (titleValue || '').trim().length > 0;
+
+    if (hasContent && hasRequiredTitle && !isRunning && !disabled) {
       const text = value.trim();
       const messageAttachments = convertToMessageAttachments();
 
@@ -283,14 +310,16 @@ export function ChatInput({
     }, 10);
   };
 
-  const isHome = variant === 'home';
   const canSubmit =
-    (value.trim() || attachments.length > 0) && !disabled && !isRunning;
+    Boolean(value.trim() || attachments.length > 0) &&
+    Boolean(!requireTitle || (titleValue || '').trim()) &&
+    !disabled &&
+    !isRunning;
 
   // Auto-resize textarea based on content
   useEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea) return;
+    if (!textarea || isTaskCreateLayout) return;
 
     // Reset height to auto to get the correct scrollHeight
     textarea.style.height = 'auto';
@@ -308,7 +337,7 @@ export function ChatInput({
     // Enable/disable overflow based on content height
     textarea.style.overflowY =
       textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-  }, [value, isHome]);
+  }, [isTaskCreateLayout, value, isHome]);
 
   return (
     <div
@@ -317,6 +346,7 @@ export function ChatInput({
         isHome
           ? 'border-border/50 bg-background rounded-2xl border p-4 shadow-lg'
           : 'border-border/60 bg-background rounded-xl border p-3 shadow-sm',
+        isTaskCreateLayout && 'flex min-h-[300px] flex-col',
         className
       )}
     >
@@ -364,6 +394,28 @@ export function ChatInput({
         </div>
       )}
 
+      {hasTitleField && (
+        <>
+          <div className="mb-2">
+            <input
+              ref={titleInputRef}
+              value={titleValue || ''}
+              onChange={(e) => onTitleChange?.(e.target.value)}
+              placeholder={titlePlaceholder}
+              className="text-foreground placeholder:text-muted-foreground w-full border-0 bg-transparent px-0 py-1 text-base font-medium focus:outline-none"
+              disabled={isRunning || disabled}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  textareaRef.current?.focus();
+                }
+              }}
+            />
+          </div>
+          <div className="bg-border/70 mb-3 h-px w-full" />
+        </>
+      )}
+
       {/* Textarea */}
       <textarea
         ref={textareaRef}
@@ -376,12 +428,13 @@ export function ChatInput({
         placeholder={placeholder}
         className={cn(
           'text-foreground placeholder:text-muted-foreground w-full resize-none border-0 bg-transparent focus:outline-none',
-          isHome ? 'text-base' : 'px-1 text-sm'
+          isHome ? 'text-base' : 'px-1 text-sm',
+          isTaskCreateLayout && 'min-h-[160px] flex-1 overflow-auto px-0 py-1 text-sm'
         )}
         style={{
-          minHeight: isHome ? '56px' : '20px',
-          maxHeight: isHome ? '200px' : '120px',
-          overflowY: 'hidden',
+          minHeight: isTaskCreateLayout ? undefined : isHome ? '56px' : '20px',
+          maxHeight: isTaskCreateLayout ? undefined : isHome ? '200px' : '120px',
+          overflowY: isTaskCreateLayout ? 'auto' : 'hidden',
         }}
         rows={1}
         disabled={isRunning || disabled}
@@ -395,7 +448,7 @@ export function ChatInput({
         )}
       >
         {/* Add Button with Dropdown */}
-        <div className="flex items-center gap-1">
+        <div className={cn('flex items-center gap-1', isHome && 'min-w-0 flex-1')}>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger
               disabled={isRunning || disabled}
@@ -422,6 +475,10 @@ export function ChatInput({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {isHome && operationBar && (
+            <div className="ml-1 min-w-0 flex-1">{operationBar}</div>
+          )}
         </div>
 
         {/* Submit/Stop Button */}

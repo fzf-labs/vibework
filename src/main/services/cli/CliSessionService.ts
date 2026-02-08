@@ -10,6 +10,68 @@ import { CLIToolConfigService } from '../CLIToolConfigService'
 import { DatabaseService } from '../DatabaseService'
 import { LogMsg } from '../../types/log'
 
+const TOOL_CONFIG_ALLOWED_KEYS: Record<string, Set<string>> = {
+  'claude-code': new Set([
+    'append_prompt',
+    'claude_code_router',
+    'plan',
+    'approvals',
+    'model',
+    'dangerously_skip_permissions',
+    'disable_api_key',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ]),
+  codex: new Set([
+    'append_prompt',
+    'sandbox',
+    'ask_for_approval',
+    'oss',
+    'model',
+    'model_reasoning_effort',
+    'model_reasoning_summary',
+    'model_reasoning_summary_format',
+    'profile',
+    'base_instructions',
+    'include_apply_patch_tool',
+    'model_provider',
+    'compact_prompt',
+    'developer_instructions',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ]),
+  'cursor-agent': new Set([
+    'append_prompt',
+    'api_key',
+    'force',
+    'model',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ]),
+  'gemini-cli': new Set([
+    'append_prompt',
+    'model',
+    'yolo',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ]),
+  opencode: new Set([
+    'append_prompt',
+    'model',
+    'variant',
+    'agent',
+    'auto_approve',
+    'auto_compact',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ])
+}
+
 interface SessionRecord {
   handle: CliSessionHandle
   toolId: string
@@ -43,6 +105,25 @@ export class CliSessionService extends EventEmitter {
     this.adapters.set(adapter.id, adapter)
   }
 
+  private sanitizeToolConfig(
+    toolId: string,
+    config: Record<string, unknown>
+  ): Record<string, unknown> {
+    const allowedKeys = TOOL_CONFIG_ALLOWED_KEYS[toolId]
+    if (!allowedKeys) {
+      return config
+    }
+
+    const sanitized: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(config)) {
+      if (allowedKeys.has(key)) {
+        sanitized[key] = value
+      }
+    }
+
+    return sanitized
+  }
+
   async startSession(
     sessionId: string,
     toolId: string,
@@ -72,10 +153,6 @@ export class CliSessionService extends EventEmitter {
     if (typeof baseConfig.defaultModel === 'string' && !('model' in normalizedBase)) {
       normalizedBase.model = baseConfig.defaultModel
     }
-    if (typeof baseConfig.apiKey === 'string' && !('apiKey' in normalizedBase)) {
-      normalizedBase.apiKey = baseConfig.apiKey
-    }
-
     let resolvedConfigId = configId ?? null
     if (!resolvedConfigId && taskNode?.agent_tool_config_id) {
       resolvedConfigId = taskNode.agent_tool_config_id
@@ -100,9 +177,25 @@ export class CliSessionService extends EventEmitter {
       }
     }
 
-    const toolConfig = {
+    const toolConfig = this.sanitizeToolConfig(toolId, {
       ...normalizedBase,
       ...profileConfig
+    })
+
+    if (toolId === 'cursor-agent') {
+      const model = toolConfig.model
+      if (typeof model !== 'string' || !model.trim()) {
+        toolConfig.model = 'auto'
+      }
+    }
+
+    const resolveConfigString = (...values: unknown[]): string | undefined => {
+      for (const value of values) {
+        if (typeof value === 'string' && value.trim()) {
+          return value.trim()
+        }
+      }
+      return undefined
     }
 
     const envFromConfig =
@@ -115,8 +208,15 @@ export class CliSessionService extends EventEmitter {
       ...(env ?? {})
     }
 
-    const executablePath =
-      typeof toolConfig.executablePath === 'string' ? toolConfig.executablePath : undefined
+    const executablePath = resolveConfigString(
+      toolConfig.base_command_override,
+      normalizedBase.executablePath
+    )
+
+    const appendPrompt = resolveConfigString(toolConfig.append_prompt)
+    const resolvedPrompt = [prompt?.trim(), appendPrompt]
+      .filter((entry): entry is string => Boolean(entry))
+      .join('\n\n') || undefined
 
     const pendingMsgStore = this.pendingMsgStores.get(sessionId)
     const msgStore =
@@ -129,7 +229,7 @@ export class CliSessionService extends EventEmitter {
       taskId: resolvedTaskId,
       taskNodeId,
       projectId,
-      prompt,
+      prompt: resolvedPrompt,
       env: mergedEnv,
       executablePath,
       toolConfig,

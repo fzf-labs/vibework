@@ -52,7 +52,7 @@ export class CodexCliAdapter implements CliAdapter {
 
           pushFlagWithValue(args, '--profile', (toolConfig as Record<string, unknown>).profile)
           pushFlagWithValue(args, '--sandbox', (toolConfig as Record<string, unknown>).sandbox)
-          pushFlagWithValue(args, '--ask-for-approval', (toolConfig as Record<string, unknown>).askForApproval)
+          pushFlagWithValue(args, '--ask-for-approval', (toolConfig as Record<string, unknown>).ask_for_approval)
           pushFlag(args, '--full-auto', asBoolean((toolConfig as Record<string, unknown>).fullAuto))
           pushFlag(args, '--dangerously-bypass-approvals-and-sandbox', asBoolean((toolConfig as Record<string, unknown>).dangerouslyBypassApprovalsAndSandbox))
           pushFlag(args, '--oss', asBoolean((toolConfig as Record<string, unknown>).oss))
@@ -62,7 +62,7 @@ export class CodexCliAdapter implements CliAdapter {
           pushFlagWithValue(args, '--cd', (toolConfig as Record<string, unknown>).cd)
           pushFlag(args, '--no-alt-screen', asBoolean((toolConfig as Record<string, unknown>).noAltScreen))
 
-          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additional_params)
           if (additionalArgs) {
             args.push(...additionalArgs)
           }

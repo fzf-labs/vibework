@@ -29,7 +29,7 @@ export class OpencodeAdapter implements CliAdapter {
           pushFlagWithValue(args, '--mdns-domain', (toolConfig as Record<string, unknown>).mdnsDomain)
           pushRepeatableFlag(args, '--cors', (toolConfig as Record<string, unknown>).cors)
 
-          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additional_params)
           if (additionalArgs) {
             args.push(...additionalArgs)
           }

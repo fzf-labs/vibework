@@ -37,7 +37,7 @@ export class GeminiCliAdapter implements CliAdapter {
           pushFlag(args, '--accept-raw-output-risk', asBoolean((toolConfig as Record<string, unknown>).acceptRawOutputRisk))
           pushFlag(args, '--debug', asBoolean((toolConfig as Record<string, unknown>).debug))
 
-          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+          const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additional_params)
           if (additionalArgs) {
             args.push(...additionalArgs)
           }

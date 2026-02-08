@@ -1171,8 +1171,10 @@ export function useTaskDetail({
   }, [executionStatus, t.task.cliStatusError, t.task.cliStatusIdle, t.task.cliStatusRunning, t.task.cliStatusStopped]);
 
   const showWorkflowCard = useMemo(
-    () => Boolean(workflowNodes.length || pipelineTemplate?.nodes?.length) || currentTaskNode?.status === 'in_review',
-    [currentTaskNode?.status, pipelineTemplate?.nodes?.length, workflowNodes.length]
+    () =>
+      task?.task_mode === 'workflow' &&
+      (Boolean(workflowNodes.length || pipelineTemplate?.nodes?.length) || currentTaskNode?.status === 'in_review'),
+    [currentTaskNode?.status, pipelineTemplate?.nodes?.length, task?.task_mode, workflowNodes.length]
   );
 
   const workflowTemplateNodeMap = useMemo(() => {

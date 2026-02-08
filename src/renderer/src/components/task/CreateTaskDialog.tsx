@@ -1,17 +1,21 @@
-import { useEffect, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter
+  DialogContent
 } from '@/components/ui/dialog'
+import { ChatInput } from '@/components/shared/ChatInput'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { db } from '@/data'
 import type { AgentToolConfig } from '@/data'
 import { getSettings } from '@/data/settings'
 import { useLanguage } from '@/providers/language-provider'
+import type { MessageAttachment } from '@/hooks/useAgent'
+import { ChevronDown, GitBranch, Settings2, Sparkles, Workflow, Wrench } from 'lucide-react'
 
 interface CreateTaskDialogProps {
   open: boolean
@@ -24,14 +28,14 @@ interface CreateTaskDialogProps {
 
 interface CLIToolInfo {
   id: string
-  displayName: string
-  installed: boolean
+  displayName?: string
+  name?: string
+  installed?: boolean
 }
 
 interface PipelineTemplate {
   id: string
   name: string
-  description?: string | null
 }
 
 export function CreateTaskDialog({
@@ -44,7 +48,6 @@ export function CreateTaskDialog({
 }: CreateTaskDialogProps) {
   const { t } = useLanguage()
   const [title, setTitle] = useState('')
-  const [prompt, setPrompt] = useState('')
   const [cliTools, setCliTools] = useState<CLIToolInfo[]>([])
   const [selectedCliToolId, setSelectedCliToolId] = useState('')
   const [cliConfigs, setCliConfigs] = useState<AgentToolConfig[]>([])
@@ -69,7 +72,7 @@ export function CreateTaskDialog({
       try {
         const detected = await window.api?.cliTools?.detectAll?.()
         const tools = (Array.isArray(detected) ? detected : []) as CLIToolInfo[]
-        const installedTools = tools.filter((tool) => tool.installed)
+        const installedTools = tools.filter((tool) => tool.installed !== false)
         setCliTools(installedTools)
 
         const settings = getSettings()
@@ -162,55 +165,53 @@ export function CreateTaskDialog({
 
   const resetForm = () => {
     setTitle('')
-    setPrompt('')
     setSelectedCliToolId('')
     setSelectedCliConfigId('')
     setSelectedTemplateId('')
     setSelectedBaseBranch('')
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!title.trim()) {
+  const selectedCliToolName = useMemo(() => {
+    if (!selectedCliToolId) return 'CLI 工具'
+    const tool = cliTools.find((item) => item.id === selectedCliToolId)
+    return tool?.displayName || tool?.name || selectedCliToolId
+  }, [cliTools, selectedCliToolId])
+
+  const selectedCliConfigName = useMemo(() => {
+    if (!selectedCliConfigId) return 'CLI 配置项'
+    return cliConfigs.find((item) => item.id === selectedCliConfigId)?.name || 'CLI 配置项'
+  }, [cliConfigs, selectedCliConfigId])
+
+  const selectedWorkflowTemplateName = useMemo(() => {
+    if (!selectedTemplateId) return '工作流'
+    return pipelineTemplates.find((item) => item.id === selectedTemplateId)?.name || '工作流'
+  }, [pipelineTemplates, selectedTemplateId])
+
+  const handleSubmit = async (text: string, attachments?: MessageAttachment[]) => {
+    const trimmedTitle = title.trim()
+    if (!trimmedTitle) {
       setError(t.task.createTitleRequired)
       return
     }
-    if (!prompt.trim()) {
+
+    if (!text.trim() && (!attachments || attachments.length === 0)) {
       setError(t.task.createPromptRequired)
       return
     }
 
-    const taskMode = selectedTemplateId ? 'workflow' : 'conversation'
-
-    if (taskMode === 'conversation') {
-      if (!selectedCliToolId) {
-        setError(t.task.createCliRequired)
-        return
-      }
-      if (cliConfigs.length > 0 && !selectedCliConfigId) {
-        setError(t.task.createCliConfigRequired || '请选择 CLI 配置项')
-        return
-      }
-      if (cliConfigs.length === 0) {
-        setError(t.task.createCliConfigEmpty || '请先创建 CLI 配置项')
-        return
-      }
-    }
-    if (isGitProject && !selectedBaseBranch) {
-      setError(t.task.createBaseBranchRequired)
-      return
-    }
     setLoading(true)
     setError(null)
 
+    const trimmedPrompt = text.trim()
     try {
-      const trimmedPrompt = prompt.trim()
-      const trimmedTitle = title.trim()
       const settings = getSettings()
+      const taskMode = selectedTemplateId ? 'workflow' : 'conversation'
       const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'VW-'
       const worktreeRootPath = settings.gitWorktreeDir || '~/.vibework/worktrees'
-      const workflowTemplateId = taskMode === 'workflow' ? selectedTemplateId : undefined
-      const cliToolId = taskMode === 'conversation' ? selectedCliToolId : undefined
+      const cliToolId =
+        taskMode === 'conversation'
+          ? selectedCliToolId || settings.defaultCliToolId || undefined
+          : undefined
       const agentToolConfigId = taskMode === 'conversation' ? selectedCliConfigId || undefined : undefined
 
       const result = await window.api.task.create({
@@ -225,7 +226,7 @@ export function CreateTaskDialog({
         worktreeRootPath,
         cliToolId,
         agentToolConfigId,
-        workflowTemplateId
+        workflowTemplateId: taskMode === 'workflow' ? selectedTemplateId : undefined
       })
 
       if (result.success && result.data) {
@@ -242,158 +243,134 @@ export function CreateTaskDialog({
     }
   }
 
-  const renderTemplateOptions = () =>
-    pipelineTemplates.map((tpl) => ({ value: tpl.id, label: tpl.name }))
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t.task.createTitle}</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">{t.task.createTitleLabel}</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t.task.createTitlePlaceholder}
-              className={cn(
-                'mt-1.5 w-full px-3 py-2 text-sm',
-                'bg-background border rounded-md',
-                'focus:outline-none focus:ring-2 focus:ring-primary'
-              )}
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">{t.task.createPromptLabel}</label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={t.task.createPromptPlaceholder}
-              className={cn(
-                'mt-1.5 w-full min-h-[100px] px-3 py-2 text-sm',
-                'bg-background border rounded-md',
-                'focus:outline-none focus:ring-2 focus:ring-primary'
-              )}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">{t.task.createCliLabel}</label>
-            <select
-              value={selectedCliToolId}
-              onChange={(e) => setSelectedCliToolId(e.target.value)}
-              className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">{t.task.createCliPlaceholder}</option>
-              {cliTools.map((tool) => (
-                <option key={tool.id} value={tool.id}>
-                  {tool.displayName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium">
-              {t.task.createCliConfigLabel || 'CLI 配置项'}
-            </label>
-            <select
-              value={selectedCliConfigId}
-              onChange={(e) => setSelectedCliConfigId(e.target.value)}
-              disabled={!selectedCliToolId || cliConfigs.length === 0}
-              className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">
-                {t.task.createCliConfigPlaceholder || '请选择 CLI 配置项'}
-              </option>
-              {cliConfigs.map((cfg) => (
-                <option key={cfg.id} value={cfg.id}>
-                  {cfg.name}
-                </option>
-              ))}
-            </select>
-            {!selectedCliToolId && (
-              <div className="text-muted-foreground mt-1 text-xs">
-                {t.task.createCliConfigSelectTool || '请先选择 CLI 工具'}
-              </div>
-            )}
-            {selectedCliToolId && cliConfigs.length === 0 && (
-              <div className="text-amber-500 mt-1 text-xs">
-                {t.task.createCliConfigEmpty || '请先创建 CLI 配置项'}
-              </div>
-            )}
-          </div>
-
-          {isGitProject && (
-            <div>
-              <label className="text-sm font-medium">{t.task.createBaseBranchLabel}</label>
-              <select
-                value={selectedBaseBranch}
-                onChange={(e) => setSelectedBaseBranch(e.target.value)}
-                className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
-              >
-                <option value="">{t.task.createBaseBranchPlaceholder}</option>
-                {branches.map((branch) => (
-                  <option key={branch} value={branch}>
-                    {branch}
-                  </option>
-                ))}
-              </select>
+      <DialogContent className="sm:max-w-3xl">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="mb-6 flex flex-col items-center gap-3 text-center">
+            <div className="bg-muted flex size-10 items-center justify-center rounded-full">
+              <Sparkles className="size-5" />
             </div>
-          )}
-
-          <div>
-            <label className="text-sm font-medium">{t.task.createPipelineLabel}</label>
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              disabled={!projectId}
-              className="mt-1.5 w-full rounded-md border bg-background px-3 py-2 text-sm"
-            >
-              <option value="">不选择（对话模式）</option>
-              {renderTemplateOptions().map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {!projectId && (
-              <div className="text-muted-foreground mt-1 text-xs">
-                {t.task.createPipelineProjectRequired}
-              </div>
-            )}
-            {projectId && pipelineTemplates.length === 0 && (
-              <div className="text-amber-500 mt-1 text-xs">
-                请先创建工作流模板
-              </div>
-            )}
+            <h2 className="text-foreground text-3xl font-semibold tracking-tight">我能为你做什么？</h2>
           </div>
 
-          {error && (
-            <div className="text-sm text-red-500">{error}</div>
-          )}
+          <ChatInput
+            variant="home"
+            titleValue={title}
+            onTitleChange={setTitle}
+            titlePlaceholder="标题"
+            requireTitle
+            placeholder="提示词"
+            onSubmit={handleSubmit}
+            className="w-full"
+            autoFocus
+            disabled={loading}
+            operationBar={
+              <div className="flex flex-wrap items-center gap-2">
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger className="border-border bg-background hover:bg-accent/60 text-foreground inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors">
+                    <Wrench className="size-3.5" />
+                    <span className="max-w-[140px] truncate">{selectedCliToolName}</span>
+                    <ChevronDown className="size-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" sideOffset={8} className="max-h-64 w-56 overflow-auto">
+                    {cliTools.map((tool) => (
+                      <DropdownMenuItem
+                        key={tool.id}
+                        onSelect={() => setSelectedCliToolId(tool.id)}
+                        className="cursor-pointer"
+                      >
+                        {tool.displayName || tool.name || tool.id}
+                      </DropdownMenuItem>
+                    ))}
+                    {cliTools.length === 0 && (
+                      <DropdownMenuItem disabled>暂无可用 CLI 工具</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              {t.common.cancel}
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? t.task.createLoading : t.task.createSubmit}
-            </Button>
-          </DialogFooter>
-        </form>
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger
+                    disabled={!selectedCliToolId || cliConfigs.length === 0}
+                    className="border-border bg-background hover:bg-accent/60 text-foreground inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Settings2 className="size-3.5" />
+                    <span className="max-w-[140px] truncate">{selectedCliConfigName}</span>
+                    <ChevronDown className="size-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" sideOffset={8} className="max-h-64 w-56 overflow-auto">
+                    {cliConfigs.map((config) => (
+                      <DropdownMenuItem
+                        key={config.id}
+                        onSelect={() => setSelectedCliConfigId(config.id)}
+                        className="cursor-pointer"
+                      >
+                        {config.name}
+                      </DropdownMenuItem>
+                    ))}
+                    {cliConfigs.length === 0 && (
+                      <DropdownMenuItem disabled>请先选择 CLI 工具</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger
+                    disabled={!isGitProject || branches.length === 0}
+                    className="border-border bg-background hover:bg-accent/60 text-foreground inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <GitBranch className="size-3.5" />
+                    <span className="max-w-[140px] truncate">
+                      {selectedBaseBranch || '工作流基础分支'}
+                    </span>
+                    <ChevronDown className="size-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" sideOffset={8} className="max-h-64 w-56 overflow-auto">
+                    {branches.map((branch) => (
+                      <DropdownMenuItem
+                        key={branch}
+                        onSelect={() => setSelectedBaseBranch(branch)}
+                        className="cursor-pointer"
+                      >
+                        {branch}
+                      </DropdownMenuItem>
+                    ))}
+                    {!isGitProject && <DropdownMenuItem disabled>当前项目不是 Git 仓库</DropdownMenuItem>}
+                    {isGitProject && branches.length === 0 && (
+                      <DropdownMenuItem disabled>暂无可用分支</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger
+                    className="border-border bg-background hover:bg-accent/60 text-muted-foreground inline-flex size-8 items-center justify-center rounded-full border transition-colors"
+                    title={selectedTemplateId ? `工作流：${selectedWorkflowTemplateName}` : '不使用工作流'}
+                    aria-label={selectedTemplateId ? `工作流：${selectedWorkflowTemplateName}` : '选择工作流'}
+                  >
+                    <Workflow className="size-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" sideOffset={6} className="max-h-64 w-56 overflow-auto">
+                    {pipelineTemplates.map((template) => (
+                      <DropdownMenuItem
+                        key={template.id}
+                        onSelect={() => setSelectedTemplateId(template.id)}
+                        className="cursor-pointer"
+                      >
+                        {template.name}
+                      </DropdownMenuItem>
+                    ))}
+                    {pipelineTemplates.length === 0 && (
+                      <DropdownMenuItem disabled>暂无可用工作流</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            }
+          />
+
+          {error && <div className="mt-3 text-sm text-red-500">{error}</div>}
+        </div>
       </DialogContent>
     </Dialog>
   )

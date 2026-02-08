@@ -31,17 +31,22 @@ export class CLIToolConfigService {
 
   getConfig(toolId: string): ToolConfig {
     const configPath = this.getConfigPath(toolId)
+    const defaults = this.getDefaultConfig(toolId)
 
     if (!fs.existsSync(configPath)) {
-      return this.getDefaultConfig(toolId)
+      return defaults
     }
 
     try {
       const data = fs.readFileSync(configPath, 'utf-8')
-      return JSON.parse(data)
+      const parsed = JSON.parse(data)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return defaults
+      }
+      return { ...defaults, ...(parsed as ToolConfig) }
     } catch (error) {
       console.error(`Failed to read config for ${toolId}:`, error)
-      return this.getDefaultConfig(toolId)
+      return defaults
     }
   }
 
@@ -56,7 +61,7 @@ export class CLIToolConfigService {
       case 'opencode':
         return { executablePath: 'opencode' }
       case 'cursor-agent':
-        return { executablePath: 'cursor-agent' }
+        return { executablePath: 'cursor-agent', defaultModel: 'auto' }
       default:
         return {}
     }

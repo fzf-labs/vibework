@@ -31,8 +31,8 @@ export function LeftSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
   const navItems: NavItem[] = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard, path: '/dashboard' },
-    { id: 'board', label: t.nav.board, icon: KanbanSquare, path: '/board' },
     { id: 'tasks', label: t.nav.tasks, icon: ListTodo, path: '/tasks' },
+    { id: 'board', label: t.nav.board, icon: KanbanSquare, path: '/board' },
     {
       id: 'pipelineTemplates',
       label: t.nav.pipelineTemplates,

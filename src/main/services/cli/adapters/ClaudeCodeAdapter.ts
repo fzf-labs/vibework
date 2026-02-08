@@ -34,8 +34,16 @@ export class ClaudeCodeAdapter implements CliAdapter {
     this.configService = configService
   }
 
-  private getExecutablePath(override?: string): string {
+  private getExecutablePath(override?: string, toolConfig?: Record<string, unknown>): string {
     if (override) return override
+
+    const useRouter = asBoolean(
+      toolConfig?.claude_code_router
+    )
+    if (useRouter) {
+      return 'claude-code-router'
+    }
+
     const config = this.configService.getConfig('claude-code')
     const cmd = config.executablePath || 'claude'
     if (cmd === 'claude') {
@@ -69,7 +77,7 @@ export class ClaudeCodeAdapter implements CliAdapter {
     }
 
     const skipPermissions = asBoolean(
-      (toolConfig as Record<string, unknown>).dangerouslySkipPermissions
+      (toolConfig as Record<string, unknown>).dangerously_skip_permissions
     )
     if (skipPermissions === undefined || skipPermissions === true) {
       args.push('--dangerously-skip-permissions')
@@ -94,7 +102,10 @@ export class ClaudeCodeAdapter implements CliAdapter {
 
     pushFlagWithValue(args, '--append-system-prompt', (toolConfig as Record<string, unknown>).appendSystemPrompt)
     pushFlagWithValue(args, '--system-prompt', (toolConfig as Record<string, unknown>).systemPrompt)
-    pushFlagWithValue(args, '--permission-mode', (toolConfig as Record<string, unknown>).permissionMode)
+    const permissionMode = asBoolean((toolConfig as Record<string, unknown>).plan)
+      ? 'plan'
+      : undefined
+    pushFlagWithValue(args, '--permission-mode', permissionMode)
     pushRepeatableFlag(args, '--mcp-config', (toolConfig as Record<string, unknown>).mcpConfig)
     pushFlag(args, '--strict-mcp-config', asBoolean((toolConfig as Record<string, unknown>).strictMcpConfig))
     pushFlagWithValue(args, '--settings', (toolConfig as Record<string, unknown>).settings)
@@ -125,7 +136,7 @@ export class ClaudeCodeAdapter implements CliAdapter {
     pushFlag(args, '--ide', asBoolean((toolConfig as Record<string, unknown>).ide))
     pushRepeatableFlag(args, '--plugin-dir', (toolConfig as Record<string, unknown>).pluginDir)
 
-    const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additionalArgs)
+    const additionalArgs = asStringArray((toolConfig as Record<string, unknown>).additional_params)
     if (additionalArgs) {
       args.push(...additionalArgs)
     }
@@ -154,7 +165,7 @@ export class ClaudeCodeAdapter implements CliAdapter {
       options.sessionId,
       options.toolId,
       {
-        command: this.getExecutablePath(options.executablePath),
+        command: this.getExecutablePath(options.executablePath, toolConfig as Record<string, unknown>),
         args,
         cwd: options.workdir,
         env: {
