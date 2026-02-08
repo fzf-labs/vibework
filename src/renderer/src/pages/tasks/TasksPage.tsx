@@ -313,10 +313,10 @@ export function TasksPage() {
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger
                     className={cn(
-                      'border-border bg-background hover:bg-accent/60 inline-flex size-8 items-center justify-center rounded-full border transition-colors',
+                      'border-border bg-background hover:bg-accent/60 inline-flex items-center rounded-full border transition-colors',
                       selectedWorkflowTemplateId
-                        ? 'text-foreground bg-accent/40'
-                        : 'text-muted-foreground'
+                        ? 'bg-accent/40 text-foreground gap-1.5 px-2.5 py-1.5 text-xs'
+                        : 'text-muted-foreground size-8 justify-center'
                     )}
                     title={
                       selectedWorkflowTemplateId
@@ -329,7 +329,13 @@ export function TasksPage() {
                         : '选择工作流'
                     }
                   >
-                    <Workflow className="size-3.5" />
+                    <Workflow className="size-3.5 shrink-0" />
+                    {selectedWorkflowTemplateId && (
+                      <>
+                        <span className="max-w-[130px] truncate">{selectedWorkflowTemplateName}</span>
+                        <ChevronDown className="size-3.5 shrink-0" />
+                      </>
+                    )}
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" sideOffset={6} className="max-h-64 w-56 overflow-auto">
                     {workflowTemplates.map((template) => (

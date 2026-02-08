@@ -344,11 +344,21 @@ export function CreateTaskDialog({
 
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger
-                    className="border-border bg-background hover:bg-accent/60 text-muted-foreground inline-flex size-8 items-center justify-center rounded-full border transition-colors"
+                    className={
+                      selectedTemplateId
+                        ? 'border-border bg-accent/40 text-foreground hover:bg-accent/60 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs transition-colors'
+                        : 'border-border bg-background hover:bg-accent/60 text-muted-foreground inline-flex size-8 items-center justify-center rounded-full border transition-colors'
+                    }
                     title={selectedTemplateId ? `工作流：${selectedWorkflowTemplateName}` : '不使用工作流'}
                     aria-label={selectedTemplateId ? `工作流：${selectedWorkflowTemplateName}` : '选择工作流'}
                   >
-                    <Workflow className="size-3.5" />
+                    <Workflow className="size-3.5 shrink-0" />
+                    {selectedTemplateId && (
+                      <>
+                        <span className="max-w-[130px] truncate">{selectedWorkflowTemplateName}</span>
+                        <ChevronDown className="size-3.5 shrink-0" />
+                      </>
+                    )}
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" sideOffset={6} className="max-h-64 w-56 overflow-auto">
                     {pipelineTemplates.map((template) => (
