@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { db, type AgentToolConfig } from '@/data';
 import {
   Dialog,
   DialogContent,
@@ -13,14 +14,30 @@ import { useLanguage } from '@/providers/language-provider';
 export interface TaskNodeTemplateDraft {
   name: string;
   prompt: string;
+  cliToolId: string;
+  agentToolConfigId: string;
   requiresApproval: boolean;
   continueOnError: boolean;
+}
+
+interface CLIToolInfo {
+  id: string;
+  displayName?: string;
+  name?: string;
+  installed?: boolean;
 }
 
 export interface WorkflowTemplateFormValues {
   name: string;
   description?: string;
-  nodes: TaskNodeTemplateDraft[];
+  nodes: Array<{
+    name: string;
+    prompt: string;
+    cliToolId?: string;
+    agentToolConfigId?: string;
+    requiresApproval: boolean;
+    continueOnError: boolean;
+  }>;
 }
 
 interface WorkflowTemplateDialogProps {
@@ -34,6 +51,8 @@ interface WorkflowTemplateDialogProps {
 const DEFAULT_NODE: TaskNodeTemplateDraft = {
   name: '',
   prompt: '',
+  cliToolId: '',
+  agentToolConfigId: '',
   requiresApproval: true,
   continueOnError: false,
 };
@@ -51,8 +70,60 @@ export function WorkflowTemplateDialog({
   const [templateNodes, setTemplateNodes] = useState<TaskNodeTemplateDraft[]>([
     { ...DEFAULT_NODE },
   ]);
+  const [cliTools, setCliTools] = useState<CLIToolInfo[]>([]);
+  const [cliConfigsByTool, setCliConfigsByTool] = useState<
+    Record<string, AgentToolConfig[]>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const loadCliConfigs = useCallback(
+    async (toolId: string): Promise<AgentToolConfig[]> => {
+      if (!toolId) return [];
+      const cached = cliConfigsByTool[toolId];
+      if (cached) return cached;
+
+      try {
+        const result = await db.listAgentToolConfigs(toolId);
+        const list = Array.isArray(result)
+          ? (result as AgentToolConfig[])
+          : [];
+        setCliConfigsByTool((prev) =>
+          prev[toolId] ? prev : { ...prev, [toolId]: list }
+        );
+        return list;
+      } catch {
+        setCliConfigsByTool((prev) =>
+          prev[toolId] ? prev : { ...prev, [toolId]: [] }
+        );
+        return [];
+      }
+    },
+    [cliConfigsByTool]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const loadTools = async () => {
+      try {
+        const detected =
+          (await window.api?.cliTools?.getAll?.()) ||
+          (await window.api?.cliTools?.detectAll?.());
+        const tools = (Array.isArray(detected)
+          ? detected
+          : []) as CLIToolInfo[];
+        const installedTools = tools.filter((tool) => tool.installed !== false);
+        if (active) setCliTools(installedTools);
+      } catch {
+        if (active) setCliTools([]);
+      }
+    };
+    void loadTools();
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -62,7 +133,12 @@ export function WorkflowTemplateDialog({
       setTemplateDescription(initialValues.description || '');
       setTemplateNodes(
         initialValues.nodes.length > 0
-          ? initialValues.nodes.map((node) => ({ ...node }))
+          ? initialValues.nodes.map((node) => ({
+              ...DEFAULT_NODE,
+              ...node,
+              cliToolId: node.cliToolId || '',
+              agentToolConfigId: node.agentToolConfigId || '',
+            }))
           : [{ ...DEFAULT_NODE }]
       );
     } else {
@@ -71,6 +147,20 @@ export function WorkflowTemplateDialog({
       setTemplateNodes([{ ...DEFAULT_NODE }]);
     }
   }, [open, initialValues]);
+
+  useEffect(() => {
+    if (!open) return;
+    const toolIds = Array.from(
+      new Set(
+        templateNodes
+          .map((node) => node.cliToolId)
+          .filter((toolId): toolId is string => Boolean(toolId))
+      )
+    );
+    toolIds.forEach((toolId) => {
+      void loadCliConfigs(toolId);
+    });
+  }, [loadCliConfigs, open, templateNodes]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -83,6 +173,10 @@ export function WorkflowTemplateDialog({
       .map((node, index) => ({
         name: node.name.trim() || `${t.task.workflowNodeLabel} ${index + 1}`,
         prompt: node.prompt.trim(),
+        cliToolId: node.cliToolId || undefined,
+        agentToolConfigId: node.cliToolId
+          ? node.agentToolConfigId || undefined
+          : undefined,
         requiresApproval: node.requiresApproval,
         continueOnError: node.continueOnError,
       }))
@@ -198,6 +292,83 @@ export function WorkflowTemplateDialog({
                     placeholder={t.task.createStagePromptPlaceholder}
                     className="mt-2 w-full rounded-md border bg-background px-2 py-1 text-sm"
                   />
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {t.task.createCliLabel}
+                      </label>
+                      <select
+                        value={node.cliToolId || ''}
+                        onChange={async (e) => {
+                          const toolId = e.target.value;
+                          let defaultConfigId = '';
+                          if (toolId) {
+                            const configs =
+                              cliConfigsByTool[toolId] ||
+                              (await loadCliConfigs(toolId));
+                            const defaultConfig = configs.find(
+                              (cfg) => cfg.is_default
+                            );
+                            defaultConfigId = defaultConfig?.id || '';
+                          }
+
+                          setTemplateNodes((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index
+                                ? {
+                                    ...item,
+                                    cliToolId: toolId,
+                                    agentToolConfigId: defaultConfigId,
+                                  }
+                                : item
+                            )
+                          );
+                        }}
+                        className="mt-1.5 w-full rounded-md border bg-background px-2 py-1 text-sm"
+                      >
+                        <option value="">{t.task.createStageCliInherit}</option>
+                        {cliTools.map((tool) => (
+                          <option key={tool.id} value={tool.id}>
+                            {tool.displayName || tool.name || tool.id}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {t.task.createCliConfigLabel}
+                      </label>
+                      <select
+                        value={node.agentToolConfigId || ''}
+                        disabled={!node.cliToolId}
+                        onChange={(e) => {
+                          const configId = e.target.value;
+                          setTemplateNodes((prev) =>
+                            prev.map((item, idx) =>
+                              idx === index
+                                ? { ...item, agentToolConfigId: configId }
+                                : item
+                            )
+                          );
+                        }}
+                        className="mt-1.5 w-full rounded-md border bg-background px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <option value="">
+                          {!node.cliToolId
+                            ? t.task.createCliConfigSelectTool
+                            : t.task.createStageConfigInherit}
+                        </option>
+                        {(node.cliToolId
+                          ? cliConfigsByTool[node.cliToolId] || []
+                          : []
+                        ).map((config) => (
+                          <option key={config.id} value={config.id}>
+                            {config.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                     <label className="flex items-center gap-1.5">
                       <input

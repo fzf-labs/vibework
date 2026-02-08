@@ -115,7 +115,14 @@ export class DatabaseService {
     return node
   }
 
-  createTaskNodesFromTemplate(taskId: string, templateId: string): TaskNode[] {
+  createTaskNodesFromTemplate(
+    taskId: string,
+    templateId: string,
+    fallbackRuntime?: {
+      cliToolId?: string | null
+      agentToolConfigId?: string | null
+    }
+  ): TaskNode[] {
     const template = this.getWorkflowTemplate(templateId)
     if (!template) {
       throw new Error(`Workflow template not found: ${templateId}`)
@@ -130,8 +137,8 @@ export class DatabaseService {
         node_order: Number.isFinite(node.node_order) ? node.node_order : index + 1,
         name: node.name,
         prompt: node.prompt,
-        cli_tool_id: node.cli_tool_id ?? null,
-        agent_tool_config_id: node.agent_tool_config_id ?? null,
+        cli_tool_id: node.cli_tool_id ?? fallbackRuntime?.cliToolId ?? null,
+        agent_tool_config_id: node.agent_tool_config_id ?? fallbackRuntime?.agentToolConfigId ?? null,
         requires_approval: Boolean(node.requires_approval),
         continue_on_error: Boolean(node.continue_on_error)
       }))

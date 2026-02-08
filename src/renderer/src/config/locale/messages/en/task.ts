@@ -88,6 +88,8 @@ export default {
   createTemplateDescriptionPlaceholder: 'Optional',
   createStageNamePlaceholder: 'Stage name',
   createStagePromptPlaceholder: 'Stage prompt',
+  createStageCliInherit: 'Inherit task default CLI',
+  createStageConfigInherit: 'Inherit selected CLI default config',
   createStageRequiresApproval: 'Requires approval',
   createStageContinueOnError: 'Continue on error',
   addStage: 'Add stage',

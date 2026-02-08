@@ -88,6 +88,8 @@ export default {
   createTemplateDescriptionPlaceholder: '可选',
   createStageNamePlaceholder: '工作节点名称',
   createStagePromptPlaceholder: '工作节点提示词',
+  createStageCliInherit: '继承任务默认 CLI',
+  createStageConfigInherit: '继承所选 CLI 的默认配置',
   createStageRequiresApproval: '需要确认',
   createStageContinueOnError: '失败继续',
   addStage: '添加工作节点',

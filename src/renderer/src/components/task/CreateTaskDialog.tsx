@@ -208,11 +208,8 @@ export function CreateTaskDialog({
       const taskMode = selectedTemplateId ? 'workflow' : 'conversation'
       const worktreeBranchPrefix = settings.gitWorktreeBranchPrefix || 'VW-'
       const worktreeRootPath = settings.gitWorktreeDir || '~/.vibework/worktrees'
-      const cliToolId =
-        taskMode === 'conversation'
-          ? selectedCliToolId || settings.defaultCliToolId || undefined
-          : undefined
-      const agentToolConfigId = taskMode === 'conversation' ? selectedCliConfigId || undefined : undefined
+      const cliToolId = selectedCliToolId || settings.defaultCliToolId || undefined
+      const agentToolConfigId = selectedCliConfigId || undefined
 
       const result = await window.api.task.create({
         title: trimmedTitle,

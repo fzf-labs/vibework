@@ -103,7 +103,10 @@ export class TaskService {
     }
 
     if (options.taskMode === 'workflow' && options.workflowTemplateId) {
-      this.db.createTaskNodesFromTemplate(taskId, options.workflowTemplateId)
+      this.db.createTaskNodesFromTemplate(taskId, options.workflowTemplateId, {
+        cliToolId: options.cliToolId ?? null,
+        agentToolConfigId: agentToolConfigId ?? null
+      })
     }
 
     return this.mapTask(this.db.getTask(taskId) ?? task)

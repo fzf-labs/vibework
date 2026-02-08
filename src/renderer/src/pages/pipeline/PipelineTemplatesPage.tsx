@@ -21,6 +21,8 @@ interface TaskNodeTemplate {
   node_order: number;
   name: string;
   prompt: string;
+  cli_tool_id?: string | null;
+  agent_tool_config_id?: string | null;
   requires_approval: boolean;
   continue_on_error: boolean;
   created_at: string;
@@ -43,6 +45,8 @@ const toNodeInputs = (values: WorkflowTemplateFormValues) =>
     name: node.name,
     prompt: node.prompt,
     node_order: index + 1,
+    cli_tool_id: node.cliToolId || undefined,
+    agent_tool_config_id: node.agentToolConfigId || undefined,
     requires_approval: node.requiresApproval,
     continue_on_error: node.continueOnError,
   }));
@@ -287,6 +291,8 @@ export function PipelineTemplatesPage() {
                 nodes: (editingTemplate.nodes || []).map((node) => ({
                   name: node.name,
                   prompt: node.prompt,
+                  cliToolId: node.cli_tool_id || '',
+                  agentToolConfigId: node.agent_tool_config_id || '',
                   requiresApproval: node.requires_approval,
                   continueOnError: node.continue_on_error,
                 })),
