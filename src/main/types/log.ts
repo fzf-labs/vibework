@@ -8,6 +8,7 @@ export type LogMsgType = 'stdout' | 'stderr' | 'normalized' | 'finished'
 export interface LogMsgBase {
   id: string
   task_id: string
+  task_node_id?: string
   session_id: string
   created_at: string
   schema_version: string

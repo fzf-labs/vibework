@@ -167,6 +167,54 @@ describe('TaskExecutionService', () => {
     }
   })
 
+
+  it('keeps task in_progress after approving stage and starting next node', () => {
+    const context = createTestContext()
+    if (!context) return
+
+    try {
+      const { taskRepo, taskNodeRepo, executionService } = context
+      const taskId = 'task-approval-advance'
+
+      taskRepo.createTask({
+        id: taskId,
+        title: 'Approval advance',
+        prompt: 'run approval flow',
+        task_mode: 'workflow'
+      })
+
+      const node1 = taskNodeRepo.createNode({
+        task_id: taskId,
+        node_order: 1,
+        name: 'Node 1',
+        prompt: 'step 1',
+        requires_approval: true
+      })
+
+      const node2 = taskNodeRepo.createNode({
+        task_id: taskId,
+        node_order: 2,
+        name: 'Node 2',
+        prompt: 'step 2',
+        requires_approval: true
+      })
+
+      executionService.startTaskExecution(taskId)
+      const reviewNode = executionService.completeTaskNode(node1.id, {
+        resultSummary: 'need review'
+      })
+      expect(reviewNode?.status).toBe('in_review')
+      expect(taskRepo.getTask(taskId)?.status).toBe('in_review')
+
+      const approvedNode = executionService.approveTaskNode(node1.id)
+      expect(approvedNode?.status).toBe('done')
+      expect(taskNodeRepo.getTaskNode(node2.id)?.status).toBe('in_progress')
+      expect(taskRepo.getTask(taskId)?.status).toBe('in_progress')
+    } finally {
+      cleanupTestContext(context)
+    }
+  })
+
   it('aggregates task status for mixed node states', () => {
     const context = createTestContext()
     if (!context) return

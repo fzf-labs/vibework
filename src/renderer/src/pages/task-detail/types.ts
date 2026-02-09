@@ -66,6 +66,9 @@ export type WorkflowNode = {
   status: PipelineDisplayStatus
   name?: string
   prompt?: string
+  session_id?: string | null
+  cli_tool_id?: string | null
+  agent_tool_config_id?: string | null
 }
 
 export type WorkflowCurrentNode = {
@@ -81,6 +84,7 @@ export type WorkflowReviewNode = {
 }
 
 export type CurrentNodeRuntime = {
+  taskNodeId: string | null
   sessionId: string | null
   cliToolId: string | null
   agentToolConfigId: string | null

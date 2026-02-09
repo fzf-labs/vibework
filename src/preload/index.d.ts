@@ -151,7 +151,7 @@ interface CliSessionAPI {
 interface LogStreamAPI {
   subscribe: (sessionId: string) => Promise<{ success: boolean; error?: string }>
   unsubscribe: (sessionId: string) => Promise<unknown>
-  getHistory: (taskId: string, sessionId?: string | null) => Promise<unknown[]>
+  getHistory: (taskId: string, sessionId?: string | null, taskNodeId?: string | null) => Promise<unknown[]>
   onMessage: (callback: (sessionId: string, msg: unknown) => void) => () => void
 }
 

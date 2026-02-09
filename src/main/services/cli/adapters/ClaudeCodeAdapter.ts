@@ -179,6 +179,7 @@ export class ClaudeCodeAdapter implements CliAdapter {
       undefined,
       options.taskId,
       options.projectId,
+      options.taskNodeId,
       options.msgStore
     )
   }

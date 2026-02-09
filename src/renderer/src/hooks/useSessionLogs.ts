@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { readSessionLogs, type SessionLogEntry } from '@/lib/session-logs'
 
-export function useSessionLogs(taskId: string | null, pollMs = 1000): SessionLogEntry[] {
+export function useSessionLogs(
+  taskId: string | null,
+  pollMs = 1000,
+  taskNodeId?: string | null
+): SessionLogEntry[] {
   const [logs, setLogs] = useState<SessionLogEntry[]>([])
 
   useEffect(() => {
@@ -14,7 +18,7 @@ export function useSessionLogs(taskId: string | null, pollMs = 1000): SessionLog
         return
       }
       try {
-        const entries = await readSessionLogs(taskId)
+        const entries = await readSessionLogs(taskId, undefined, taskNodeId)
         if (active) setLogs(entries)
       } catch {
         if (active) setLogs([])
@@ -28,7 +32,7 @@ export function useSessionLogs(taskId: string | null, pollMs = 1000): SessionLog
       active = false
       if (timer) clearInterval(timer)
     }
-  }, [pollMs, taskId])
+  }, [pollMs, taskId, taskNodeId])
 
   return logs
 }

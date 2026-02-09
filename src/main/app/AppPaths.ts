@@ -73,10 +73,17 @@ export class AppPaths {
   }
 
   /**
-   * 获取指定 task 的日志文件路径 ~/.vibework/data/sessions/<projectId>/<taskId>.jsonl
+   * 获取指定 task 的日志文件路径（兼容旧结构） ~/.vibework/data/sessions/<projectId>/<taskId>.jsonl
    */
   getTaskMessagesFile(taskId: string, projectId?: string | null): string {
     return join(this.getProjectSessionsDir(projectId), `${taskId}.jsonl`)
+  }
+
+  /**
+   * 获取指定 task node 的日志文件路径 ~/.vibework/data/sessions/<projectId>/<taskId>/<taskNodeId>.jsonl
+   */
+  getTaskNodeMessagesFile(taskId: string, taskNodeId: string, projectId?: string | null): string {
+    return join(this.getTaskDataDir(taskId, projectId), `${taskNodeId}.jsonl`)
   }
 
   /**

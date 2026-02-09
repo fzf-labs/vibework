@@ -25,6 +25,20 @@ import type {
 const TASK_NODE_STATUS_VALUES = ['todo', 'in_progress', 'in_review', 'done'] as const
 type TaskNodeStatusValue = (typeof TASK_NODE_STATUS_VALUES)[number]
 
+export const composeTaskNodePrompt = (
+  taskPrompt: string | null | undefined,
+  nodePrompt: string | null | undefined
+): string => {
+  const basePrompt = taskPrompt ?? ''
+  const templatePrompt = nodePrompt ?? ''
+
+  if (basePrompt && templatePrompt) {
+    return `${basePrompt}\n\n${templatePrompt}`
+  }
+
+  return basePrompt || templatePrompt
+}
+
 export class DatabaseService {
   private db: Database.Database
   private connection: DatabaseConnection
@@ -131,6 +145,11 @@ export class DatabaseService {
       throw new Error(`Workflow template not found: ${templateId}`)
     }
 
+    const task = this.getTask(taskId)
+    if (!task) {
+      throw new Error(`Task not found: ${taskId}`)
+    }
+
     const nodes = template.nodes
       .slice()
       .sort((left, right) => left.node_order - right.node_order)
@@ -139,7 +158,7 @@ export class DatabaseService {
         task_id: taskId,
         node_order: Number.isFinite(node.node_order) ? node.node_order : index + 1,
         name: node.name,
-        prompt: node.prompt,
+        prompt: composeTaskNodePrompt(task.prompt, node.prompt),
         cli_tool_id: node.cli_tool_id ?? fallbackRuntime?.cliToolId ?? null,
         agent_tool_config_id: node.agent_tool_config_id ?? fallbackRuntime?.agentToolConfigId ?? null,
         requires_approval: Boolean(node.requires_approval)
@@ -257,14 +276,8 @@ export class DatabaseService {
     const node = this.getTaskNode(taskNodeId)
     if (!node) return null
 
-    const task = this.getTask(node.task_id)
-    if (!task) return null
-
-    const nodePrompt = node.prompt || ''
-    if (nodePrompt) {
-      return `${task.prompt}\n\n${nodePrompt}`
-    }
-    return task.prompt
+    const nodePrompt = node.prompt?.trim()
+    return nodePrompt || null
   }
 
   // ============ Agent Tool Config 操作 ============

@@ -31,6 +31,10 @@ function renderToolLogView(toolId: string, logs: LogMsg[]): React.ReactNode {
 interface CLISessionProps {
   sessionId: string
   taskId?: string | null
+  taskNodeId?: string | null
+  logTaskNodeId?: string | null
+  logSource?: 'session' | 'file'
+  logToolId?: string | null
   toolId: string
   configId?: string | null
   workdir: string
@@ -53,6 +57,10 @@ export interface CLISessionHandle {
 export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function CLISession({
   sessionId,
   taskId,
+  taskNodeId,
+  logTaskNodeId,
+  logSource = 'session',
+  logToolId,
   toolId,
   configId,
   workdir,
@@ -65,9 +73,10 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
 }: CLISessionProps, ref) {
   const [status, setStatus] = useState<CLISessionStatus>('idle')
 
-  const { logs, resubscribe } = useLogStream(sessionId, taskId, {
-    source: 'session'
+  const { logs, resubscribe } = useLogStream(sessionId, taskId, logTaskNodeId ?? taskNodeId, {
+    source: logSource
   })
+  const displayToolId = logToolId || toolId
   const logContainerRef = useRef<HTMLDivElement>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
@@ -145,6 +154,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
       await window.api.cliSession.startSession(sessionId, toolId, workdir, {
         prompt: nextPrompt,
         taskId: taskId ?? undefined,
+        taskNodeId: taskNodeId ?? undefined,
         configId: configId ?? undefined
       })
       await resubscribe({ clear: false })
@@ -152,7 +162,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
       setStatus('error')
       console.error('[CLISession] Failed to start session:', error)
     }
-  }, [prompt, resubscribe, sessionId, taskId, configId, toolId, workdir])
+  }, [prompt, resubscribe, sessionId, taskId, taskNodeId, configId, toolId, workdir])
 
   const stopSession = useCallback(async () => {
     try {
@@ -302,7 +312,7 @@ export const CLISession = forwardRef<CLISessionHandle, CLISessionProps>(function
             </div>
           </div>
         )}
-        {renderToolLogView(toolId, logs)}
+        {renderToolLogView(displayToolId, logs)}
         <div ref={logEndRef} />
       </div>
     </div>

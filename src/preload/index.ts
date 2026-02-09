@@ -190,8 +190,8 @@ const api = {
   logStream: {
     subscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.subscribe, sessionId),
     unsubscribe: (sessionId: string) => invoke(IPC_CHANNELS.logStream.unsubscribe, sessionId),
-    getHistory: (taskId: string, sessionId?: string | null) =>
-      invoke(IPC_CHANNELS.logStream.getHistory, taskId, sessionId || null),
+    getHistory: (taskId: string, sessionId?: string | null, taskNodeId?: string | null) =>
+      invoke(IPC_CHANNELS.logStream.getHistory, taskId, sessionId || null, taskNodeId || null),
     onMessage: (callback: (sessionId: string, msg: unknown) => void) => {
       const listener = (_: unknown, sessionId: string, msg: unknown) => callback(sessionId, msg)
       ipcRenderer.on(IPC_EVENTS.logStream.message, listener)

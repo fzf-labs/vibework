@@ -48,6 +48,7 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     detectStderrCompletion?: CompletionDetector,
     taskId?: string,
     projectId?: string | null,
+    taskNodeId?: string,
     msgStore?: MsgStoreService
   ) {
     super()
@@ -55,7 +56,8 @@ export class ProcessCliSession extends EventEmitter implements CliSessionHandle 
     this.toolId = toolId
     this.detectCompletion = detectCompletion
     this.detectStderrCompletion = detectStderrCompletion
-    this.msgStore = msgStore ?? new MsgStoreService(undefined, taskId, sessionId, projectId)
+    this.msgStore =
+      msgStore ?? new MsgStoreService(undefined, taskId, sessionId, projectId, taskNodeId)
 
     try {
       this.process = safeSpawn(commandSpec.command, commandSpec.args, {

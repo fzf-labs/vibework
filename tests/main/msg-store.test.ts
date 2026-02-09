@@ -36,7 +36,10 @@ const setupMsgStore = async (env: Record<string, string>) => {
   vi.doMock('../../src/main/app/AppPaths', () => ({
     getAppPaths: () => ({
       getProjectSessionsDir: () => sessionRoot,
+      getTaskDataDir: (taskId: string) => join(sessionRoot, taskId),
       getTaskMessagesFile: (taskId: string) => join(sessionRoot, `${taskId}.jsonl`),
+      getTaskNodeMessagesFile: (taskId: string, taskNodeId: string) =>
+        join(sessionRoot, taskId, `${taskNodeId}.jsonl`),
       getSessionsDir: () => sessionRoot,
       getLegacySessionMessagesFile: (sessionId: string) =>
         join(sessionRoot, sessionId, 'messages.jsonl')
@@ -74,8 +77,8 @@ describe('MsgStoreService', () => {
       VIBEWORK_LOG_MAX_FILES: '1'
     })
 
-    const store = new MsgStoreService(undefined, 'task-a', 'session-a', 'project')
-    const logFilePath = join(sessionRoot, 'task-a.jsonl')
+    const store = new MsgStoreService(undefined, 'task-a', 'session-a', 'project', 'node-a')
+    const logFilePath = join(sessionRoot, 'task-a', 'node-a.jsonl')
 
     store.push({ type: 'stdout', content: 'hello' } as any)
     expect(existsSync(logFilePath)).toBe(false)
@@ -95,8 +98,8 @@ describe('MsgStoreService', () => {
       VIBEWORK_LOG_MAX_FILES: '2'
     })
 
-    const store = new MsgStoreService(undefined, 'task-b', 'session-b', 'project')
-    const logFilePath = join(sessionRoot, 'task-b.jsonl')
+    const store = new MsgStoreService(undefined, 'task-b', 'session-b', 'project', 'node-b')
+    const logFilePath = join(sessionRoot, 'task-b', 'node-b.jsonl')
 
     for (let i = 0; i < 10; i += 1) {
       store.push({ type: 'stdout', content: 'x'.repeat(80) } as any)
@@ -107,5 +110,28 @@ describe('MsgStoreService', () => {
 
     expect(existsSync(logFilePath)).toBe(true)
     expect(existsSync(`${logFilePath}.1`)).toBe(true)
+  })
+
+  it('stores and loads logs by task node file', async () => {
+    const { MsgStoreService, sessionRoot } = await setupMsgStore({
+      VIBEWORK_LOG_BATCH_MAX_BYTES: '1000000',
+      VIBEWORK_LOG_FLUSH_INTERVAL_MS: '10',
+      VIBEWORK_LOG_MAX_BYTES: '1000000',
+      VIBEWORK_LOG_MAX_FILES: '1'
+    })
+
+    const store = new MsgStoreService(undefined, 'task-c', 'session-c', 'project', 'node-1')
+    const nodeLogPath = join(sessionRoot, 'task-c', 'node-1.jsonl')
+
+    store.push({ type: 'stdout', content: 'node-1-only' } as any)
+    await waitFor(() => existsSync(nodeLogPath), 1000)
+
+    expect(existsSync(nodeLogPath)).toBe(true)
+
+    const nodeHistory = MsgStoreService.loadFromFile('task-c', 'node-1', 'project') as Array<{ content?: string }>
+    expect(nodeHistory.some((entry) => entry.content?.includes('node-1-only'))).toBe(true)
+
+    const otherNodeHistory = MsgStoreService.loadFromFile('task-c', 'node-2', 'project')
+    expect(otherNodeHistory.length).toBe(0)
   })
 })

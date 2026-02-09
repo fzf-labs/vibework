@@ -30,6 +30,8 @@ interface WorkflowCardProps {
   nodes: WorkflowDisplayNode[]
   templateNodeMap: ReadonlyMap<string, TemplateNode>
   currentTaskNode: WorkflowReviewNode | null
+  selectedNodeId?: string | null
+  onSelectNode?: (nodeId: string) => void
   onApproveCurrent: () => void
 }
 
@@ -38,6 +40,8 @@ export function WorkflowCard({
   nodes,
   templateNodeMap,
   currentTaskNode,
+  selectedNodeId,
+  onSelectNode,
   onApproveCurrent
 }: WorkflowCardProps) {
   return (
@@ -50,14 +54,15 @@ export function WorkflowCard({
       </div>
       <div className="space-y-2 px-3 py-2">
         {nodes.length > 0 && (
-          <div className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-hide">
-            <div className="flex min-w-max items-center gap-1 pr-2">
+          <div className="-mx-1 overflow-x-auto overflow-y-visible px-1 py-1 scrollbar-hide">
+            <div className="flex min-w-max items-center gap-1 py-0.5 pr-2">
               {nodes.map((node, index) => {
                 const nodeStatus = node.status
                 const isCompleted = nodeStatus === 'done'
                 const isRunningNode = nodeStatus === 'in_progress'
                 const isWaiting = nodeStatus === 'in_review'
                 const isTodo = nodeStatus === 'todo'
+                const isSelected = selectedNodeId === node.id
                 const templateNode = templateNodeMap.get(node.id)
                 const nodeName =
                   node.name || templateNode?.name || `${t.task.stageLabel} ${index + 1}`
@@ -65,15 +70,19 @@ export function WorkflowCard({
 
                 return (
                   <div key={node.id} className="flex items-center">
-                    <div
+                    <button
+                      type="button"
                       className={cn(
-                        'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
+                        'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors',
                         isCompleted && 'bg-green-500/10 text-green-600',
                         isWaiting && 'bg-amber-500/10 text-amber-600',
                         isRunningNode && 'bg-blue-500/10 text-blue-600',
-                        isTodo && 'bg-muted/40 text-muted-foreground'
+                        isTodo && 'bg-muted/40 text-muted-foreground',
+                        isSelected && 'ring-primary/50 ring-2',
+                        onSelectNode && 'hover:brightness-95 cursor-pointer'
                       )}
                       title={nodePrompt}
+                      onClick={() => onSelectNode?.(node.id)}
                     >
                       {isCompleted && <CheckCircle className="size-3" />}
                       {isRunningNode && (
@@ -84,7 +93,7 @@ export function WorkflowCard({
                         <span className="size-2 rounded-full bg-muted-foreground/30" />
                       )}
                       <span className="max-w-[80px] truncate">{nodeName}</span>
-                    </div>
+                    </button>
                     {index < nodes.length - 1 && (
                       <div
                         className={cn(

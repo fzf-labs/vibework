@@ -93,6 +93,7 @@ export interface LogMsg {
   type: 'stdout' | 'stderr' | 'normalized' | 'finished'
   id?: string
   task_id?: string
+  task_node_id?: string
   session_id?: string
   created_at?: string
   schema_version?: string
@@ -122,6 +123,7 @@ export interface UseLogStreamOptions {
 export function useLogStream(
   sessionId: string | null,
   taskId?: string | null,
+  taskNodeId?: string | null,
   options?: UseLogStreamOptions
 ): UseLogStreamResult {
   const source = options?.source ?? 'session'
@@ -133,6 +135,7 @@ export function useLogStream(
   const pollTimerRef = useRef<number | null>(null)
   const sessionIdRef = useRef<string | null>(sessionId)
   const taskIdRef = useRef<string | null>(taskId ?? null)
+  const taskNodeIdRef = useRef<string | null>(taskNodeId ?? null)
   const seenIdsRef = useRef<Set<string>>(new Set())
   const messageSeqRef = useRef(0)
   const historyLoadedRef = useRef(false)
@@ -146,6 +149,10 @@ export function useLogStream(
   useEffect(() => {
     taskIdRef.current = taskId ?? null
   }, [taskId])
+
+  useEffect(() => {
+    taskNodeIdRef.current = taskNodeId ?? null
+  }, [taskNodeId])
 
   const clearLogs = useCallback(() => {
     setLogs([])
@@ -202,6 +209,7 @@ export function useLogStream(
   const subscribe = useCallback(async (options?: { includeHistory?: boolean }) => {
     const currentSessionId = sessionIdRef.current
     const currentTaskId = taskIdRef.current
+    const currentTaskNodeId = taskNodeIdRef.current
     if (!currentSessionId && !currentTaskId) {
       console.log('[useLogStream] No sessionId or taskId, skipping subscribe')
       return
@@ -215,7 +223,11 @@ export function useLogStream(
       if (includeHistory && currentTaskId) {
         const historySessionId = source === 'file' ? null : currentSessionId ?? null
         console.log('[useLogStream] Getting history for:', { taskId: currentTaskId, sessionId: historySessionId })
-        const history = await window.api.logStream.getHistory(currentTaskId, historySessionId)
+        const history = await window.api.logStream.getHistory(
+          currentTaskId,
+          historySessionId,
+          currentTaskNodeId
+        )
         console.log('[useLogStream] History received:', history?.length || 0, 'messages')
         if (Array.isArray(history) && history.length > 0) {
           console.log('[useLogStream] History sample:', history[history.length - 1])
@@ -242,11 +254,23 @@ export function useLogStream(
         setIsConnected(true)
         setError(null)
       } else {
-        setError(result.error || 'Failed to subscribe')
+        const errorMessage = result.error || 'Failed to subscribe'
+        if (errorMessage.includes('Session not found')) {
+          setIsConnected(false)
+          setError(null)
+          return
+        }
+        setError(errorMessage)
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+      if (errorMessage.includes('Session not found')) {
+        setIsConnected(false)
+        setError(null)
+        return
+      }
       console.error('[useLogStream] Subscribe error:', err)
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      setError(errorMessage)
     }
   }, [processMessages, setLogsFromHistory, source])
 
@@ -293,13 +317,15 @@ export function useLogStream(
       unsubscribeRef.current = removeListener
     }
 
+    clearLogs()
+
     // 初始订阅（包含历史）
     subscribe()
 
       if (source === 'file' && taskId) {
         const poll = async () => {
           try {
-            const history = await window.api.logStream.getHistory(taskId, null)
+            const history = await window.api.logStream.getHistory(taskId, null, taskNodeIdRef.current)
             if (Array.isArray(history) && history.length > 0) {
               console.log('[useLogStream] File poll sample:', history[history.length - 1])
               setLogsFromHistory(history as LogMsg[])
@@ -326,7 +352,7 @@ export function useLogStream(
       }
       setIsConnected(false)
     }
-  }, [processMessages, pollIntervalMs, sessionId, setLogsFromHistory, source, subscribe, taskId])
+  }, [clearLogs, processMessages, pollIntervalMs, sessionId, setLogsFromHistory, source, subscribe, taskId, taskNodeId])
 
   return {
     logs,

@@ -132,6 +132,7 @@ export function useTaskDetail({
   // ===========================================================================
   const [task, setTask] = useState<Task | null>(null);
   const [currentNodeRuntime, setCurrentNodeRuntime] = useState<CurrentNodeRuntime>({
+    taskNodeId: null,
     sessionId: null,
     cliToolId: null,
     agentToolConfigId: null
@@ -147,7 +148,7 @@ export function useTaskDetail({
     if (prevTaskIdRef.current !== taskId) {
       if (prevTaskIdRef.current !== undefined) {
         setTask(null);
-        setCurrentNodeRuntime({ sessionId: null, cliToolId: null, agentToolConfigId: null });
+        setCurrentNodeRuntime({ taskNodeId: null, sessionId: null, cliToolId: null, agentToolConfigId: null });
         setHasStarted(false);
         isInitializingRef.current = false;
         initializedTaskIdRef.current = null;
@@ -158,24 +159,41 @@ export function useTaskDetail({
 
   const loadCurrentNodeRuntime = useCallback(async () => {
     if (!taskId) {
-      setCurrentNodeRuntime({ sessionId: null, cliToolId: null, agentToolConfigId: null });
+      setCurrentNodeRuntime({ taskNodeId: null, sessionId: null, cliToolId: null, agentToolConfigId: null });
       return;
     }
 
     try {
-      const node = (await db.getCurrentTaskNode(taskId)) as {
+      let node = (await db.getCurrentTaskNode(taskId)) as {
+        id?: string | null
+        node_order?: number | null
         session_id?: string | null
         cli_tool_id?: string | null
         agent_tool_config_id?: string | null
       } | null
 
+      if (!node?.id) {
+        const nodes = (await db.getTaskNodes(taskId)) as Array<{
+          id: string
+          node_order?: number | null
+          session_id?: string | null
+          cli_tool_id?: string | null
+          agent_tool_config_id?: string | null
+        }>
+        const sortedNodes = [...nodes].sort(
+          (a, b) => (a.node_order ?? Number.MAX_SAFE_INTEGER) - (b.node_order ?? Number.MAX_SAFE_INTEGER)
+        )
+        node = sortedNodes[sortedNodes.length - 1] ?? null
+      }
+
       setCurrentNodeRuntime({
+        taskNodeId: node?.id ?? null,
         sessionId: node?.session_id ?? null,
         cliToolId: node?.cli_tool_id ?? null,
         agentToolConfigId: node?.agent_tool_config_id ?? null
       })
     } catch {
-      setCurrentNodeRuntime({ sessionId: null, cliToolId: null, agentToolConfigId: null })
+      setCurrentNodeRuntime({ taskNodeId: null, sessionId: null, cliToolId: null, agentToolConfigId: null })
     }
   }, [taskId])
 
@@ -351,7 +369,26 @@ export function useTaskDetail({
 
   const ensureCliSessionId = useCallback(async (): Promise<string | null> => {
     if (!taskId) return null;
-    if (currentNodeRuntime.sessionId) return currentNodeRuntime.sessionId;
+
+    try {
+      const currentNode = (await db.getCurrentTaskNode(taskId)) as
+        | { id?: string | null; session_id?: string | null }
+        | null;
+
+      const runtimeMatchesCurrentNode =
+        !currentNode?.id || currentNode.id === currentNodeRuntime.taskNodeId;
+
+      if (runtimeMatchesCurrentNode && currentNodeRuntime.sessionId) {
+        return currentNodeRuntime.sessionId;
+      }
+
+      if (currentNode?.session_id) {
+        return currentNode.session_id;
+      }
+    } catch {
+      // ignore and fallback to creating a new session id
+    }
+
     const newSessionId = newUuid();
     try {
       await db.updateCurrentTaskNodeRuntime(taskId, { session_id: newSessionId });
@@ -360,7 +397,7 @@ export function useTaskDetail({
       console.error('[TaskDetail] Failed to persist session_id:', error);
     }
     return newSessionId;
-  }, [currentNodeRuntime.sessionId, loadCurrentNodeRuntime, taskId]);
+  }, [currentNodeRuntime.sessionId, currentNodeRuntime.taskNodeId, loadCurrentNodeRuntime, taskId]);
 
   useEffect(() => {
     if (!currentNodeRuntime.sessionId || !pendingCliStartRef.current) return;
@@ -372,19 +409,6 @@ export function useTaskDetail({
 
   useEffect(() => { setCliStatus('idle'); }, [taskId]);
 
-  const resolveCurrentTaskNodeId = useCallback(async () => {
-    if (!taskId) return null;
-    try {
-      const currentNode = (await db.getCurrentTaskNode(taskId)) as { id: string } | null;
-      if (currentNode?.id) return currentNode.id;
-      const nodes = (await db.getTaskNodes(taskId)) as Array<{ id: string }>;
-      return nodes[0]?.id ?? null;
-    } catch (error) {
-      console.error('[TaskDetail] Failed to resolve current task node:', error);
-      return null;
-    }
-  }, [taskId]);
-
   const markExecutionRunning = useCallback(async () => {
     if (!taskId) return;
     try {
@@ -393,18 +417,6 @@ export function useTaskDetail({
       /* ignore */
     }
   }, [taskId]);
-
-  const markExecutionCompleted = useCallback(async () => {
-    const taskNodeId = await resolveCurrentTaskNodeId();
-    if (!taskNodeId) return;
-    try {
-      await db.completeTaskNode(taskNodeId, {
-        sessionId: currentNodeRuntime.sessionId ?? null
-      });
-    } catch {
-      /* ignore */
-    }
-  }, [currentNodeRuntime.sessionId, resolveCurrentTaskNodeId]);
 
   // Forward declare loadWorkflowStatus for use in handleCliStatusChange
   const loadWorkflowStatusRef = useRef<() => Promise<void>>(async () => {});
@@ -415,16 +427,15 @@ export function useTaskDetail({
       if (!taskId) return;
       if (status === 'running') {
         void markExecutionRunning();
-      } else if (status === 'stopped') {
+      } else if (status === 'stopped' || status === 'error') {
         void (async () => {
-          await markExecutionCompleted();
           await loadWorkflowStatusRef.current();
           await loadCurrentNodeRuntime();
           await refreshTask();
         })();
       }
     },
-    [markExecutionCompleted, markExecutionRunning, loadCurrentNodeRuntime, refreshTask, taskId]
+    [markExecutionRunning, loadCurrentNodeRuntime, refreshTask, taskId]
   );
 
   const runCliPrompt = useCallback(
@@ -500,17 +511,9 @@ export function useTaskDetail({
   // ===========================================================================
   // Section 5: Prompt
   // ===========================================================================
-  const baseTaskPrompt = useMemo(() => task?.prompt || initialPrompt || '', [initialPrompt, task?.prompt]);
   const taskPrompt = useMemo(() => task?.prompt || initialPrompt, [initialPrompt, task?.prompt]);
 
-  const buildCliPrompt = useCallback(
-    (nodePrompt?: string) => {
-      const trimmedNode = nodePrompt?.trim();
-      if (trimmedNode) return baseTaskPrompt ? `${baseTaskPrompt}\n\n${trimmedNode}` : trimmedNode;
-      return baseTaskPrompt;
-    },
-    [baseTaskPrompt]
-  );
+  const buildCliPrompt = useCallback((nodePrompt?: string) => nodePrompt?.trim() || '', []);
 
   // ===========================================================================
   // Section 6: Tool Selection
@@ -655,6 +658,7 @@ export function useTaskDetail({
   const [currentTaskNode, setCurrentTaskNode] = useState<WorkflowReviewNode | null>(null);
   const [workflowNodes, setWorkflowNodes] = useState<WorkflowNode[]>([]);
   const [workflowCurrentNode, setWorkflowCurrentNode] = useState<WorkflowCurrentNode | null>(null);
+  const [selectedWorkflowNodeId, setSelectedWorkflowNodeId] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
   const workflowPrevTaskIdRef = useRef<string | undefined>(undefined);
@@ -666,6 +670,7 @@ export function useTaskDetail({
         setCurrentTaskNode(null);
         setWorkflowNodes([]);
         setWorkflowCurrentNode(null);
+        setSelectedWorkflowNodeId(null);
         lastAutoRunTaskNodeIdRef.current = null;
       }
       workflowPrevTaskIdRef.current = taskId;
@@ -701,6 +706,41 @@ export function useTaskDetail({
     [taskId, workflowNodes]
   );
 
+  const resolveCurrentNodePrompt = useCallback(async () => {
+    if (!taskId) return '';
+
+    try {
+      const currentNode = (await db.getCurrentTaskNode(taskId)) as {
+        id?: string;
+        node_order?: number;
+        prompt?: string;
+      } | null;
+
+      if (currentNode?.prompt?.trim()) {
+        return currentNode.prompt.trim();
+      }
+
+      if (currentNode?.id) {
+        const resolved = await resolveTaskNodePrompt(
+          currentNode.id,
+          typeof currentNode.node_order === 'number' ? Math.max(currentNode.node_order - 1, 0) : null
+        );
+        if (resolved.trim()) {
+          return resolved.trim();
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    if (workflowCurrentNode?.id) {
+      const fallback = await resolveTaskNodePrompt(workflowCurrentNode.id, workflowCurrentNode.index);
+      return fallback.trim();
+    }
+
+    return '';
+  }, [resolveTaskNodePrompt, taskId, workflowCurrentNode?.id, workflowCurrentNode?.index]);
+
   const loadWorkflowStatus = useCallback(async () => {
     if (!taskId) return;
     try {
@@ -710,12 +750,16 @@ export function useTaskDetail({
         status: PipelineDisplayStatus;
         name?: string;
         prompt?: string;
+        session_id?: string | null;
+        cli_tool_id?: string | null;
+        agent_tool_config_id?: string | null;
       }>;
       if (!nodes.length) {
         if (isMountedRef.current) {
           setCurrentTaskNode(null);
           setWorkflowNodes([]);
           setWorkflowCurrentNode(null);
+          setSelectedWorkflowNodeId(null);
         }
         return;
       }
@@ -749,17 +793,35 @@ export function useTaskDetail({
           status: currentNode.status,
           index: currentNodeIndex
         });
+        const hasSelectedNode =
+          selectedWorkflowNodeId !== null &&
+          sortedNodes.some((node) => node.id === selectedWorkflowNodeId);
+        if (!hasSelectedNode) {
+          setSelectedWorkflowNodeId(currentNode.id);
+        }
         if (useCliSession) setPipelineStageIndex(currentNodeIndex);
       }
 
-      if (currentNode.status === 'in_review') {
-        const nodeTemplate = pipelineTemplate?.nodes.find((n) => n.id === currentNode.id);
-        const fallbackName = `${t.task.stageLabel} ${currentNodeIndex + 1}`;
+      const selectedReviewNode = selectedWorkflowNodeId
+        ? sortedNodes.find((node) => node.id === selectedWorkflowNodeId && node.status === 'in_review')
+        : null;
+
+      const runtimeReviewNode =
+        currentNode.status === 'in_review'
+          ? sortedNodes.find((node) => node.id === currentNode.id) ?? null
+          : null;
+
+      const reviewNode = selectedReviewNode ?? runtimeReviewNode;
+
+      if (reviewNode) {
+        const reviewNodeIndex = Math.max(0, sortedNodes.findIndex((node) => node.id === reviewNode.id));
+        const nodeTemplate = pipelineTemplate?.nodes.find((n) => n.id === reviewNode.id);
+        const fallbackName = `${t.task.stageLabel} ${reviewNodeIndex + 1}`;
         if (isMountedRef.current) {
           setCurrentTaskNode({
-            id: currentNode.id,
-            name: currentNode.name || nodeTemplate?.name || fallbackName,
-            status: currentNode.status as 'in_review'
+            id: reviewNode.id,
+            name: reviewNode.name || nodeTemplate?.name || fallbackName,
+            status: 'in_review'
           });
         }
         return;
@@ -769,7 +831,7 @@ export function useTaskDetail({
     } catch {
       /* ignore */
     }
-  }, [pipelineTemplate, taskId, t.task.stageLabel, useCliSession]);
+  }, [pipelineTemplate, selectedWorkflowNodeId, taskId, t.task.stageLabel, useCliSession]);
 
   // Assign to ref for use in handleCliStatusChange
   loadWorkflowStatusRef.current = loadWorkflowStatus;
@@ -840,6 +902,7 @@ export function useTaskDetail({
     await db.approveTaskNode(currentTaskNode.id);
     await loadCurrentNodeRuntime();
     setCurrentTaskNode(null);
+    setSelectedWorkflowNodeId(null);
     lastAutoRunTaskNodeIdRef.current = null;
     await loadWorkflowStatus();
     if (taskId) {
@@ -849,6 +912,11 @@ export function useTaskDetail({
       } catch { /* ignore */ }
     }
   }, [currentTaskNode, loadCurrentNodeRuntime, loadWorkflowStatus, taskId]);
+
+
+  const handleSelectWorkflowNode = useCallback((nodeId: string) => {
+    setSelectedWorkflowNodeId(nodeId);
+  }, []);
 
   // ===========================================================================
   // Section 11: Pipeline Actions
@@ -869,9 +937,11 @@ export function useTaskDetail({
       }
 
       const resolvedPrompt = await resolveTaskNodePrompt(stage.id, index);
-      const baseNodePrompt = resolvedPrompt || stage.prompt || '';
-      const nodePrompt = approvalNote ? `${baseNodePrompt}\n\n${t.task.pipelineApprovalNotePrefix}: ${approvalNote}` : baseNodePrompt;
-      const prompt = buildCliPrompt(nodePrompt);
+      const stagePrompt = buildCliPrompt(resolvedPrompt);
+      if (!stagePrompt) return;
+      const prompt = approvalNote
+        ? `${stagePrompt}\n\n${t.task.pipelineApprovalNotePrefix}: ${approvalNote}`
+        : stagePrompt;
 
       setPipelineStageIndex(index);
       setPipelineStatus('running');
@@ -993,11 +1063,9 @@ export function useTaskDetail({
         if (currentNode.session_id) return;
       } catch { if (!active) return; }
 
-      const templateNode = pipelineTemplate?.nodes?.find((n) => n.id === workflowCurrentNode.id);
       const resolvedPrompt = await resolveTaskNodePrompt(workflowCurrentNode.id, workflowCurrentNode.index);
-      const nodePrompt = resolvedPrompt || templateNode?.prompt || '';
-      const prompt = buildCliPrompt(nodePrompt);
-      if (!prompt.trim() || !active) return;
+      const prompt = buildCliPrompt(resolvedPrompt);
+      if (!prompt || !active) return;
 
       lastAutoRunTaskNodeIdRef.current = workflowCurrentNode.id;
       const newSessionId = await appendCliUserLog(prompt);
@@ -1005,7 +1073,7 @@ export function useTaskDetail({
     };
     void run();
     return () => { active = false; };
-  }, [appendCliUserLog, buildCliPrompt, cliStatus, currentNodeRuntime.sessionId, pipelineTemplate, resolveTaskNodePrompt, runCliPrompt, useCliSession, workflowCurrentNode]);
+  }, [appendCliUserLog, buildCliPrompt, cliStatus, currentNodeRuntime.sessionId, resolveTaskNodePrompt, runCliPrompt, useCliSession, workflowCurrentNode]);
 
   // ===========================================================================
   // Section 12: Artifacts
@@ -1145,14 +1213,6 @@ export function useTaskDetail({
 
   const displayTitle = task?.title || task?.prompt || initialPrompt;
 
-  const cliToolName = useMemo(() => {
-    if (!currentNodeRuntime.cliToolId) return null;
-    const match = cliTools.find((tool) => tool.id === currentNodeRuntime.cliToolId);
-    return match?.displayName || match?.name || currentNodeRuntime.cliToolId;
-  }, [cliTools, currentNodeRuntime.cliToolId]);
-
-  const cliToolLabel = cliToolName || t.task.detailCli || 'CLI';
-
   const startDisabled = useMemo(() => {
     if (!taskId) return true;
     if (task?.task_mode === 'workflow') {
@@ -1227,6 +1287,144 @@ export function useTaskDetail({
     return [];
   }, [pipelineTemplate?.nodes, workflowNodes]);
 
+  const selectedWorkflowNode = useMemo(() => {
+    if (task?.task_mode !== 'workflow') return null;
+    const sortedNodes = [...workflowNodes].sort((a, b) => a.node_order - b.node_order);
+    if (!sortedNodes.length) return null;
+
+    const fallbackNodeId = workflowCurrentNode?.id ?? currentTaskNode?.id ?? sortedNodes[0]?.id ?? null;
+    const targetNodeId = selectedWorkflowNodeId ?? fallbackNodeId;
+    if (!targetNodeId) return null;
+
+    return sortedNodes.find((node) => node.id === targetNodeId) ?? sortedNodes[0];
+  }, [currentTaskNode?.id, selectedWorkflowNodeId, task?.task_mode, workflowCurrentNode?.id, workflowNodes]);
+
+  const selectedWorkflowNodeIsDone = useMemo(
+    () => Boolean(task?.task_mode === 'workflow' && selectedWorkflowNode?.status === 'done'),
+    [selectedWorkflowNode?.status, task?.task_mode]
+  );
+
+  const runtimeWorkflowNode = useMemo(() => {
+    if (task?.task_mode !== 'workflow') return null;
+
+    const sortedNodes = [...workflowNodes].sort((a, b) => a.node_order - b.node_order);
+    if (!sortedNodes.length) return null;
+
+    const runtimeNodeId = workflowCurrentNode?.id ?? currentTaskNode?.id ?? null;
+    if (!runtimeNodeId) return sortedNodes[0] ?? null;
+
+    return sortedNodes.find((node) => node.id === runtimeNodeId) ?? sortedNodes[0] ?? null;
+  }, [currentTaskNode?.id, task?.task_mode, workflowCurrentNode?.id, workflowNodes]);
+
+  const executionTaskNodeId = useMemo(() => {
+    if (task?.task_mode === 'workflow') {
+      return runtimeWorkflowNode?.id ?? workflowCurrentNode?.id ?? currentTaskNode?.id ?? currentNodeRuntime.taskNodeId ?? null;
+    }
+    return currentNodeRuntime.taskNodeId ?? currentTaskNode?.id ?? null;
+  }, [
+    currentNodeRuntime.taskNodeId,
+    currentTaskNode?.id,
+    runtimeWorkflowNode?.id,
+    task?.task_mode,
+    workflowCurrentNode?.id
+  ]);
+
+  const executionLogTaskNodeId = useMemo(() => {
+    if (task?.task_mode === 'workflow') {
+      return selectedWorkflowNode?.id ?? executionTaskNodeId ?? null;
+    }
+    return executionTaskNodeId;
+  }, [executionTaskNodeId, selectedWorkflowNode?.id, task?.task_mode]);
+
+  const executionLogSource = useMemo(() => {
+    if (task?.task_mode !== 'workflow') return 'session' as const;
+    if (!executionTaskNodeId || !executionLogTaskNodeId) return 'session' as const;
+    return executionLogTaskNodeId === executionTaskNodeId ? ('session' as const) : ('file' as const);
+  }, [executionLogTaskNodeId, executionTaskNodeId, task?.task_mode]);
+
+  const executionSessionId = useMemo(() => {
+    if (task?.task_mode !== 'workflow') {
+      return currentNodeRuntime.sessionId || '';
+    }
+
+    if (!executionTaskNodeId) return '';
+
+    if (runtimeWorkflowNode?.session_id) {
+      return runtimeWorkflowNode.session_id;
+    }
+
+    const runtimeMatchesExecutionNode = currentNodeRuntime.taskNodeId === executionTaskNodeId;
+    return runtimeMatchesExecutionNode ? (currentNodeRuntime.sessionId || '') : '';
+  }, [
+    currentNodeRuntime.sessionId,
+    currentNodeRuntime.taskNodeId,
+    executionTaskNodeId,
+    runtimeWorkflowNode?.session_id,
+    task?.task_mode
+  ]);
+
+  const executionCliToolId = useMemo(() => {
+    if (task?.task_mode !== 'workflow') {
+      return currentNodeRuntime.cliToolId || '';
+    }
+    return runtimeWorkflowNode?.cli_tool_id || currentNodeRuntime.cliToolId || '';
+  }, [currentNodeRuntime.cliToolId, runtimeWorkflowNode?.cli_tool_id, task?.task_mode]);
+
+  const executionAgentToolConfigId = useMemo(() => {
+    if (task?.task_mode !== 'workflow') {
+      return currentNodeRuntime.agentToolConfigId ?? null;
+    }
+    return runtimeWorkflowNode?.agent_tool_config_id ?? currentNodeRuntime.agentToolConfigId ?? null;
+  }, [
+    currentNodeRuntime.agentToolConfigId,
+    runtimeWorkflowNode?.agent_tool_config_id,
+    task?.task_mode
+  ]);
+
+  const executionLogToolId = useMemo(() => {
+    if (task?.task_mode !== 'workflow') {
+      return executionCliToolId;
+    }
+
+    return selectedWorkflowNode?.cli_tool_id || executionCliToolId || currentNodeRuntime.cliToolId || '';
+  }, [
+    currentNodeRuntime.cliToolId,
+    executionCliToolId,
+    selectedWorkflowNode?.cli_tool_id,
+    task?.task_mode
+  ]);
+
+  const useCliSessionPanel = useMemo(() => {
+    if (task?.task_mode === 'workflow') {
+      return Boolean(executionLogToolId || executionCliToolId || currentNodeRuntime.cliToolId);
+    }
+    return useCliSession;
+  }, [
+    currentNodeRuntime.cliToolId,
+    executionCliToolId,
+    executionLogToolId,
+    task?.task_mode,
+    useCliSession
+  ]);
+
+  const isTaskDone = task?.status === 'done';
+
+  const replyDisabled = Boolean(isTaskDone || selectedWorkflowNodeIsDone);
+
+  const replyPlaceholder = useMemo(() => {
+    if (isTaskDone) return '任务已结束';
+    if (selectedWorkflowNodeIsDone) return '当前节点已结束，请切换到进行中的节点继续提问';
+    return '有疑问，继续问我…';
+  }, [isTaskDone, selectedWorkflowNodeIsDone]);
+
+  const cliToolName = useMemo(() => {
+    if (!executionLogToolId) return null;
+    const match = cliTools.find((tool) => tool.id === executionLogToolId);
+    return match?.displayName || match?.name || executionLogToolId;
+  }, [cliTools, executionLogToolId]);
+
+  const cliToolLabel = cliToolName || t.task.detailCli || 'CLI';
+
   const metaRows = useMemo<TaskMetaRow[]>(
     () => [
       {
@@ -1255,6 +1453,8 @@ export function useTaskDetail({
       if ((text.trim() || (messageAttachments && messageAttachments.length > 0)) && taskId) {
         if (!useCliSession && isRunning) return;
         if (useCliSession) {
+          if (task?.task_mode === 'workflow' && selectedWorkflowNode?.status === 'done') return;
+
           const content = text.trim();
           let sessionId: string | null = null;
           if (content) {
@@ -1293,7 +1493,7 @@ export function useTaskDetail({
         await continueConversation(text.trim(), messageAttachments, workingDir || undefined);
       }
     },
-    [activeTaskId, appendCliSystemLog, appendCliUserLog, continueConversation, isRunning, loadMessages, pipelineStatus, pipelineTemplate, runCliPrompt, setMessages, setTask, startNextPipelineStage, t.common.errors.serverNotRunning, task?.status, taskId, useCliSession, workingDir]
+    [activeTaskId, appendCliSystemLog, appendCliUserLog, continueConversation, isRunning, loadMessages, pipelineStatus, pipelineTemplate, runCliPrompt, selectedWorkflowNode?.status, setMessages, setTask, startNextPipelineStage, t.common.errors.serverNotRunning, task?.status, task?.task_mode, taskId, useCliSession, workingDir]
   );
 
   const handleStartTask = useCallback(async () => {
@@ -1317,17 +1517,12 @@ export function useTaskDetail({
     if (useCliSession) {
       try {
         if (!cliSessionRef.current) throw new Error('CLI session not initialized');
-        let prompt = task?.prompt || initialPrompt;
-        if (workflowCurrentNode) {
-          const nodePrompt = await resolveTaskNodePrompt(workflowCurrentNode?.id, workflowCurrentNode?.index ?? 0);
-          const composed = buildCliPrompt(nodePrompt);
-          if (composed.trim()) prompt = composed;
-        }
+        const prompt = buildCliPrompt(await resolveCurrentNodePrompt());
         let sessionId: string | null = null;
         if (prompt) {
           sessionId = await appendCliUserLog(prompt);
         }
-        await runCliPrompt(prompt, sessionId);
+        await runCliPrompt(prompt || undefined, sessionId);
       } catch {
         await appendCliSystemLog(t.common.errors.serverNotRunning || 'CLI session is not running.');
       }
@@ -1340,7 +1535,7 @@ export function useTaskDetail({
     const pendingAttachments = initialAttachmentsRef.current;
     initialAttachmentsRef.current = undefined;
     await runAgent(task?.prompt || initialPrompt, taskId, sessionInfo, pendingAttachments, workingDir || undefined);
-  }, [appendCliSystemLog, appendCliUserLog, buildCliPrompt, currentNodeRuntime.sessionId, initialPrompt, initialAttachmentsRef, isRunning, markStartedOnce, pipelineStatus, pipelineTemplate, resolveTaskNodePrompt, runAgent, runCliPrompt, setTask, startPipelineStage, t.common.errors.serverNotRunning, task?.prompt, task?.task_mode, taskId, useCliSession, workingDir, workflowCurrentNode]);
+  }, [appendCliSystemLog, appendCliUserLog, buildCliPrompt, currentNodeRuntime.sessionId, initialPrompt, initialAttachmentsRef, isRunning, markStartedOnce, pipelineStatus, pipelineTemplate, resolveCurrentNodePrompt, runAgent, runCliPrompt, setTask, startPipelineStage, t.common.errors.serverNotRunning, task?.prompt, task?.task_mode, taskId, useCliSession, workingDir]);
 
   const handleApproveCliTask = useCallback(async () => {
     if (!taskId) return;
@@ -1386,7 +1581,7 @@ export function useTaskDetail({
     return isRunning;
   }, [cliStatus, isRunning, useCliSession]);
 
-  const agentToolConfigId = currentNodeRuntime.agentToolConfigId ?? null;
+  const agentToolConfigId = executionAgentToolConfigId;
 
   // ===========================================================================
   // Return
@@ -1397,6 +1592,7 @@ export function useTaskDetail({
     setTask,
     isLoading,
     useCliSession,
+    useCliSessionPanel,
     agentToolConfigId,
 
     // CLI Tools
@@ -1423,6 +1619,12 @@ export function useTaskDetail({
     cliSessionRef,
     handleCliStatusChange,
     currentNodeRuntime,
+    executionSessionId,
+    executionTaskNodeId,
+    executionLogTaskNodeId,
+    executionLogSource,
+    executionLogToolId,
+    executionCliToolId,
 
     // Prompt
     taskPrompt,
@@ -1448,6 +1650,8 @@ export function useTaskDetail({
     currentTaskNode,
     workflowNodes,
     workflowCurrentNode,
+    selectedWorkflowNodeId: selectedWorkflowNode?.id ?? null,
+    handleSelectWorkflowNode,
     handleApproveTaskNode,
 
     // Artifacts
@@ -1477,6 +1681,8 @@ export function useTaskDetail({
     handleApproveCliTask,
     handleStopExecution,
     replyIsRunning,
+    replyDisabled,
+    replyPlaceholder,
     isCliTaskReviewPending,
   };
 }

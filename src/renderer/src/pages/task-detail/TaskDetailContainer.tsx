@@ -75,8 +75,6 @@ export function TaskDetailContainer() {
   const handleAction = detail.isCliTaskReviewPending
     ? detail.handleApproveCliTask
     : detail.handleStartTask;
-  const cliSessionId = detail.currentNodeRuntime.sessionId || '';
-  const cliToolId = detail.currentNodeRuntime.cliToolId || '';
 
   return (
     <ToolSelectionContext.Provider value={detail.toolSelectionValue}>
@@ -121,6 +119,8 @@ export function TaskDetailContainer() {
                   nodes={detail.workflowNodesForDisplay}
                   templateNodeMap={detail.workflowTemplateNodeMap}
                   currentTaskNode={detail.currentTaskNode}
+                  selectedNodeId={detail.selectedWorkflowNodeId}
+                  onSelectNode={detail.handleSelectWorkflowNode}
                   onApproveCurrent={detail.handleApproveTaskNode}
                 />
               )}
@@ -129,7 +129,7 @@ export function TaskDetailContainer() {
                 t={t}
                 isLoading={detail.isLoading}
                 pipelineBanner={detail.pipelineBanner}
-                useCliSession={detail.useCliSession}
+                useCliSession={detail.useCliSessionPanel}
                 cliStatusInfo={detail.cliStatusInfo}
                 cliToolLabel={detail.cliToolLabel}
                 messages={messages}
@@ -138,8 +138,12 @@ export function TaskDetailContainer() {
                 onRejectPlan={rejectPlan}
                 isRunning={isRunning}
                 taskId={taskId ?? null}
-                sessionId={cliSessionId}
-                toolId={cliToolId}
+                taskNodeId={detail.executionTaskNodeId}
+                logTaskNodeId={detail.executionLogTaskNodeId}
+                logSource={detail.executionLogSource}
+                logToolId={detail.executionLogToolId}
+                sessionId={detail.executionSessionId}
+                toolId={detail.executionCliToolId}
                 configId={detail.agentToolConfigId}
                 workingDir={detail.workingDir}
                 prompt={detail.taskPrompt}
@@ -152,6 +156,8 @@ export function TaskDetailContainer() {
               <ReplyCard
                 t={t}
                 isRunning={detail.replyIsRunning}
+                disabled={detail.replyDisabled}
+                placeholder={detail.replyPlaceholder}
                 onStop={detail.handleStopExecution}
                 onSubmit={detail.handleReply}
               />

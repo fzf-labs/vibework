@@ -168,8 +168,15 @@ export class CliSessionService extends EventEmitter {
       throw new Error(`Unsupported CLI tool: ${toolId}`)
     }
 
-    const taskNode = taskNodeId ? this.databaseService.getTaskNode(taskNodeId) : null
-    const resolvedTaskId = taskId ?? taskNode?.task_id
+    const explicitTaskNode = taskNodeId ? this.databaseService.getTaskNode(taskNodeId) : null
+    let resolvedTaskId = taskId ?? explicitTaskNode?.task_id
+    const taskNode =
+      explicitTaskNode ??
+      (resolvedTaskId ? this.databaseService.getCurrentTaskNode(resolvedTaskId) : null)
+    if (!resolvedTaskId && taskNode) {
+      resolvedTaskId = taskNode.task_id
+    }
+    const resolvedTaskNodeId = taskNode?.id
 
     const baseConfig = this.configService.getConfig(toolId)
     const normalizedBase: Record<string, unknown> = { ...baseConfig }
@@ -243,14 +250,15 @@ export class CliSessionService extends EventEmitter {
 
     const pendingMsgStore = this.pendingMsgStores.get(sessionId)
     const msgStore =
-      pendingMsgStore ?? new MsgStoreService(undefined, resolvedTaskId, sessionId, projectId)
+      pendingMsgStore ??
+      new MsgStoreService(undefined, resolvedTaskId, sessionId, projectId, resolvedTaskNodeId)
 
     const handle = await adapter.startSession({
       sessionId,
       toolId,
       workdir,
       taskId: resolvedTaskId,
-      taskNodeId,
+      taskNodeId: resolvedTaskNodeId,
       projectId,
       prompt: resolvedPrompt,
       env: mergedEnv,
@@ -266,12 +274,12 @@ export class CliSessionService extends EventEmitter {
       workdir,
       startTime: new Date(),
       taskId: resolvedTaskId,
-      taskNodeId,
+      taskNodeId: resolvedTaskNodeId,
       projectId
     })
 
-    if (taskNodeId) {
-      this.databaseService.updateTaskNodeSession(taskNodeId, sessionId)
+    if (resolvedTaskNodeId) {
+      this.databaseService.updateTaskNodeSession(resolvedTaskNodeId, sessionId)
     }
 
     if (pendingMsgStore) {
@@ -403,18 +411,24 @@ export class CliSessionService extends EventEmitter {
     return msgStore.subscribe(callback)
   }
 
-  getSessionLogHistory(sessionId?: string | null, taskId?: string | null): LogMsg[] {
+  getSessionLogHistory(
+    sessionId?: string | null,
+    taskId?: string | null,
+    taskNodeId?: string | null
+  ): LogMsg[] {
     const msgStore = sessionId ? this.getSessionMsgStore(sessionId) : undefined
     if (msgStore) {
       return msgStore.getHistory()
     }
-    if (taskId) {
-      return MsgStoreService.loadFromFile(taskId)
+
+    if (!taskId) {
+      return []
     }
-    if (sessionId) {
-      return MsgStoreService.loadFromFile(sessionId)
-    }
-    return []
+
+    const task = this.databaseService.getTask(taskId)
+    const resolvedTaskNodeId = taskNodeId ?? this.databaseService.getCurrentTaskNode(taskId)?.id ?? null
+
+    return MsgStoreService.loadFromFile(taskId, resolvedTaskNodeId, task?.project_id)
   }
 
   getToolConfig(toolId: string): Record<string, unknown> {
@@ -426,8 +440,8 @@ export class CliSessionService extends EventEmitter {
     this.configService.saveConfig(toolId, { ...current, ...updates })
   }
 
-  getSessionOutput(sessionId: string, taskId?: string | null): string[] {
-    const history = this.getSessionLogHistory(sessionId, taskId)
+  getSessionOutput(sessionId: string, taskId?: string | null, taskNodeId?: string | null): string[] {
+    const history = this.getSessionLogHistory(sessionId, taskId, taskNodeId)
     return history.filter((msg) => msg.type === 'stdout').map((msg) => (msg as { content: string }).content)
   }
 

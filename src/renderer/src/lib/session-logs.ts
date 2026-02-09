@@ -5,6 +5,7 @@ export interface SessionLogEntry {
   id?: string
   type: 'stdout' | 'stderr' | 'normalized' | 'finished'
   task_id: string
+  task_node_id?: string
   session_id: string
   created_at: string
   schema_version?: string
@@ -16,17 +17,21 @@ export interface SessionLogEntry {
 
 export async function getSessionLogPath(
   taskId: string,
+  taskNodeId?: string | null,
   projectId?: string | null
 ): Promise<string> {
   const root = await getDataRootDir()
   const projectKey = projectId?.trim() || 'project'
+  if (taskNodeId) {
+    return `${root}/data/sessions/${projectKey}/${taskId}/${taskNodeId}.jsonl`
+  }
   return `${root}/data/sessions/${projectKey}/${taskId}.jsonl`
 }
 
-export async function ensureSessionDir(projectId?: string | null): Promise<string> {
+export async function ensureSessionDir(taskId: string, projectId?: string | null): Promise<string> {
   const root = await getDataRootDir()
   const projectKey = projectId?.trim() || 'project'
-  const dir = `${root}/data/sessions/${projectKey}`
+  const dir = `${root}/data/sessions/${projectKey}/${taskId}`
   try {
     const exists = await fs.exists(dir)
     if (!exists) {
@@ -41,19 +46,21 @@ export async function ensureSessionDir(projectId?: string | null): Promise<strin
 export async function appendSessionLog(
   taskId: string,
   entry: SessionLogEntry,
-  projectId?: string | null
+  projectId?: string | null,
+  taskNodeId?: string | null
 ): Promise<void> {
-  await ensureSessionDir(projectId)
-  const logPath = await getSessionLogPath(taskId, projectId)
+  await ensureSessionDir(taskId, projectId)
+  const logPath = await getSessionLogPath(taskId, taskNodeId, projectId)
   const line = JSON.stringify(entry) + '\n'
   await fs.appendTextFile(logPath, line)
 }
 
 export async function readSessionLogs(
   taskId: string,
-  projectId?: string | null
+  projectId?: string | null,
+  taskNodeId?: string | null
 ): Promise<SessionLogEntry[]> {
-  const logPath = await getSessionLogPath(taskId, projectId)
+  const logPath = await getSessionLogPath(taskId, taskNodeId, projectId)
   const exists = await fs.exists(logPath)
   if (!exists) {
     return []

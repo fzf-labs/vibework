@@ -16,6 +16,7 @@ export class MsgStoreService extends EventEmitter {
   private totalBytes = 0
   private config: MsgStoreConfig
   private _taskId: string | null = null
+  private _taskNodeId: string | null = null
   private _sessionId: string | null = null
   private logFilePath: string | null = null
   private pendingWrites: string[] = []
@@ -31,24 +32,45 @@ export class MsgStoreService extends EventEmitter {
     config?: Partial<MsgStoreConfig>,
     taskId?: string,
     sessionId?: string,
-    projectId?: string | null
+    projectId?: string | null,
+    taskNodeId?: string
   ) {
     super()
     this.config = { ...DEFAULT_CONFIG, ...config }
     if (taskId) {
       this._taskId = taskId
     }
+    if (taskNodeId) {
+      this._taskNodeId = taskNodeId
+    }
     if (sessionId) {
       this._sessionId = sessionId
     }
-    const logKey = taskId || sessionId
-    if (logKey) {
-      const appPaths = getAppPaths()
+
+    const appPaths = getAppPaths()
+
+    if (this._taskId) {
+      const taskDir = appPaths.getTaskDataDir(this._taskId, projectId)
+      if (!existsSync(taskDir)) {
+        mkdirSync(taskDir, { recursive: true })
+      }
+
+      if (!this._taskNodeId) {
+        console.warn('[MsgStore] taskNodeId missing for task-scoped log store, skipping persistence')
+        return
+      }
+
+      this.logFilePath = appPaths.getTaskNodeMessagesFile(this._taskId, this._taskNodeId, projectId)
+      this.loadExistingHistory()
+      return
+    }
+
+    if (this._sessionId) {
       const projectDir = appPaths.getProjectSessionsDir(projectId)
       if (!existsSync(projectDir)) {
         mkdirSync(projectDir, { recursive: true })
       }
-      this.logFilePath = appPaths.getTaskMessagesFile(logKey, projectId)
+      this.logFilePath = appPaths.getTaskMessagesFile(this._sessionId, projectId)
       this.loadExistingHistory()
     }
   }
@@ -90,7 +112,12 @@ export class MsgStoreService extends EventEmitter {
       if (!content) return
       const lines = content.split('\n').filter((line) => line.length > 0)
       for (const line of lines) {
-        const msg = this.parsePersistedLine(line, this._taskId ?? undefined, this._sessionId ?? undefined)
+        const msg = this.parsePersistedLine(
+          line,
+          this._taskId ?? undefined,
+          this._sessionId ?? undefined,
+          this._taskNodeId ?? undefined
+        )
         if (msg) this.addToHistory(msg)
       }
     } catch (error) {
@@ -206,6 +233,7 @@ export class MsgStoreService extends EventEmitter {
     const base = {
       id: normalizedInput.id ?? newUlid(),
       task_id: taskId,
+      task_node_id: normalizedInput.task_node_id ?? this._taskNodeId ?? undefined,
       session_id: sessionId,
       created_at: createdAt,
       schema_version: normalizedInput.schema_version ?? 'v1',
@@ -238,7 +266,8 @@ export class MsgStoreService extends EventEmitter {
   private parsePersistedLine(
     line: string,
     taskId?: string,
-    sessionId?: string
+    sessionId?: string,
+    taskNodeId?: string
   ): LogMsg | null {
     if (!line) return null
     const trimmed = line.trim()
@@ -266,6 +295,7 @@ export class MsgStoreService extends EventEmitter {
       content: line,
       timestamp: now,
       task_id: taskId ?? 'unknown',
+      task_node_id: taskNodeId,
       session_id: sessionId ?? 'unknown',
       created_at: new Date(now).toISOString(),
       schema_version: 'v1'
@@ -338,12 +368,30 @@ export class MsgStoreService extends EventEmitter {
   /**
    * 从文件加载历史日志（静态方法）
    */
-  static loadFromFile(taskId: string, projectId?: string | null): LogMsg[] {
+  static loadFromFile(
+    taskId: string,
+    taskNodeId?: string | null,
+    projectId?: string | null
+  ): LogMsg[] {
+    if (!taskNodeId) {
+      return []
+    }
+
     const appPaths = getAppPaths()
     const candidatePaths: string[] = []
 
+    const pushCandidate = (path: string): void => {
+      if (!candidatePaths.includes(path)) {
+        candidatePaths.push(path)
+      }
+    }
+
+    const addProjectCandidate = (projectKey: string): void => {
+      pushCandidate(appPaths.getTaskNodeMessagesFile(taskId, taskNodeId, projectKey))
+    }
+
     if (projectId !== undefined) {
-      candidatePaths.push(appPaths.getTaskMessagesFile(taskId, projectId))
+      addProjectCandidate(projectId || 'project')
     }
 
     if (!projectId) {
@@ -352,9 +400,7 @@ export class MsgStoreService extends EventEmitter {
         const entries = readdirSync(sessionsDir, { withFileTypes: true })
         for (const entry of entries) {
           if (!entry.isDirectory()) continue
-          candidatePaths.push(
-            appPaths.getTaskMessagesFile(taskId, entry.name)
-          )
+          addProjectCandidate(entry.name)
         }
       } catch {
         // ignore directory scan errors
@@ -397,6 +443,7 @@ export class MsgStoreService extends EventEmitter {
             content: line,
             timestamp: now,
             task_id: taskId,
+            task_node_id: taskNodeId ?? undefined,
             session_id: 'unknown',
             created_at: new Date(now).toISOString(),
             schema_version: 'v1'

@@ -317,7 +317,7 @@ export interface IpcContracts {
 
   'logStream:subscribe': IpcContract<[string], { success: boolean; error?: string }>
   'logStream:unsubscribe': IpcContract<[string], { success: boolean; error?: string }>
-  'logStream:getHistory': IpcContract<[string, (string | null)?], unknown[]>
+  'logStream:getHistory': IpcContract<[string, (string | null)?, (string | null)?], unknown[]>
 
   'cliTools:getAll': IpcContract<[], unknown[]>
   'cliTools:detect': IpcContract<[string], unknown>

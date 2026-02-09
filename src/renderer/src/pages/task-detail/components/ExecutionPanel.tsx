@@ -21,6 +21,10 @@ interface ExecutionPanelProps {
   onRejectPlan: () => void;
   isRunning: boolean;
   taskId?: string | null;
+  taskNodeId?: string | null;
+  logTaskNodeId?: string | null;
+  logSource?: 'session' | 'file';
+  logToolId?: string | null;
   sessionId: string;
   toolId: string;
   configId?: string | null;
@@ -45,6 +49,10 @@ export function ExecutionPanel({
   onRejectPlan,
   isRunning,
   taskId,
+  taskNodeId,
+  logTaskNodeId,
+  logSource = 'session',
+  logToolId,
   sessionId,
   toolId,
   configId,
@@ -102,6 +110,10 @@ export function ExecutionPanel({
                     ref={cliSessionRef}
                     sessionId={sessionId}
                     taskId={taskId}
+                    taskNodeId={taskNodeId}
+                    logTaskNodeId={logTaskNodeId}
+                    logSource={logSource}
+                    logToolId={logToolId}
                     toolId={toolId}
                     configId={configId}
                     workdir={workingDir}

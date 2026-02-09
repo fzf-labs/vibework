@@ -124,9 +124,13 @@ export const registerCliSessionIpc = ({
 
   handle(
     IPC_CHANNELS.logStream.getHistory,
-    [v.string(), v.optional(v.nullable(v.string({ allowEmpty: true })))],
-    (_, taskId, sessionId) => {
-      return cliSessionService.getSessionLogHistory(sessionId ?? null, taskId)
+    [
+      v.string(),
+      v.optional(v.nullable(v.string({ allowEmpty: true }))),
+      v.optional(v.nullable(v.string({ allowEmpty: true })))
+    ],
+    (_, taskId, sessionId, taskNodeId) => {
+      return cliSessionService.getSessionLogHistory(sessionId ?? null, taskId, taskNodeId ?? null)
     }
   )
 }
