@@ -4,6 +4,12 @@ export { PlanApproval } from './PlanApproval';
 export { QuestionInput } from './QuestionInput';
 export { TaskList } from './TaskList';
 export { CreateTaskDialog } from './CreateTaskDialog';
+export { TaskCreateMenu } from './TaskCreateMenu';
+export type {
+  TaskMode,
+  TaskMenuCliToolInfo,
+  TaskMenuWorkflowTemplate,
+} from './TaskCreateMenu';
 export { TaskMetadataPanel } from './TaskMetadataPanel';
 export { RightPanel } from './RightPanel';
 export { WorkflowProgressBar } from './WorkflowProgressBar';

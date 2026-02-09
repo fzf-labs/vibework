@@ -8,7 +8,7 @@
 
 1. 用最少核心实体表达任务执行。
 2. 统一 `conversation` 与 `workflow` 的运行路径。
-3. 节点状态保留 5 个：`todo/in_progress/in_review/done/cancelled`。
+3. 任务状态与节点状态统一为 4 个：`todo/in_progress/in_review/done`。
 4. 每个任务在数据库层保证"同一时刻最多一个执行中节点"。
 
 ---
@@ -80,9 +80,8 @@ WHERE id = ?;
 
 与旧方案的关键差异：
 - **移除 `node_kind`**：该字段与 `tasks.task_mode` 完全冗余，需要时通过 JOIN 获取。
-- **新增 `review_reason`**：区分"成功待审批"、"异常待处理"、"审批驳回"三种 `in_review` 子状态。
+- **移除 `continue_on_error`**：异常时统一停止等待人工处理，不再支持跳过出错节点继续执行。
 - **新增 `result_summary`**：存储成功执行的结果摘要。
-- **新增 `cancelled` 状态**：支持取消/跳过节点。
 
 ```sql
 CREATE TABLE IF NOT EXISTS task_nodes (
@@ -100,17 +99,9 @@ CREATE TABLE IF NOT EXISTS task_nodes (
   agent_tool_config_id TEXT,
 
   requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
-  continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
 
   status TEXT NOT NULL DEFAULT 'todo'
-    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
-
-  review_reason TEXT
-    CHECK (
-      (status = 'in_review' AND review_reason IN ('approval', 'error', 'rejected'))
-      OR
-      (status <> 'in_review' AND review_reason IS NULL)
-    ),
+    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done')),
 
   session_id TEXT,
   result_summary TEXT,
@@ -145,15 +136,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress
 - `task_nodes` 同时承担"节点定义"和"节点执行结果"。
 - `node_order` 保证任务内顺序执行语义。
 - **移除 `node_kind`**：节点类型由 `tasks.task_mode` 决定，无需在每个节点上冗余存储。
-- **`review_reason`**：当 `status = 'in_review'` 时必填，用于区分三种子状态：
-  - `approval`：执行成功，等待人工审批
-  - `error`：执行异常，等待人工处理
-  - `rejected`：审批驳回，等待修正后重跑
+- **移除 `continue_on_error`**：异常时统一停止等待人工处理，简化状态流转。
 - **`result_summary`**：存储成功执行的结果摘要（可选），便于在列表页快速展示。
 - **`cli_tool_id` CHECK 约束**：枚举当前支持的 CLI 工具 ID，防止脏数据。
-- **`cancelled` 状态**：用于用户主动取消或跳过节点。
-
-> `review_reason` 与 `status` 的关系由 CHECK 约束强制保证。
+- **`in_review` 子状态区分**：通过 `error_message` 是否为空隐式判断——`error_message IS NOT NULL` 表示异常待处理，否则表示成功待审批。
 
 ---
 
@@ -163,17 +149,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress
 
 合法状态转换：
 
-| 当前状态 | 目标状态 | 触发条件 | `review_reason` |
-|---|---|---|---|
-| `todo` | `in_progress` | 调度器启动节点 | — |
-| `todo` | `cancelled` | 用户跳过节点 | — |
-| `in_progress` | `done` | 执行成功 且 `requires_approval=0` | — |
-| `in_progress` | `in_review` | 执行成功 且 `requires_approval=1` | `approval` |
-| `in_progress` | `in_review` | 执行异常 | `error` |
-| `in_progress` | `cancelled` | 用户取消执行中节点 | — |
-| `in_review` | `done` | 审批通过 | 清空 |
-| `in_review` | `in_review` | 审批驳回 | 更新为 `rejected` |
-| `in_review` | `todo` | 重置节点（用于重跑） | 清空 |
+| 当前状态 | 目标状态 | 触发条件 |
+|---|---|---|
+| `todo` | `in_progress` | 调度器启动节点 |
+| `in_progress` | `done` | 执行成功 且 `requires_approval=0` |
+| `in_progress` | `in_review` | 执行成功 且 `requires_approval=1` |
+| `in_progress` | `in_review` | 执行异常 |
+| `in_review` | `done` | 审批通过 |
+| `in_review` | `todo` | 重置节点（用于重跑） |
+| `done` | `todo` | 手动重置已完成节点（用于重跑） |
 
 > 约定：任何非法转换应在 Service 层抛出错误。
 
@@ -182,7 +166,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress
 ```sql
 UPDATE task_nodes SET
   status = 'todo',
-  review_reason = NULL,
   session_id = NULL,
   result_summary = NULL,
   error_message = NULL,
@@ -191,12 +174,12 @@ UPDATE task_nodes SET
   started_at = NULL,
   completed_at = NULL,
   updated_at = ?
-WHERE id = ? AND status = 'in_review';
+WHERE id = ? AND status IN ('in_review', 'done');
 ```
 
 ### 4.2 Task 状态聚合（`tasks.status`）
 
-`tasks.status` 同样支持 5 个值：`todo/in_progress/in_review/done/cancelled`。
+`tasks.status` 同样只支持 4 个值：`todo/in_progress/in_review/done`。
 
 聚合规则（按优先级从高到低）：
 
@@ -205,10 +188,8 @@ WHERE id = ? AND status = 'in_review';
 | 1 | 任一节点为 `in_progress` | `in_progress` |
 | 2 | 无 `in_progress`，任一节点为 `in_review` | `in_review` |
 | 3 | 存在 `done` + 存在 `todo`（无 `in_progress`/`in_review`） | `in_progress` |
-| 4 | 全部节点为 `done` 或 `cancelled`（至少一个 `done`） | `done` |
-| 5 | 全部节点为 `cancelled` | `cancelled` |
-| 6 | 全部节点为 `todo` | `todo` |
-| 7 | 存在 `todo` + `cancelled`（无 `done`/`in_progress`/`in_review`） | `todo` |
+| 4 | 全部节点为 `done` | `done` |
+| 5 | 全部节点为 `todo` | `todo` |
 
 聚合 SQL：
 
@@ -222,23 +203,31 @@ SELECT
     WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) > 0
          AND SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) > 0
       THEN 'in_progress'
-    WHEN SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) > 0
-      THEN 'done'
-    WHEN SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) = COUNT(*)
+    WHEN SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) = COUNT(*)
          AND COUNT(*) > 0
-      THEN 'cancelled'
+      THEN 'done'
     WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) = COUNT(*)
          AND COUNT(*) > 0
-      THEN 'todo'
-    WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) > 0
-         AND SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) > 0
-         AND SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) = 0
       THEN 'todo'
     ELSE 'todo'
   END AS task_status
 FROM task_nodes
 WHERE task_id = ?;
 ```
+
+### 4.3 对话模式 / 工作流模式状态机对齐
+
+- 两种模式都复用 **同一套 Node 状态机**（见 4.1）。
+- 两种模式都复用 **同一套 Task 聚合规则**（见 4.2）。
+
+对齐规则：
+
+| 模式 | Node 编排 | Task 状态来源 | 关键行为 |
+|---|---|---|---|
+| `conversation` | 固定 1 个节点 | 该节点状态的一一映射 | `todo -> in_progress -> (in_review) -> done` |
+| `workflow` | N 个有序节点 | N 个节点按 4.2 聚合 | 节点逐个推进；中间出现 `in_review` 时任务进入 `in_review` |
+
+> `conversation` 被视作“单节点 workflow”，状态推进逻辑完全一致，不再区分两套状态机。
 
 ---
 
@@ -258,7 +247,7 @@ WHERE task_id = ?;
 #### workflow
 
 1. 创建 `tasks`（`task_mode=workflow`）。
-2. 按模板节点快照插入 N 条 `task_nodes`（包含 `node_order/prompt/审批/容错/工具配置`）。
+2. 按模板节点快照插入 N 条 `task_nodes`（包含 `node_order/prompt/审批/工具配置`）。
 
 > 约定：`conversation` 本质是"单节点 workflow"，创建后与 workflow 使用同一套调度、审批、完成逻辑。
 
@@ -290,44 +279,36 @@ LIMIT 1;
 
 1. 按 `requires_approval` 更新 `task_nodes.status`：
    - `requires_approval=0`：`in_progress -> done`
-   - `requires_approval=1`：`in_progress -> in_review`，`review_reason='approval'`
+   - `requires_approval=1`：`in_progress -> in_review`
 2. 回填 `result_summary/cost/duration/completed_at/updated_at`
 3. 若当前节点变为 `done`，可继续调度下一 `todo` 节点
 4. 聚合更新 `tasks` 的 `status/cost/duration/completed_at`
 
 执行异常：
 
-1. 设置 `task_nodes.status = 'in_review'`，`review_reason = 'error'`
-2. 回填 `error_message/completed_at/updated_at`
-3. 若 `continue_on_error=1`：允许继续调度下一 `todo` 节点（当前异常节点仍保持 `in_review`）
-4. 若 `continue_on_error=0`：停止在当前节点，等待人工处理
-5. 聚合更新 `tasks` 的 `status/cost/duration`
+1. 设置 `task_nodes.status = 'in_review'`
+2. 回填 `error_message/cost/duration/completed_at/updated_at`
+3. 停止在当前节点，等待人工处理
+4. 聚合更新 `tasks` 的 `status/cost/duration`
 
 ### 5.4 审批流程
 
-审批通过：
-
-1. `UPDATE task_nodes SET status='done', review_reason=NULL, updated_at=? WHERE id=? AND status='in_review'`
+1. `UPDATE task_nodes SET status='done', error_message=NULL, updated_at=? WHERE id=? AND status='in_review'`
 2. 继续调度下一 `todo` 节点
 3. 聚合更新 `tasks`
 
-审批驳回：
-
-1. `UPDATE task_nodes SET review_reason='rejected', error_message=?, updated_at=? WHERE id=? AND status='in_review'`
-2. 节点保持 `in_review`，等待用户决定重跑或跳过
-
 ### 5.5 重跑节点
 
-1. 校验节点当前状态为 `in_review`
+1. 校验节点当前状态为 `in_review` 或 `done`
 2. 清空执行相关字段，重置为 `todo`（见 4.1 重置 SQL）
 3. 聚合更新 `tasks.status`
 4. 调度器可重新拾取该节点
 
-### 5.6 取消/跳过节点
+### 5.6 手动停止执行
 
-1. 校验节点当前状态为 `todo` 或 `in_progress`
-2. 若 `in_progress`：先停止关联的 CLI session
-3. `UPDATE task_nodes SET status='cancelled', completed_at=?, updated_at=? WHERE id=?`
+1. 校验节点当前状态为 `in_progress`
+2. 停止关联的 CLI session
+3. `UPDATE task_nodes SET status='in_review', error_message='stopped_by_user', completed_at=?, updated_at=? WHERE id=?`
 4. 聚合更新 `tasks.status`
 
 ---
@@ -339,7 +320,9 @@ LIMIT 1;
 ```sql
 SELECT
   SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS finished,
-  SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+  SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) AS running,
+  SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) AS reviewing,
+  SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) AS pending,
   COUNT(*) AS total
 FROM task_nodes
 WHERE task_id = ?;
@@ -409,9 +392,8 @@ ORDER BY node_order ASC;
 | `db:getCurrentTaskNode` | `taskId` | 获取当前活跃节点 |
 | `db:getTaskNodesByStatus` | `taskId, status` | 按状态筛选节点 |
 | `db:approveTaskNode` | `nodeId` | 审批通过节点 |
-| `db:rejectTaskNode` | `nodeId, reason` | 审批驳回节点 |
 | `db:retryTaskNode` | `nodeId` | 重置节点为 todo（重跑） |
-| `db:cancelTaskNode` | `nodeId` | 取消/跳过节点 |
+| `db:stopTaskNodeExecution` | `nodeId, reason` | 停止执行中的节点（进入 in_review） |
 | `task:startExecution` | `taskId` | 启动任务执行 |
 | `task:stopExecution` | `taskId` | 停止任务执行 |
 
@@ -494,9 +476,8 @@ interface SessionCompletionEvent {
 | `completeTaskNode(nodeId, result)` | 节点执行完成 |
 | `markTaskNodeErrorReview(nodeId, error)` | 节点执行异常并置为 in_review |
 | `approveTaskNode(nodeId)` | 审批通过 |
-| `rejectTaskNode(nodeId, reason)` | 审批驳回 |
 | `retryTaskNode(nodeId)` | 重置节点为 todo |
-| `cancelTaskNode(nodeId)` | 取消/跳过节点 |
+| `stopTaskNodeExecution(nodeId, reason)` | 停止执行中的节点并置为 in_review |
 | `syncTaskStatus(taskId)` | 聚合更新 task 状态和指标 |
 
 ### 10.3 状态推进原则
@@ -633,7 +614,6 @@ CREATE TABLE IF NOT EXISTS workflow_template_nodes (
   cli_tool_id TEXT,
   agent_tool_config_id TEXT,
   requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
-  continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE,
@@ -653,7 +633,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   prompt TEXT NOT NULL,
 
   status TEXT NOT NULL DEFAULT 'todo'
-    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
+    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done')),
   task_mode TEXT NOT NULL DEFAULT 'conversation'
     CHECK (task_mode IN ('conversation', 'workflow')),
 
@@ -710,17 +690,9 @@ CREATE TABLE IF NOT EXISTS task_nodes (
   agent_tool_config_id TEXT,
 
   requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
-  continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
 
   status TEXT NOT NULL DEFAULT 'todo'
-    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
-
-  review_reason TEXT
-    CHECK (
-      (status = 'in_review' AND review_reason IN ('approval', 'error', 'rejected'))
-      OR
-      (status <> 'in_review' AND review_reason IS NULL)
-    ),
+    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done')),
 
   session_id TEXT,
   result_summary TEXT,
