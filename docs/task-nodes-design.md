@@ -156,26 +156,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_task_nodes_single_in_progress
 | `in_progress` | `in_review` | 执行成功 且 `requires_approval=1` |
 | `in_progress` | `in_review` | 执行异常 |
 | `in_review` | `done` | 审批通过 |
-| `in_review` | `todo` | 重置节点（用于重跑） |
-| `done` | `todo` | 手动重置已完成节点（用于重跑） |
+| `in_review` | `in_progress` | 用户触发重新执行 |
 
 > 约定：任何非法转换应在 Service 层抛出错误。
-
-重置节点（重跑）时需同时清空执行相关字段：
-
-```sql
-UPDATE task_nodes SET
-  status = 'todo',
-  session_id = NULL,
-  result_summary = NULL,
-  error_message = NULL,
-  cost = NULL,
-  duration = NULL,
-  started_at = NULL,
-  completed_at = NULL,
-  updated_at = ?
-WHERE id = ? AND status IN ('in_review', 'done');
-```
 
 ### 4.2 Task 状态聚合（`tasks.status`）
 
@@ -297,12 +280,32 @@ LIMIT 1;
 2. 继续调度下一 `todo` 节点
 3. 聚合更新 `tasks`
 
-### 5.5 重跑节点
+### 5.5 重新执行
 
-1. 校验节点当前状态为 `in_review` 或 `done`
-2. 清空执行相关字段，重置为 `todo`（见 4.1 重置 SQL）
-3. 聚合更新 `tasks.status`
-4. 调度器可重新拾取该节点
+当节点处于 `in_review` 时，用户可通过 agent CLI 触发重新执行：
+
+1. 校验节点当前状态为 `in_review`，且同一任务无其他 `in_progress` 节点
+2. 清空上一次执行结果，更新状态：
+
+```sql
+UPDATE task_nodes SET
+  status = 'in_progress',
+  error_message = NULL,
+  result_summary = NULL,
+  cost = NULL,
+  duration = NULL,
+  completed_at = NULL,
+  session_id = ?,
+  updated_at = ?
+WHERE id = ? AND status = 'in_review';
+```
+
+3. 启动 CLI session：
+   - **conversation 节点**：读取原 `session_id`，通过 `--resume` 恢复已有会话
+   - **workflow 节点**：创建新 session，写入新的 `session_id`
+4. 聚合更新 `tasks.status`
+
+> 受 `uniq_task_nodes_single_in_progress` 唯一索引保护，同一任务不会出现两个 `in_progress` 节点。
 
 ### 5.6 手动停止执行
 
@@ -392,7 +395,7 @@ ORDER BY node_order ASC;
 | `db:getCurrentTaskNode` | `taskId` | 获取当前活跃节点 |
 | `db:getTaskNodesByStatus` | `taskId, status` | 按状态筛选节点 |
 | `db:approveTaskNode` | `nodeId` | 审批通过节点 |
-| `db:retryTaskNode` | `nodeId` | 重置节点为 todo（重跑） |
+| `db:rerunTaskNode` | `nodeId` | 重新执行 in_review 节点 |
 | `db:stopTaskNodeExecution` | `nodeId, reason` | 停止执行中的节点（进入 in_review） |
 | `task:startExecution` | `taskId` | 启动任务执行 |
 | `task:stopExecution` | `taskId` | 停止任务执行 |
@@ -436,6 +439,20 @@ interface SessionCompletionEvent {
 
 `TaskExecutionService` 根据 `exitCode` 判断成功/异常，执行对应的状态转换。
 
+### 8.4 CLI 执行状态存储
+
+Agent CLI 的执行状态分两层存储：
+
+- **持久层**（数据库 `task_nodes`）：
+  - `status = 'in_progress'` 表示 CLI 正在执行
+  - `session_id` 关联到具体的 CLI session
+  - 执行结果（`result_summary/error_message/cost/duration`）在 session 结束时回填
+- **运行时**（内存 `CliSessionService`）：
+  - CLI 进程句柄、stdout/stderr 流、实时日志
+  - session 的运行状态（running/exited）
+
+> 数据库不单独存储 CLI 进程的运行状态（running/exited），而是通过 `task_nodes.status = 'in_progress'` + `session_id` 隐式表达。应用重启时，`CliSessionService` 应扫描 `status = 'in_progress'` 的节点，将无对应进程的节点标记为 `in_review`（异常待处理）。
+
 ---
 
 ## 9. 日志系统集成
@@ -476,7 +493,7 @@ interface SessionCompletionEvent {
 | `completeTaskNode(nodeId, result)` | 节点执行完成 |
 | `markTaskNodeErrorReview(nodeId, error)` | 节点执行异常并置为 in_review |
 | `approveTaskNode(nodeId)` | 审批通过 |
-| `retryTaskNode(nodeId)` | 重置节点为 todo |
+| `rerunTaskNode(nodeId)` | 重新执行 in_review 节点 |
 | `stopTaskNodeExecution(nodeId, reason)` | 停止执行中的节点并置为 in_review |
 | `syncTaskStatus(taskId)` | 聚合更新 task 状态和指标 |
 
