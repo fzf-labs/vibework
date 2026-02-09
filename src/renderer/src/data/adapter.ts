@@ -132,16 +132,12 @@ export const db = {
     return window.api.database.approveTaskNode(nodeId) as Promise<unknown>
   },
 
-  rejectTaskNode: (nodeId: string, reason?: string): Promise<unknown> => {
-    return window.api.database.rejectTaskNode(nodeId, reason) as Promise<unknown>
+  rerunTaskNode: (nodeId: string): Promise<unknown> => {
+    return window.api.database.rerunTaskNode(nodeId) as Promise<unknown>
   },
 
-  retryTaskNode: (nodeId: string): Promise<unknown> => {
-    return window.api.database.retryTaskNode(nodeId) as Promise<unknown>
-  },
-
-  cancelTaskNode: (nodeId: string): Promise<unknown> => {
-    return window.api.database.cancelTaskNode(nodeId) as Promise<unknown>
+  stopTaskNodeExecution: (nodeId: string, reason?: string): Promise<unknown> => {
+    return window.api.database.stopTaskNodeExecution(nodeId, reason) as Promise<unknown>
   },
 
   startTaskExecution: (taskId: string): Promise<unknown> => {

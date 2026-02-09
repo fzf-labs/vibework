@@ -43,6 +43,11 @@ type ContentLike =
   | ContentLike[]
   | Record<string, unknown>;
 
+type TaskNodeLike = {
+  id: string;
+  status: 'todo' | 'in_progress' | 'in_review' | 'done';
+};
+
 function stringifyContentPart(part: ContentLike): string {
   if (part === null || part === undefined) return '';
   if (typeof part === 'string') return part;
@@ -1244,13 +1249,20 @@ export function useAgent(): UseAgentReturn {
       }
     }
 
-    // Keep task in in_progress status when stopped - user can continue
     setIsRunning(false);
     if (taskId) {
-      const taskNodeId = await getCurrentTaskNodeId(taskId);
-      await completeTaskNodeExecution(taskNodeId);
+      try {
+        const currentNode = (await db.getCurrentTaskNode(taskId)) as
+          | TaskNodeLike
+          | null;
+        if (currentNode?.id && currentNode.status === 'in_progress') {
+          await db.stopTaskNodeExecution(currentNode.id, 'stopped_by_user');
+        }
+      } catch (error) {
+        console.error('[useAgent] Failed to stop task node execution:', error);
+      }
     }
-  }, [taskId, completeTaskNodeExecution, getCurrentTaskNodeId]);
+  }, [taskId]);
 
   const clearMessages = useCallback(() => {
     // Stop polling if active

@@ -1,4 +1,4 @@
-import { Ban, CheckCircle, Clock, ListChecks } from 'lucide-react'
+import { CheckCircle, Clock, ListChecks } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,6 @@ export function WorkflowCard({
                 const isCompleted = nodeStatus === 'done'
                 const isRunningNode = nodeStatus === 'in_progress'
                 const isWaiting = nodeStatus === 'in_review'
-                const isCancelled = nodeStatus === 'cancelled'
                 const isTodo = nodeStatus === 'todo'
                 const templateNode = templateNodeMap.get(node.id)
                 const nodeName =
@@ -72,7 +71,6 @@ export function WorkflowCard({
                         isCompleted && 'bg-green-500/10 text-green-600',
                         isWaiting && 'bg-amber-500/10 text-amber-600',
                         isRunningNode && 'bg-blue-500/10 text-blue-600',
-                        isCancelled && 'bg-zinc-500/10 text-zinc-500',
                         isTodo && 'bg-muted/40 text-muted-foreground'
                       )}
                       title={nodePrompt}
@@ -82,7 +80,6 @@ export function WorkflowCard({
                         <span className="size-2 animate-pulse rounded-full bg-blue-500" />
                       )}
                       {isWaiting && <Clock className="size-3" />}
-                      {isCancelled && <Ban className="size-3" />}
                       {isTodo && (
                         <span className="size-2 rounded-full bg-muted-foreground/30" />
                       )}

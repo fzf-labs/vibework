@@ -17,7 +17,6 @@ export interface TaskNodeTemplateDraft {
   cliToolId: string;
   agentToolConfigId: string;
   requiresApproval: boolean;
-  continueOnError: boolean;
 }
 
 interface CLIToolInfo {
@@ -36,7 +35,6 @@ export interface WorkflowTemplateFormValues {
     cliToolId?: string;
     agentToolConfigId?: string;
     requiresApproval: boolean;
-    continueOnError: boolean;
   }>;
 }
 
@@ -54,7 +52,6 @@ const DEFAULT_NODE: TaskNodeTemplateDraft = {
   cliToolId: '',
   agentToolConfigId: '',
   requiresApproval: true,
-  continueOnError: false,
 };
 
 export function WorkflowTemplateDialog({
@@ -135,9 +132,11 @@ export function WorkflowTemplateDialog({
         initialValues.nodes.length > 0
           ? initialValues.nodes.map((node) => ({
               ...DEFAULT_NODE,
-              ...node,
+              name: node.name,
+              prompt: node.prompt,
               cliToolId: node.cliToolId || '',
               agentToolConfigId: node.agentToolConfigId || '',
+              requiresApproval: node.requiresApproval,
             }))
           : [{ ...DEFAULT_NODE }]
       );
@@ -178,7 +177,6 @@ export function WorkflowTemplateDialog({
           ? node.agentToolConfigId || undefined
           : undefined,
         requiresApproval: node.requiresApproval,
-        continueOnError: node.continueOnError,
       }))
       .filter((node) => node.prompt.length > 0);
 
@@ -386,23 +384,6 @@ export function WorkflowTemplateDialog({
                         }}
                       />
                       {t.task.createStageRequiresApproval}
-                    </label>
-                    <label className="flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        checked={node.continueOnError}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setTemplateNodes((prev) =>
-                            prev.map((item, idx) =>
-                              idx === index
-                                ? { ...item, continueOnError: checked }
-                                : item
-                            )
-                          );
-                        }}
-                      />
-                      {t.task.createStageContinueOnError}
                     </label>
                   </div>
                 </div>

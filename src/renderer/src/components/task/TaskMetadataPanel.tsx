@@ -6,7 +6,6 @@ import {
   Clock,
   Play,
   CheckCircle,
-  Ban,
   ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,11 +41,6 @@ const statusConfig: Record<
     icon: CheckCircle,
     label: 'Done',
     color: 'text-green-500 bg-green-500/10',
-  },
-  cancelled: {
-    icon: Ban,
-    label: 'Cancelled',
-    color: 'text-zinc-500 bg-zinc-500/10',
   },
 };
 

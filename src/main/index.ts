@@ -109,9 +109,6 @@ app.whenReady().then(async () => {
         return
       }
 
-      if (node.status === 'cancelled') {
-        mainWindow.webContents.send(IPC_EVENTS.taskNode.cancelled, payload)
-      }
     })
   )
 

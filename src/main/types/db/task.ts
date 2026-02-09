@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
 
 export interface DbTask {
   id: string

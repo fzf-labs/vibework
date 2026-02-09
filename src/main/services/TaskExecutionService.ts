@@ -7,7 +7,6 @@ interface CompleteNodeResult {
   cost?: number | null
   duration?: number | null
   sessionId?: string | null
-  manualConversationStop?: boolean
   allowConversationCompletion?: boolean
 }
 
@@ -39,45 +38,25 @@ export class TaskExecutionService {
   }
 
   stopTaskExecution(taskId: string): TaskNode | null {
-    const task = this.taskRepo.getTask(taskId)
-    if (!task) return null
-
-    let currentNode = this.taskNodeRepo.getCurrentTaskNode(taskId)
-    if (!currentNode) {
+    const runningNode = this.taskNodeRepo.getTaskNodesByStatus(taskId, 'in_progress')[0]
+    if (!runningNode) {
       this.syncTaskStatus(taskId)
       return null
     }
 
-    if (task.task_mode === 'conversation') {
-      if (currentNode.status === 'todo') {
-        currentNode = this.taskNodeRepo.startNode(currentNode.id) ?? currentNode
-      }
-
-      if (currentNode.status === 'in_progress') {
-        currentNode =
-          this.taskNodeRepo.completeNode({
-            node_id: currentNode.id,
-            status: 'done',
-            review_reason: null,
-            result_summary: currentNode.result_summary,
-            error_message: currentNode.error_message,
-            cost: currentNode.cost,
-            duration: currentNode.duration
-          }) ?? currentNode
-      } else if (currentNode.status === 'in_review') {
-        currentNode = this.taskNodeRepo.approveNode(currentNode.id) ?? currentNode
-      }
-
-      this.syncTaskStatus(taskId)
-      return currentNode
-    }
-
-    if (currentNode.status === 'todo' || currentNode.status === 'in_progress') {
-      currentNode = this.taskNodeRepo.cancelNode(currentNode.id) ?? currentNode
-    }
+    const updated = this.taskNodeRepo.stopNodeExecution(runningNode.id)
 
     this.syncTaskStatus(taskId)
-    return currentNode
+    return updated
+  }
+
+  stopTaskNodeExecution(nodeId: string, reason?: string): TaskNode | null {
+    const node = this.taskNodeRepo.getTaskNode(nodeId)
+    if (!node) return null
+
+    const updated = this.taskNodeRepo.stopNodeExecution(nodeId, reason ?? 'stopped_by_user')
+    this.syncTaskStatus(node.task_id)
+    return updated
   }
 
   completeTaskNode(nodeId: string, result: CompleteNodeResult = {}): TaskNode | null {
@@ -87,20 +66,18 @@ export class TaskExecutionService {
     const task = this.taskRepo.getTask(node.task_id)
     if (!task) return null
 
-    if (
-      task.task_mode === 'conversation' &&
-      !result.manualConversationStop &&
-      !result.allowConversationCompletion
-    ) {
-      // conversation 节点默认持续进行，仅显式 stopExecution 时结束
-      return node
-    }
+    const completionStatus: 'done' | 'in_review' =
+      task.task_mode === 'conversation'
+        ? result.allowConversationCompletion
+          ? 'done'
+          : 'in_review'
+        : node.requires_approval
+          ? 'in_review'
+          : 'done'
 
-    const requiresApproval = Boolean(node.requires_approval)
     const updated = this.taskNodeRepo.completeNode({
       node_id: nodeId,
-      status: requiresApproval ? 'in_review' : 'done',
-      review_reason: requiresApproval ? 'approval' : null,
+      status: completionStatus,
       result_summary: result.resultSummary ?? null,
       error_message: null,
       cost: result.cost ?? null,
@@ -122,10 +99,6 @@ export class TaskExecutionService {
 
     const updated = this.taskNodeRepo.markErrorReview(nodeId, error)
 
-    if (updated && Boolean(node.continue_on_error)) {
-      this.startNextTodoNode(node.task_id)
-    }
-
     this.syncTaskStatus(node.task_id)
     return updated
   }
@@ -143,29 +116,11 @@ export class TaskExecutionService {
     return updated
   }
 
-  rejectTaskNode(nodeId: string, reason?: string): TaskNode | null {
+  rerunTaskNode(nodeId: string): TaskNode | null {
     const node = this.taskNodeRepo.getTaskNode(nodeId)
     if (!node) return null
 
-    const updated = this.taskNodeRepo.rejectNode(nodeId, reason)
-    this.syncTaskStatus(node.task_id)
-    return updated
-  }
-
-  retryTaskNode(nodeId: string): TaskNode | null {
-    const node = this.taskNodeRepo.getTaskNode(nodeId)
-    if (!node) return null
-
-    const updated = this.taskNodeRepo.retryNode(nodeId)
-    this.syncTaskStatus(node.task_id)
-    return updated
-  }
-
-  cancelTaskNode(nodeId: string): TaskNode | null {
-    const node = this.taskNodeRepo.getTaskNode(nodeId)
-    if (!node) return null
-
-    const updated = this.taskNodeRepo.cancelNode(nodeId)
+    const updated = this.taskNodeRepo.rerunNode(nodeId)
     this.syncTaskStatus(node.task_id)
     return updated
   }

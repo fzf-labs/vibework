@@ -17,7 +17,6 @@ export interface DashboardSummary {
   in_progress: number
   in_review: number
   done: number
-  cancelled: number
 }
 
 export interface DashboardActivityItem {
@@ -30,14 +29,13 @@ export interface DashboardActivityItem {
   branchName?: string | null
 }
 
-const STATUS_VALUES: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'cancelled']
+const STATUS_VALUES: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done']
 
 const emptySummary: DashboardSummary = {
   todo: 0,
   in_progress: 0,
   in_review: 0,
-  done: 0,
-  cancelled: 0
+  done: 0
 }
 
 function normalizeStatus(value?: string | null): TaskStatus {

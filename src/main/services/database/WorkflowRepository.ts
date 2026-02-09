@@ -41,8 +41,8 @@ export class WorkflowRepository {
 
       const insertNode = this.db.prepare(`
         INSERT INTO workflow_template_nodes
-          (id, template_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id, requires_approval, continue_on_error, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, template_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id, requires_approval, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
 
       nodes.forEach((node) => {
@@ -55,7 +55,6 @@ export class WorkflowRepository {
           node.cli_tool_id ?? null,
           node.agent_tool_config_id ?? null,
           node.requires_approval ? 1 : 0,
-          node.continue_on_error ? 1 : 0,
           now,
           now
         )
@@ -111,8 +110,8 @@ export class WorkflowRepository {
       this.db.prepare('DELETE FROM workflow_template_nodes WHERE template_id = ?').run(input.id)
 
       const insertNode = this.db.prepare(
-        `INSERT INTO workflow_template_nodes (id, template_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id, requires_approval, continue_on_error, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO workflow_template_nodes (id, template_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id, requires_approval, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       input.nodes.forEach((node) => {
         insertNode.run(
@@ -124,7 +123,6 @@ export class WorkflowRepository {
           node.cli_tool_id ?? null,
           node.agent_tool_config_id ?? null,
           node.requires_approval ? 1 : 0,
-          node.continue_on_error ? 1 : 0,
           now,
           now
         )
@@ -183,8 +181,7 @@ export class WorkflowRepository {
         node_order: node.node_order,
         cli_tool_id: node.cli_tool_id ?? undefined,
         agent_tool_config_id: node.agent_tool_config_id ?? undefined,
-        requires_approval: node.requires_approval,
-        continue_on_error: node.continue_on_error
+        requires_approval: node.requires_approval
       }))
     })
   }
@@ -196,8 +193,7 @@ export class WorkflowRepository {
       .all(templateId) as TaskNodeTemplate[]
     return rows.map((node) => ({
       ...node,
-      requires_approval: Boolean(node.requires_approval),
-      continue_on_error: Boolean(node.continue_on_error)
+      requires_approval: Boolean(node.requires_approval)
     }))
   }
 }

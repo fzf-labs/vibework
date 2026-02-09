@@ -134,17 +134,11 @@ export class TaskRepository {
               WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) > 0
                    AND SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) > 0
                 THEN 'in_progress'
-              WHEN SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) > 0
-                THEN 'done'
-              WHEN SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) = COUNT(*)
+              WHEN SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) = COUNT(*)
                    AND COUNT(*) > 0
-                THEN 'cancelled'
+                THEN 'done'
               WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) = COUNT(*)
                    AND COUNT(*) > 0
-                THEN 'todo'
-              WHEN SUM(CASE WHEN status = 'todo' THEN 1 ELSE 0 END) > 0
-                   AND SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) > 0
-                   AND SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) = 0
                 THEN 'todo'
               ELSE 'todo'
             END AS task_status,

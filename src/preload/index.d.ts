@@ -233,7 +233,6 @@ interface NotificationAPI {
 interface TaskNodeAPI {
   onCompleted: (callback: (data: { id: string; name?: string; taskId: string }) => void) => () => void
   onReview: (callback: (data: { id: string; name?: string; taskId: string }) => void) => () => void
-  onCancelled: (callback: (data: { id: string; name?: string; taskId: string }) => void) => () => void
 }
 
 interface DatabaseAPI {
@@ -279,9 +278,8 @@ interface DatabaseAPI {
   ) => Promise<unknown>
   markTaskNodeErrorReview: (nodeId: string, error: string) => Promise<unknown>
   approveTaskNode: (nodeId: string) => Promise<unknown>
-  rejectTaskNode: (nodeId: string, reason?: string) => Promise<unknown>
-  retryTaskNode: (nodeId: string) => Promise<unknown>
-  cancelTaskNode: (nodeId: string) => Promise<unknown>
+  rerunTaskNode: (nodeId: string) => Promise<unknown>
+  stopTaskNodeExecution: (nodeId: string, reason?: string) => Promise<unknown>
 }
 
 interface FSAPI {

@@ -32,8 +32,8 @@ export const registerIpcHandlers = (deps: IpcDependencies): void => {
     ipcMain.handle(channel, wrapHandler(handler, validators))
   }
 
-  const taskStatusValues = ['todo', 'in_progress', 'in_review', 'done', 'cancelled'] as const
-  const taskNodeStatusValues = ['todo', 'in_progress', 'in_review', 'done', 'cancelled'] as const
+  const taskStatusValues = ['todo', 'in_progress', 'in_review', 'done'] as const
+  const taskNodeStatusValues = ['todo', 'in_progress', 'in_review', 'done'] as const
 
   const fileDataValidator: Validator<Uint8Array | string> = (value, name) => {
     if (typeof value === 'string') return value

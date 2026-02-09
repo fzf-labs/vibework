@@ -18,7 +18,6 @@ export interface DbTaskNodeTemplate {
   cli_tool_id: string | null
   agent_tool_config_id: string | null
   requires_approval: boolean
-  continue_on_error: boolean
   created_at: string
   updated_at: string
 }
@@ -30,7 +29,6 @@ export interface CreateTaskNodeTemplateInput {
   cli_tool_id?: string
   agent_tool_config_id?: string
   requires_approval?: boolean
-  continue_on_error?: boolean
 }
 
 export interface CreateWorkflowTemplateInput {

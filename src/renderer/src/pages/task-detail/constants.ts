@@ -1,4 +1,4 @@
-import { Ban, CheckCircle, Clock, Play } from 'lucide-react';
+import { CheckCircle, Clock, Play } from 'lucide-react';
 
 import type { PipelineDisplayStatus } from './types';
 
@@ -25,10 +25,5 @@ export const statusConfig: Record<
     icon: CheckCircle,
     label: 'Done',
     color: 'text-green-500 bg-green-500/10',
-  },
-  cancelled: {
-    icon: Ban,
-    label: 'Cancelled',
-    color: 'text-zinc-500 bg-zinc-500/10',
   },
 };

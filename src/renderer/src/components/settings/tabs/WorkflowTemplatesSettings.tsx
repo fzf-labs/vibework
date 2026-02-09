@@ -23,7 +23,6 @@ interface TaskNodeTemplate {
   cli_tool_id?: string | null;
   agent_tool_config_id?: string | null;
   requires_approval: boolean;
-  continue_on_error: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -47,7 +46,6 @@ const toNodeInputs = (values: WorkflowTemplateFormValues) =>
     cli_tool_id: node.cliToolId || undefined,
     agent_tool_config_id: node.agentToolConfigId || undefined,
     requires_approval: node.requiresApproval,
-    continue_on_error: node.continueOnError,
   }));
 
 export function WorkflowTemplatesSettings() {
@@ -207,10 +205,9 @@ export function WorkflowTemplatesSettings() {
                   cliToolId: node.cli_tool_id || '',
                   agentToolConfigId: node.agent_tool_config_id || '',
                   requiresApproval: node.requires_approval,
-                  continueOnError: node.continue_on_error,
                 })),
-              }
-            : null
+            }
+          : null
         }
         onSubmit={handleSubmit}
       />

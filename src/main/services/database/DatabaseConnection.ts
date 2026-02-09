@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 
-const TARGET_SCHEMA_VERSION = 2
+const TARGET_SCHEMA_VERSION = 3
 
 export class DatabaseConnection {
   private dbPath: string
@@ -118,7 +118,6 @@ export class DatabaseConnection {
         cli_tool_id TEXT,
         agent_tool_config_id TEXT,
         requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
-        continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE,
@@ -136,7 +135,7 @@ export class DatabaseConnection {
         prompt TEXT NOT NULL,
 
         status TEXT NOT NULL DEFAULT 'todo'
-          CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
+          CHECK (status IN ('todo', 'in_progress', 'in_review', 'done')),
         task_mode TEXT NOT NULL DEFAULT 'conversation'
           CHECK (task_mode IN ('conversation', 'workflow')),
 
@@ -173,22 +172,14 @@ export class DatabaseConnection {
         prompt TEXT NOT NULL,
         cli_tool_id TEXT
           CHECK (cli_tool_id IS NULL OR cli_tool_id IN (
-            'claude-code', 'cursor-agent', 'gemini-cli', 'codex', 'opencode'
+            'claude-code', 'cursor-agent', 'gemini-cli', 'codex', 'codex-cli', 'opencode'
           )),
         agent_tool_config_id TEXT,
 
         requires_approval INTEGER NOT NULL DEFAULT 0 CHECK (requires_approval IN (0, 1)),
-        continue_on_error INTEGER NOT NULL DEFAULT 0 CHECK (continue_on_error IN (0, 1)),
 
         status TEXT NOT NULL DEFAULT 'todo'
-          CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
-
-        review_reason TEXT
-          CHECK (
-            (status = 'in_review' AND review_reason IN ('approval', 'error', 'rejected'))
-            OR
-            (status <> 'in_review' AND review_reason IS NULL)
-          ),
+          CHECK (status IN ('todo', 'in_progress', 'in_review', 'done')),
 
         session_id TEXT,
         result_summary TEXT,

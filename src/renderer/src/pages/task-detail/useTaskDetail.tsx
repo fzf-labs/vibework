@@ -179,6 +179,16 @@ export function useTaskDetail({
     }
   }, [taskId])
 
+  const refreshTask = useCallback(async () => {
+    if (!taskId) return;
+    try {
+      const refreshedTask = await db.getTask(taskId);
+      if (refreshedTask) setTask(refreshedTask as Task);
+    } catch {
+      /* ignore */
+    }
+  }, [taskId]);
+
   useEffect(() => {
     async function initialize() {
       if (!taskId) { setIsLoading(false); return; }
@@ -406,17 +416,15 @@ export function useTaskDetail({
       if (status === 'running') {
         void markExecutionRunning();
       } else if (status === 'stopped') {
-        void markExecutionCompleted();
-        void loadWorkflowStatusRef.current();
         void (async () => {
-          try {
-            const refreshedTask = await db.getTask(taskId);
-            if (refreshedTask) setTask(refreshedTask as Task);
-          } catch { /* ignore */ }
+          await markExecutionCompleted();
+          await loadWorkflowStatusRef.current();
+          await loadCurrentNodeRuntime();
+          await refreshTask();
         })();
       }
     },
-    [markExecutionCompleted, markExecutionRunning, taskId]
+    [markExecutionCompleted, markExecutionRunning, loadCurrentNodeRuntime, refreshTask, taskId]
   );
 
   const runCliPrompt = useCallback(
@@ -593,7 +601,6 @@ export function useTaskDetail({
           name?: string;
           prompt?: string;
           requires_approval?: boolean | number;
-          continue_on_error?: boolean | number;
         }>;
         if (!nodes.length) {
           if (active) {
@@ -621,7 +628,6 @@ export function useTaskDetail({
               name: node.name || `${t.task.stageLabel} ${index + 1}`,
               prompt: node.prompt || '',
               requires_approval: Boolean(node.requires_approval),
-              continue_on_error: Boolean(node.continue_on_error),
               created_at: '',
               updated_at: ''
             }))
@@ -768,6 +774,29 @@ export function useTaskDetail({
   // Assign to ref for use in handleCliStatusChange
   loadWorkflowStatusRef.current = loadWorkflowStatus;
 
+  useEffect(() => {
+    if (!taskId) return;
+
+    const refreshByTaskNodeEvent = async (eventTaskId?: string) => {
+      if (!eventTaskId || eventTaskId !== taskId) return;
+      await loadCurrentNodeRuntime();
+      await loadWorkflowStatus();
+      await refreshTask();
+    };
+
+    const offCompleted = window.api?.taskNode?.onCompleted?.((data) => {
+      void refreshByTaskNodeEvent(data?.taskId);
+    });
+    const offReview = window.api?.taskNode?.onReview?.((data) => {
+      void refreshByTaskNodeEvent(data?.taskId);
+    });
+
+    return () => {
+      offCompleted?.();
+      offReview?.();
+    };
+  }, [taskId, loadCurrentNodeRuntime, loadWorkflowStatus, refreshTask]);
+
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, [taskId]);
 
   useEffect(() => {
@@ -778,6 +807,8 @@ export function useTaskDetail({
       await loadCurrentNodeRuntime();
       if (!active) return;
       await loadWorkflowStatus();
+      if (!active) return;
+      await refreshTask();
     })();
     const shouldPoll = isRunning || cliStatus === 'running';
     const interval = shouldPoll
@@ -785,10 +816,11 @@ export function useTaskDetail({
           if (!active) return;
           void loadCurrentNodeRuntime();
           void loadWorkflowStatus();
+          void refreshTask();
         }, 2000)
       : null;
     return () => { active = false; if (interval) clearInterval(interval); };
-  }, [taskId, loadCurrentNodeRuntime, loadWorkflowStatus, isRunning, cliStatus]);
+  }, [taskId, loadCurrentNodeRuntime, loadWorkflowStatus, refreshTask, isRunning, cliStatus]);
 
   useEffect(() => {
     if (!taskId || isRunning || cliStatus === 'running') return;
@@ -797,10 +829,11 @@ export function useTaskDetail({
       attempts++;
       void loadCurrentNodeRuntime();
       void loadWorkflowStatus();
+      void refreshTask();
       if (attempts >= 8) clearInterval(interval);
     }, 500);
     return () => clearInterval(interval);
-  }, [taskId, isRunning, cliStatus, loadCurrentNodeRuntime, loadWorkflowStatus]);
+  }, [taskId, isRunning, cliStatus, loadCurrentNodeRuntime, loadWorkflowStatus, refreshTask]);
 
   const handleApproveTaskNode = useCallback(async () => {
     if (!currentTaskNode) return;
@@ -831,7 +864,6 @@ export function useTaskDetail({
       const stage = pipelineTemplate.nodes?.[index];
       if (!stage) {
         setPipelineStatus('completed');
-        try { await db.updateTask(taskId, { status: 'done' }); } catch { /* ignore */ }
         await appendPipelineNotice(t.task.pipelineCompleted);
         return;
       }
@@ -844,7 +876,6 @@ export function useTaskDetail({
       setPipelineStageIndex(index);
       setPipelineStatus('running');
       setPipelineStageMessageStart(messages.length);
-      try { await db.updateTask(taskId, { status: 'in_progress' }); } catch { /* ignore */ }
 
       if (useCliSession) {
         try {
@@ -876,7 +907,7 @@ export function useTaskDetail({
   const normalizedTaskStatus = useMemo<PipelineDisplayStatus>(() => {
     const rawStatus = task?.status;
     if (!rawStatus) return 'todo';
-    if (['todo', 'in_progress', 'in_review', 'done', 'cancelled'].includes(rawStatus)) return rawStatus as PipelineDisplayStatus;
+    if (['todo', 'in_progress', 'in_review', 'done'].includes(rawStatus)) return rawStatus as PipelineDisplayStatus;
     return 'todo';
   }, [task?.status]);
 
@@ -920,7 +951,6 @@ export function useTaskDetail({
 
     if (outcome.type === 'result' && outcome.subtype === 'success') {
       setPipelineStatus('waiting_approval');
-      db.updateTask(taskId, { status: 'in_review' }).catch(() => {});
       appendPipelineNotice(t.task.pipelineStageCompleted.replace('{name}', stageName));
     } else {
       setPipelineStatus('failed');
@@ -1232,7 +1262,11 @@ export function useTaskDetail({
           }
           if (task?.status === 'in_review') {
             try {
-              const updatedTask = await db.updateTask(taskId, { status: 'in_progress' });
+              const reviewNode = (await db.getCurrentTaskNode(taskId)) as { id?: string; status?: string } | null;
+              if (reviewNode?.id && reviewNode.status === 'in_review') {
+                await db.rerunTaskNode(reviewNode.id);
+              }
+              const updatedTask = await db.getTask(taskId);
               if (updatedTask) setTask(updatedTask);
             } catch { /* ignore */ }
           }
@@ -1311,7 +1345,11 @@ export function useTaskDetail({
   const handleApproveCliTask = useCallback(async () => {
     if (!taskId) return;
     try {
-      const updatedTask = await db.updateTask(taskId, { status: 'done' });
+      const reviewNode = (await db.getCurrentTaskNode(taskId)) as { id?: string; status?: string } | null;
+      if (reviewNode?.id && reviewNode.status === 'in_review') {
+        await db.approveTaskNode(reviewNode.id);
+      }
+      const updatedTask = await db.getTask(taskId);
       if (updatedTask) setTask(updatedTask);
     } catch { /* ignore */ }
   }, [setTask, taskId]);

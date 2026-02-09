@@ -148,9 +148,8 @@ export const IPC_CHANNELS = {
     completeTaskNode: 'db:completeTaskNode',
     markTaskNodeErrorReview: 'db:markTaskNodeErrorReview',
     approveTaskNode: 'db:approveTaskNode',
-    rejectTaskNode: 'db:rejectTaskNode',
-    retryTaskNode: 'db:retryTaskNode',
-    cancelTaskNode: 'db:cancelTaskNode'
+    rerunTaskNode: 'db:rerunTaskNode',
+    stopTaskNodeExecution: 'db:stopTaskNodeExecution'
   },
   fs: {
     readFile: 'fs:readFile',
@@ -215,8 +214,7 @@ export const IPC_EVENTS = {
   },
   taskNode: {
     completed: 'taskNode:completed',
-    review: 'taskNode:review',
-    cancelled: 'taskNode:cancelled'
+    review: 'taskNode:review'
   }
 } as const
 
@@ -417,9 +415,8 @@ export interface IpcContracts {
   >
   'db:markTaskNodeErrorReview': IpcContract<[string, string], unknown>
   'db:approveTaskNode': IpcContract<[string], unknown>
-  'db:rejectTaskNode': IpcContract<[string, string?], unknown>
-  'db:retryTaskNode': IpcContract<[string], unknown>
-  'db:cancelTaskNode': IpcContract<[string], unknown>
+  'db:rerunTaskNode': IpcContract<[string], unknown>
+  'db:stopTaskNodeExecution': IpcContract<[string, string?], unknown>
 
   'fs:readFile': IpcContract<[string], Uint8Array>
   'fs:readTextFile': IpcContract<[string], string>

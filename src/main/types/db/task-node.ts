@@ -1,6 +1,4 @@
-export type TaskNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
-
-export type TaskNodeReviewReason = 'approval' | 'error' | 'rejected'
+export type TaskNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
 
 export interface DbTaskNode {
   id: string
@@ -11,9 +9,7 @@ export interface DbTaskNode {
   cli_tool_id: string | null
   agent_tool_config_id: string | null
   requires_approval: number
-  continue_on_error: number
   status: TaskNodeStatus
-  review_reason: TaskNodeReviewReason | null
   session_id: string | null
   result_summary: string | null
   error_message: string | null
@@ -34,13 +30,11 @@ export interface CreateTaskNodeInput {
   cli_tool_id?: string | null
   agent_tool_config_id?: string | null
   requires_approval?: boolean
-  continue_on_error?: boolean
 }
 
 export interface CompleteTaskNodeInput {
   node_id: string
   status: Extract<TaskNodeStatus, 'done' | 'in_review'>
-  review_reason?: TaskNodeReviewReason | null
   result_summary?: string | null
   error_message?: string | null
   cost?: number | null

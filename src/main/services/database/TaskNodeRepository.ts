@@ -35,8 +35,7 @@ export class TaskNodeRepository {
       prompt: input.prompt,
       cli_tool_id: input.cli_tool_id ?? null,
       agent_tool_config_id: input.agent_tool_config_id ?? null,
-      requires_approval: false,
-      continue_on_error: false
+      requires_approval: false
     })
   }
 
@@ -102,6 +101,19 @@ export class TaskNodeRepository {
       .all(taskId, status) as TaskNode[]
   }
 
+  getInProgressNodes(): TaskNode[] {
+    return this.db
+      .prepare(
+        `
+          SELECT *
+          FROM task_nodes
+          WHERE status = 'in_progress'
+          ORDER BY updated_at ASC
+        `
+      )
+      .all() as TaskNode[]
+  }
+
   getNextTodoNode(taskId: string): TaskNode | null {
     return (
       (this.db
@@ -133,7 +145,6 @@ export class TaskNodeRepository {
           UPDATE task_nodes
           SET
             status = 'in_progress',
-            review_reason = NULL,
             error_message = NULL,
             started_at = COALESCE(started_at, ?),
             session_id = COALESCE(?, session_id),
@@ -162,7 +173,6 @@ export class TaskNodeRepository {
           UPDATE task_nodes
           SET
             status = ?,
-            review_reason = ?,
             result_summary = ?,
             error_message = ?,
             cost = ?,
@@ -175,7 +185,6 @@ export class TaskNodeRepository {
       )
       .run(
         input.status,
-        input.review_reason ?? null,
         input.result_summary ?? null,
         input.error_message ?? null,
         input.cost ?? null,
@@ -204,7 +213,6 @@ export class TaskNodeRepository {
           UPDATE task_nodes
           SET
             status = 'in_review',
-            review_reason = 'error',
             error_message = ?,
             session_id = COALESCE(?, session_id),
             cost = COALESCE(?, cost),
@@ -228,7 +236,7 @@ export class TaskNodeRepository {
           UPDATE task_nodes
           SET
             status = 'done',
-            review_reason = NULL,
+            error_message = NULL,
             updated_at = ?
           WHERE id = ? AND status = 'in_review'
         `
@@ -239,7 +247,31 @@ export class TaskNodeRepository {
     return this.getTaskNode(nodeId)
   }
 
-  rejectNode(nodeId: string, reason?: string): TaskNode | null {
+  rerunNode(nodeId: string, sessionId?: string | null): TaskNode | null {
+    const now = new Date().toISOString()
+    const result = this.db
+      .prepare(
+        `
+          UPDATE task_nodes
+          SET
+            status = 'in_progress',
+            error_message = NULL,
+            result_summary = NULL,
+            cost = NULL,
+            duration = NULL,
+            completed_at = NULL,
+            session_id = COALESCE(?, session_id),
+            updated_at = ?
+          WHERE id = ? AND status = 'in_review'
+        `
+      )
+      .run(sessionId ?? null, now, nodeId)
+
+    if (result.changes === 0) return null
+    return this.getTaskNode(nodeId)
+  }
+
+  stopNodeExecution(nodeId: string, reason = 'stopped_by_user'): TaskNode | null {
     const now = new Date().toISOString()
     const result = this.db
       .prepare(
@@ -247,59 +279,13 @@ export class TaskNodeRepository {
           UPDATE task_nodes
           SET
             status = 'in_review',
-            review_reason = 'rejected',
-            error_message = COALESCE(?, error_message),
+            error_message = ?,
+            completed_at = ?,
             updated_at = ?
-          WHERE id = ? AND status = 'in_review'
+          WHERE id = ? AND status = 'in_progress'
         `
       )
-      .run(reason ?? null, now, nodeId)
-
-    if (result.changes === 0) return null
-    return this.getTaskNode(nodeId)
-  }
-
-  retryNode(nodeId: string): TaskNode | null {
-    const now = new Date().toISOString()
-    const result = this.db
-      .prepare(
-        `
-          UPDATE task_nodes
-          SET
-            status = 'todo',
-            review_reason = NULL,
-            session_id = NULL,
-            result_summary = NULL,
-            error_message = NULL,
-            cost = NULL,
-            duration = NULL,
-            started_at = NULL,
-            completed_at = NULL,
-            updated_at = ?
-          WHERE id = ? AND status = 'in_review'
-        `
-      )
-      .run(now, nodeId)
-
-    if (result.changes === 0) return null
-    return this.getTaskNode(nodeId)
-  }
-
-  cancelNode(nodeId: string): TaskNode | null {
-    const now = new Date().toISOString()
-    const result = this.db
-      .prepare(
-        `
-          UPDATE task_nodes
-          SET
-            status = 'cancelled',
-            review_reason = NULL,
-            completed_at = COALESCE(completed_at, ?),
-            updated_at = ?
-          WHERE id = ? AND status IN ('todo', 'in_progress')
-        `
-      )
-      .run(now, now, nodeId)
+      .run(reason, now, now, nodeId)
 
     if (result.changes === 0) return null
     return this.getTaskNode(nodeId)
@@ -352,9 +338,9 @@ export class TaskNodeRepository {
         `
           INSERT INTO task_nodes (
             id, task_id, node_order, name, prompt, cli_tool_id, agent_tool_config_id,
-            requires_approval, continue_on_error, status, created_at, updated_at
+            requires_approval, status, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'todo', ?, ?)
         `
       )
       .run(
@@ -366,7 +352,6 @@ export class TaskNodeRepository {
         input.cli_tool_id ?? null,
         input.agent_tool_config_id ?? null,
         input.requires_approval ? 1 : 0,
-        input.continue_on_error ? 1 : 0,
         now,
         now
       )
@@ -374,4 +359,3 @@ export class TaskNodeRepository {
     return nodeId
   }
 }
-

@@ -9,6 +9,9 @@ import { getAppPaths } from '../app/AppPaths'
 import type { CreateTaskOptions, TaskWithWorktree } from '../types/domain/task'
 import type { TaskStatus } from '../types/task'
 
+const TASK_STATUS_VALUES = ['todo', 'in_progress', 'in_review', 'done'] as const
+type TaskStatusValue = (typeof TASK_STATUS_VALUES)[number]
+
 export class TaskService {
   private static readonly DEFAULT_WORKTREE_PREFIX = 'VW-'
 
@@ -126,6 +129,9 @@ export class TaskService {
   }
 
   updateTaskStatus(id: string, status: TaskStatus): TaskWithWorktree | null {
+    if (!TASK_STATUS_VALUES.includes(status as TaskStatusValue)) {
+      throw new Error(`Unsupported task status: ${status}`)
+    }
     const task = this.db.updateTask(id, { status })
     return task ? this.mapTask(task) : null
   }

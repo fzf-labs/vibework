@@ -56,8 +56,8 @@ export interface IpcHelpers {
     action: string,
     targetPath: string
   ) => Promise<void>
-  taskStatusValues: readonly ['todo', 'in_progress', 'in_review', 'done', 'cancelled']
-  taskNodeStatusValues: readonly ['todo', 'in_progress', 'in_review', 'done', 'cancelled']
+  taskStatusValues: readonly ['todo', 'in_progress', 'in_review', 'done']
+  taskNodeStatusValues: readonly ['todo', 'in_progress', 'in_review', 'done']
 }
 
 export interface IpcModuleContext extends IpcDependencies, IpcHelpers {}

@@ -108,4 +108,13 @@ describe('TaskService workflow runtime fallback', () => {
       }
     )
   })
+
+  it('rejects unsupported task status updates', () => {
+    const { db, git } = createTaskServiceDeps()
+    const service = new TaskService(db as any, git as any)
+
+    expect(() => service.updateTaskStatus('task-1', 'cancelled' as any)).toThrow(
+      'Unsupported task status: cancelled'
+    )
+  })
 })

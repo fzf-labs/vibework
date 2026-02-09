@@ -164,16 +164,14 @@ export const registerDatabaseIpc = ({
   )
 
   handle(
-    IPC_CHANNELS.database.rejectTaskNode,
+    IPC_CHANNELS.database.rerunTaskNode,
+    [v.string()],
+    (_, nodeId) => databaseService.rerunTaskNode(nodeId)
+  )
+
+  handle(
+    IPC_CHANNELS.database.stopTaskNodeExecution,
     [v.string(), v.optional(v.string({ allowEmpty: true }))],
-    (_, nodeId, reason) => databaseService.rejectTaskNode(nodeId, reason || undefined)
-  )
-
-  handle(IPC_CHANNELS.database.retryTaskNode, [v.string()], (_, nodeId) =>
-    databaseService.retryTaskNode(nodeId)
-  )
-
-  handle(IPC_CHANNELS.database.cancelTaskNode, [v.string()], (_, nodeId) =>
-    databaseService.cancelTaskNode(nodeId)
+    (_, nodeId, reason) => databaseService.stopTaskNodeExecution(nodeId, reason || undefined)
   )
 }

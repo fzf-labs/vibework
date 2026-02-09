@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { DatabaseConnection } from '../../src/main/services/database/DatabaseConnection'
 
 describe('task nodes schema', () => {
-  it('migrates to schema v2 and creates unique in-progress index', () => {
+  it('migrates to schema v3 and creates unique in-progress index', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'vibework-task-nodes-'))
     const dbPath = join(tempDir, 'test.db')
 
@@ -26,7 +26,7 @@ describe('task nodes schema', () => {
     connection.initTables()
 
     const userVersion = Number(db.pragma('user_version', { simple: true }) ?? 0)
-    expect(userVersion).toBe(2)
+    expect(userVersion).toBe(3)
 
     const taskNodesTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='task_nodes'")

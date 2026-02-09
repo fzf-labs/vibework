@@ -22,6 +22,9 @@ import type {
   WorkflowTemplate
 } from '../types/workflow'
 
+const TASK_NODE_STATUS_VALUES = ['todo', 'in_progress', 'in_review', 'done'] as const
+type TaskNodeStatusValue = (typeof TASK_NODE_STATUS_VALUES)[number]
+
 export class DatabaseService {
   private db: Database.Database
   private connection: DatabaseConnection
@@ -139,8 +142,7 @@ export class DatabaseService {
         prompt: node.prompt,
         cli_tool_id: node.cli_tool_id ?? fallbackRuntime?.cliToolId ?? null,
         agent_tool_config_id: node.agent_tool_config_id ?? fallbackRuntime?.agentToolConfigId ?? null,
-        requires_approval: Boolean(node.requires_approval),
-        continue_on_error: Boolean(node.continue_on_error)
+        requires_approval: Boolean(node.requires_approval)
       }))
 
     const createdNodes = this.taskNodeRepo.createNodesFromTemplate(taskId, nodes)
@@ -177,7 +179,14 @@ export class DatabaseService {
   }
 
   getTaskNodesByStatus(taskId: string, status: TaskNodeStatus): TaskNode[] {
+    if (!TASK_NODE_STATUS_VALUES.includes(status as TaskNodeStatusValue)) {
+      throw new Error(`Unsupported task node status: ${status}`)
+    }
     return this.taskNodeRepo.getTaskNodesByStatus(taskId, status)
+  }
+
+  getInProgressTaskNodes(): TaskNode[] {
+    return this.taskNodeRepo.getInProgressNodes()
   }
 
   updateTaskNodeSession(nodeId: string, sessionId: string | null): TaskNode | null {
@@ -201,6 +210,12 @@ export class DatabaseService {
     return updated
   }
 
+  stopTaskNodeExecution(nodeId: string, reason?: string): TaskNode | null {
+    const updated = this.taskExecutionService.stopTaskNodeExecution(nodeId, reason)
+    if (updated) this.notifyTaskNodeStatusChange(updated)
+    return updated
+  }
+
   completeTaskNode(
     nodeId: string,
     result: {
@@ -208,7 +223,6 @@ export class DatabaseService {
       cost?: number | null
       duration?: number | null
       sessionId?: string | null
-      manualConversationStop?: boolean
       allowConversationCompletion?: boolean
     } = {}
   ): TaskNode | null {
@@ -229,20 +243,8 @@ export class DatabaseService {
     return updated
   }
 
-  rejectTaskNode(nodeId: string, reason?: string): TaskNode | null {
-    const updated = this.taskExecutionService.rejectTaskNode(nodeId, reason)
-    if (updated) this.notifyTaskNodeStatusChange(updated)
-    return updated
-  }
-
-  retryTaskNode(nodeId: string): TaskNode | null {
-    const updated = this.taskExecutionService.retryTaskNode(nodeId)
-    if (updated) this.notifyTaskNodeStatusChange(updated)
-    return updated
-  }
-
-  cancelTaskNode(nodeId: string): TaskNode | null {
-    const updated = this.taskExecutionService.cancelTaskNode(nodeId)
+  rerunTaskNode(nodeId: string): TaskNode | null {
+    const updated = this.taskExecutionService.rerunTaskNode(nodeId)
     if (updated) this.notifyTaskNodeStatusChange(updated)
     return updated
   }

@@ -208,11 +208,6 @@ const api = {
       const listener = (_: unknown, data: { id: string; name?: string; taskId: string }) => callback(data)
       ipcRenderer.on(IPC_EVENTS.taskNode.review, listener)
       return () => ipcRenderer.removeListener(IPC_EVENTS.taskNode.review, listener)
-    },
-    onCancelled: (callback: (data: { id: string; name?: string; taskId: string }) => void) => {
-      const listener = (_: unknown, data: { id: string; name?: string; taskId: string }) => callback(data)
-      ipcRenderer.on(IPC_EVENTS.taskNode.cancelled, listener)
-      return () => ipcRenderer.removeListener(IPC_EVENTS.taskNode.cancelled, listener)
     }
   },
   cliTools: {
@@ -345,10 +340,9 @@ const api = {
     markTaskNodeErrorReview: (nodeId: string, error: string) =>
       invoke(IPC_CHANNELS.database.markTaskNodeErrorReview, nodeId, error),
     approveTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.approveTaskNode, nodeId),
-    rejectTaskNode: (nodeId: string, reason?: string) =>
-      invoke(IPC_CHANNELS.database.rejectTaskNode, nodeId, reason),
-    retryTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.retryTaskNode, nodeId),
-    cancelTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.cancelTaskNode, nodeId)
+    rerunTaskNode: (nodeId: string) => invoke(IPC_CHANNELS.database.rerunTaskNode, nodeId),
+    stopTaskNodeExecution: (nodeId: string, reason?: string) =>
+      invoke(IPC_CHANNELS.database.stopTaskNodeExecution, nodeId, reason)
   },
   fs: {
     readFile: (path: string) => invoke(IPC_CHANNELS.fs.readFile, path),

@@ -42,6 +42,25 @@ const TOOL_CONFIG_ALLOWED_KEYS: Record<string, Set<string>> = {
     'additional_params',
     'env'
   ]),
+  'codex-cli': new Set([
+    'append_prompt',
+    'sandbox',
+    'ask_for_approval',
+    'oss',
+    'model',
+    'model_reasoning_effort',
+    'model_reasoning_summary',
+    'model_reasoning_summary_format',
+    'profile',
+    'base_instructions',
+    'include_apply_patch_tool',
+    'model_provider',
+    'compact_prompt',
+    'developer_instructions',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ]),
   'cursor-agent': new Set([
     'append_prompt',
     'api_key',
@@ -99,6 +118,10 @@ export class CliSessionService extends EventEmitter {
     this.registerAdapter(new GeminiCliAdapter())
     this.registerAdapter(new CodexCliAdapter())
     this.registerAdapter(new OpencodeAdapter())
+  }
+
+  init(): void {
+    this.reconcileInProgressNodes()
   }
 
   registerAdapter(adapter: CliAdapter): void {
@@ -406,6 +429,19 @@ export class CliSessionService extends EventEmitter {
   getSessionOutput(sessionId: string, taskId?: string | null): string[] {
     const history = this.getSessionLogHistory(sessionId, taskId)
     return history.filter((msg) => msg.type === 'stdout').map((msg) => (msg as { content: string }).content)
+  }
+
+  private reconcileInProgressNodes(): void {
+    const inProgressNodes = this.databaseService.getInProgressTaskNodes()
+    for (const node of inProgressNodes) {
+      const hasRunningSession = node.session_id ? this.sessions.has(node.session_id) : false
+      if (!hasRunningSession) {
+        this.databaseService.markTaskNodeErrorReview(
+          node.id,
+          node.error_message || 'session_not_running_after_restart'
+        )
+      }
+    }
   }
 
   dispose(): void {

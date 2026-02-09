@@ -12,7 +12,7 @@ export type TaskMetaRow = {
   visible: boolean
 }
 
-export type PipelineDisplayStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
+export type PipelineDisplayStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
 
 export const filterVisibleMetaRows = (rows: TaskMetaRow[]) =>
   rows.filter((row) => row.visible)
@@ -30,7 +30,6 @@ export type TaskNodeTemplate = {
   name: string
   prompt: string
   requires_approval: boolean
-  continue_on_error: boolean
   created_at: string
   updated_at: string
 }

@@ -73,8 +73,7 @@ describe('TaskExecutionService', () => {
         node_order: 1,
         name: 'Node 1',
         prompt: 'step 1',
-        requires_approval: false,
-        continue_on_error: false
+        requires_approval: false
       })
 
       const node2 = taskNodeRepo.createNode({
@@ -82,8 +81,7 @@ describe('TaskExecutionService', () => {
         node_order: 2,
         name: 'Node 2',
         prompt: 'step 2',
-        requires_approval: true,
-        continue_on_error: false
+        requires_approval: true
       })
 
       const startedNode = executionService.startTaskExecution(taskId)
@@ -102,34 +100,22 @@ describe('TaskExecutionService', () => {
         resultSummary: 'ready for review'
       })
       expect(reviewNode?.status).toBe('in_review')
-      expect(reviewNode?.review_reason).toBe('approval')
 
-      const rejectedNode = executionService.rejectTaskNode(node2.id, 'revise output')
-      expect(rejectedNode?.status).toBe('in_review')
-      expect(rejectedNode?.review_reason).toBe('rejected')
-      expect(rejectedNode?.error_message).toBe('revise output')
-
-      const retriedNode = executionService.retryTaskNode(node2.id)
-      expect(retriedNode?.status).toBe('todo')
-      expect(retriedNode?.session_id).toBeNull()
-      expect(retriedNode?.result_summary).toBeNull()
-      expect(retriedNode?.error_message).toBeNull()
-      expect(retriedNode?.cost).toBeNull()
-      expect(retriedNode?.duration).toBeNull()
-      expect(retriedNode?.started_at).toBeNull()
-      expect(retriedNode?.completed_at).toBeNull()
-
-      const restartedNode = executionService.startTaskExecution(taskId)
-      expect(restartedNode?.id).toBe(node2.id)
-      expect(restartedNode?.status).toBe('in_progress')
+      const rerunNode = executionService.rerunTaskNode(node2.id)
+      expect(rerunNode?.status).toBe('in_progress')
+      expect(rerunNode?.result_summary).toBeNull()
+      expect(rerunNode?.error_message).toBeNull()
+      expect(rerunNode?.cost).toBeNull()
+      expect(rerunNode?.duration).toBeNull()
+      expect(rerunNode?.completed_at).toBeNull()
 
       const errorReviewNode = executionService.markTaskNodeErrorReview(node2.id, 'execution failed')
       expect(errorReviewNode?.status).toBe('in_review')
-      expect(errorReviewNode?.review_reason).toBe('error')
+      expect(errorReviewNode?.error_message).toBe('execution failed')
 
       const approvedNode = executionService.approveTaskNode(node2.id)
       expect(approvedNode?.status).toBe('done')
-      expect(approvedNode?.review_reason).toBeNull()
+      expect(approvedNode?.error_message).toBeNull()
 
       const task = taskRepo.getTask(taskId)
       expect(task?.status).toBe('done')
@@ -137,6 +123,45 @@ describe('TaskExecutionService', () => {
       expect(task?.started_at).not.toBeNull()
       expect(task?.completed_at).not.toBeNull()
       expect(task?.duration).not.toBeNull()
+    } finally {
+      cleanupTestContext(context)
+    }
+  })
+
+  it('moves conversation node to in_review when execution completes', () => {
+    const context = createTestContext()
+    if (!context) return
+
+    try {
+      const { taskRepo, taskNodeRepo, executionService } = context
+      const taskId = 'task-conversation'
+
+      taskRepo.createTask({
+        id: taskId,
+        title: 'Conversation task',
+        prompt: 'chat',
+        task_mode: 'conversation'
+      })
+
+      const conversationNode = taskNodeRepo.createConversationNode({
+        task_id: taskId,
+        prompt: 'chat'
+      })
+
+      const startedNode = executionService.startTaskExecution(taskId)
+      expect(startedNode?.id).toBe(conversationNode.id)
+      expect(startedNode?.status).toBe('in_progress')
+
+      const completedNode = executionService.completeTaskNode(conversationNode.id, {
+        resultSummary: 'first turn finished'
+      })
+      expect(completedNode?.status).toBe('in_review')
+      expect(completedNode?.result_summary).toBe('first turn finished')
+      expect(taskRepo.getTask(taskId)?.status).toBe('in_review')
+
+      const approvedNode = executionService.approveTaskNode(conversationNode.id)
+      expect(approvedNode?.status).toBe('done')
+      expect(taskRepo.getTask(taskId)?.status).toBe('done')
     } finally {
       cleanupTestContext(context)
     }
@@ -172,38 +197,10 @@ describe('TaskExecutionService', () => {
       taskNodeRepo.completeNode({
         node_id: doneTodoNode1.id,
         status: 'done',
-        review_reason: null,
         result_summary: 'done'
       })
       taskRepo.syncTaskFromNodes('task-done-todo')
       expect(taskRepo.getTask('task-done-todo')?.status).toBe('in_progress')
-
-      taskRepo.createTask({
-        id: 'task-todo-cancelled',
-        title: 'Todo + Cancelled',
-        prompt: 'aggregate 2',
-        task_mode: 'workflow'
-      })
-      const todoCancelledNode1 = taskNodeRepo.createNode({
-        task_id: 'task-todo-cancelled',
-        node_order: 1,
-        name: 'Node 1',
-        prompt: 'step 1'
-      })
-      const todoCancelledNode2 = taskNodeRepo.createNode({
-        task_id: 'task-todo-cancelled',
-        node_order: 2,
-        name: 'Node 2',
-        prompt: 'step 2'
-      })
-
-      taskNodeRepo.cancelNode(todoCancelledNode1.id)
-      taskRepo.syncTaskFromNodes('task-todo-cancelled')
-      expect(taskRepo.getTask('task-todo-cancelled')?.status).toBe('todo')
-
-      taskNodeRepo.cancelNode(todoCancelledNode2.id)
-      taskRepo.syncTaskFromNodes('task-todo-cancelled')
-      expect(taskRepo.getTask('task-todo-cancelled')?.status).toBe('cancelled')
     } finally {
       cleanupTestContext(context)
     }

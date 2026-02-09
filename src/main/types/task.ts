@@ -3,6 +3,5 @@ export type {
   DbTaskNode as TaskNode,
   CreateTaskNodeInput,
   CompleteTaskNodeInput,
-  TaskNodeStatus,
-  TaskNodeReviewReason
+  TaskNodeStatus
 } from './db/task-node'

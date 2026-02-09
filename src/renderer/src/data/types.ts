@@ -1,7 +1,7 @@
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
+export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
 export type TaskMode = 'conversation' | 'workflow'
 
-export type TaskNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled'
+export type TaskNodeStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
 
 export interface Project {
   id: string
@@ -48,9 +48,7 @@ export interface TaskNode {
   cli_tool_id: string | null
   agent_tool_config_id: string | null
   requires_approval: number
-  continue_on_error: number
   status: TaskNodeStatus
-  review_reason: 'approval' | 'error' | 'rejected' | null
   session_id: string | null
   result_summary: string | null
   error_message: string | null
@@ -79,8 +77,8 @@ export interface UpdateTaskInput {
   prompt?: string
   status?: TaskStatus
   task_mode?: TaskMode
-  cost?: number
-  duration?: number
+  cost?: number | null
+  duration?: number | null
   worktree_path?: string | null
   branch_name?: string | null
   base_branch?: string | null
