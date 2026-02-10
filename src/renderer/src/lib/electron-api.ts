@@ -258,3 +258,61 @@ export const app = {
     return window.api.app.getVersion()
   }
 }
+
+export const automation = {
+  async create(input: Record<string, unknown>): Promise<unknown> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.create(input)
+  },
+
+  async update(id: string, updates: Record<string, unknown>): Promise<unknown> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.update(id, updates)
+  },
+
+  async delete(id: string): Promise<boolean> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.delete(id)
+  },
+
+  async get(id: string): Promise<unknown> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.get(id)
+  },
+
+  async list(): Promise<unknown[]> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.list() as Promise<unknown[]>
+  },
+
+  async setEnabled(id: string, enabled: boolean): Promise<unknown> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.setEnabled(id, enabled)
+  },
+
+  async runNow(id: string): Promise<unknown> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.runNow(id)
+  },
+
+  async listRuns(id: string, limit?: number): Promise<unknown[]> {
+    if (!window.api) {
+      throw new Error('Electron API not available')
+    }
+    return window.api.automation.listRuns(id, limit) as Promise<unknown[]>
+  }
+}

@@ -382,6 +382,66 @@ interface TaskAPI {
   stopExecution: (taskId: string) => Promise<unknown>
 }
 
+type AutomationTriggerType = 'interval' | 'daily' | 'weekly'
+type AutomationRunStatus = 'running' | 'success' | 'failed' | 'skipped'
+
+interface Automation {
+  id: string
+  name: string
+  enabled: boolean
+  trigger_type: AutomationTriggerType
+  trigger_json:
+    | { interval_seconds: number }
+    | { time: string }
+    | { day_of_week: number; time: string }
+  timezone: string
+  source_task_id: string | null
+  template_json: {
+    title: string
+    prompt: string
+    taskMode: 'conversation'
+    projectId?: string
+    projectPath?: string
+    createWorktree?: boolean
+    baseBranch?: string
+    worktreeBranchPrefix?: string
+    worktreeRootPath?: string
+    cliToolId?: string
+    agentToolConfigId?: string
+  }
+  next_run_at: string
+  last_run_at: string | null
+  last_status: AutomationRunStatus | null
+  created_at: string
+  updated_at: string
+}
+
+interface AutomationRun {
+  id: string
+  automation_id: string
+  scheduled_at: string
+  triggered_at: string
+  status: AutomationRunStatus
+  task_id: string | null
+  task_node_id: string | null
+  session_id: string | null
+  error_message: string | null
+  finished_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface AutomationAPI {
+  create: (input: Record<string, unknown>) => Promise<Automation>
+  update: (id: string, updates: Record<string, unknown>) => Promise<Automation | null>
+  delete: (id: string) => Promise<boolean>
+  get: (id: string) => Promise<Automation | null>
+  list: () => Promise<Automation[]>
+  setEnabled: (id: string, enabled: boolean) => Promise<Automation | null>
+  runNow: (id: string) => Promise<{ runId: string; status: AutomationRunStatus }>
+  listRuns: (id: string, limit?: number) => Promise<AutomationRun[]>
+}
+
 interface API {
   projects: ProjectAPI
   git: GitAPI
@@ -405,6 +465,7 @@ interface API {
   app: AppAPI
   settings: SettingsAPI
   task: TaskAPI
+  automation: AutomationAPI
 }
 
 declare global {

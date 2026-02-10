@@ -1,6 +1,7 @@
 export default {
   dashboard: '仪表盘',
   tasks: '任务',
+  automations: '自动化',
   board: '看板',
   pipelineTemplates: '工作流',
   skills: 'Skill',

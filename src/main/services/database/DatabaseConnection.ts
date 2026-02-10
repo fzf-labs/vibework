@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 
-const TARGET_SCHEMA_VERSION = 3
+const TARGET_SCHEMA_VERSION = 4
 
 export class DatabaseConnection {
   private dbPath: string
@@ -27,9 +27,9 @@ export class DatabaseConnection {
     this.createBaseIndexes(db)
 
     const userVersion = Number(db.pragma('user_version', { simple: true }) ?? 0)
-    if (userVersion < TARGET_SCHEMA_VERSION) {
+    if (userVersion < 3) {
       console.log(
-        `[DatabaseService] Rebuilding runtime schema: v${userVersion} -> v${TARGET_SCHEMA_VERSION}`
+        `[DatabaseService] Rebuilding runtime schema: v${userVersion} -> v3`
       )
       const rebuildRuntimeSchema = db.transaction(() => {
         db.exec(`
@@ -44,7 +44,7 @@ export class DatabaseConnection {
 
         this.createRuntimeTables(db)
         this.createRuntimeIndexes(db)
-        db.pragma(`user_version = ${TARGET_SCHEMA_VERSION}`)
+        db.pragma('user_version = 3')
       })
 
       rebuildRuntimeSchema()
@@ -52,6 +52,8 @@ export class DatabaseConnection {
       this.createRuntimeTables(db)
       this.createRuntimeIndexes(db)
     }
+
+    this.migrateSchema(db, userVersion)
 
     console.log('[DatabaseService] Tables initialized successfully')
   }
@@ -123,6 +125,41 @@ export class DatabaseConnection {
         FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE,
         FOREIGN KEY (agent_tool_config_id) REFERENCES agent_tool_configs(id) ON DELETE SET NULL,
         UNIQUE (template_id, node_order)
+      );
+
+      CREATE TABLE IF NOT EXISTS automations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+        trigger_type TEXT NOT NULL CHECK (trigger_type IN ('interval', 'daily', 'weekly')),
+        trigger_json TEXT NOT NULL,
+        timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+        source_task_id TEXT,
+        template_json TEXT NOT NULL,
+        next_run_at TEXT NOT NULL,
+        last_run_at TEXT,
+        last_status TEXT CHECK (last_status IS NULL OR last_status IN ('running', 'success', 'failed', 'skipped')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS automation_runs (
+        id TEXT PRIMARY KEY,
+        automation_id TEXT NOT NULL,
+        scheduled_at TEXT NOT NULL,
+        triggered_at TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('running', 'success', 'failed', 'skipped')),
+        task_id TEXT,
+        task_node_id TEXT,
+        session_id TEXT,
+        error_message TEXT,
+        finished_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+        FOREIGN KEY (task_node_id) REFERENCES task_nodes(id) ON DELETE SET NULL,
+        UNIQUE (automation_id, scheduled_at)
       );
     `)
   }
@@ -222,6 +259,12 @@ export class DatabaseConnection {
       CREATE UNIQUE INDEX IF NOT EXISTS uniq_agent_tool_default
         ON agent_tool_configs(tool_id)
         WHERE is_default = 1;
+
+      CREATE INDEX IF NOT EXISTS idx_automations_enabled_next_run
+        ON automations(enabled, next_run_at);
+
+      CREATE INDEX IF NOT EXISTS idx_runs_automation_created
+        ON automation_runs(automation_id, created_at);
     `)
   }
 
@@ -247,5 +290,25 @@ export class DatabaseConnection {
         ON task_nodes(task_id)
         WHERE status = 'in_progress';
     `)
+  }
+
+  private migrateSchema(db: Database.Database, originalUserVersion: number): void {
+    let currentVersion = Number(db.pragma('user_version', { simple: true }) ?? originalUserVersion)
+
+    if (currentVersion < 4) {
+      const migrateToV4 = db.transaction(() => {
+        this.createBaseTables(db)
+        this.createBaseIndexes(db)
+        db.pragma('user_version = 4')
+      })
+
+      migrateToV4()
+      currentVersion = 4
+      console.log('[DatabaseService] Migrated schema to v4')
+    }
+
+    if (currentVersion < TARGET_SCHEMA_VERSION) {
+      db.pragma(`user_version = ${TARGET_SCHEMA_VERSION}`)
+    }
   }
 }

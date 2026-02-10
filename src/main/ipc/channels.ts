@@ -194,6 +194,16 @@ export const IPC_CHANNELS = {
     delete: 'task:delete',
     startExecution: 'task:startExecution',
     stopExecution: 'task:stopExecution'
+  },
+  automation: {
+    create: 'automation:create',
+    update: 'automation:update',
+    delete: 'automation:delete',
+    get: 'automation:get',
+    list: 'automation:list',
+    setEnabled: 'automation:setEnabled',
+    runNow: 'automation:runNow',
+    listRuns: 'automation:listRuns'
   }
 } as const
 
@@ -473,6 +483,15 @@ export interface IpcContracts {
   'task:delete': IpcContract<[string, boolean?], unknown>
   'task:startExecution': IpcContract<[string], unknown>
   'task:stopExecution': IpcContract<[string], unknown>
+
+  'automation:create': IpcContract<[UnknownRecord], unknown>
+  'automation:update': IpcContract<[string, UnknownRecord], unknown>
+  'automation:delete': IpcContract<[string], boolean>
+  'automation:get': IpcContract<[string], unknown>
+  'automation:list': IpcContract<[], unknown[]>
+  'automation:setEnabled': IpcContract<[string, boolean], unknown>
+  'automation:runNow': IpcContract<[string], unknown>
+  'automation:listRuns': IpcContract<[string, number?], unknown[]>
 }
 
 export type IpcContractChannel = keyof IpcContracts

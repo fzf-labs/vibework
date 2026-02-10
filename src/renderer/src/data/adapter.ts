@@ -1,5 +1,6 @@
 import { notifyTaskCompleted, playTaskReviewSound } from '@/lib/notifications'
 import type { CreateTaskInput, Task, TaskNode, UpdateTaskInput } from './types'
+import type { Automation, AutomationRun } from './types'
 
 export const db = {
   createTask: (input: CreateTaskInput): Promise<Task> => {
@@ -146,5 +147,37 @@ export const db = {
 
   stopTaskExecution: (taskId: string): Promise<unknown> => {
     return window.api.task.stopExecution(taskId) as Promise<unknown>
+  },
+
+  createAutomation: (input: Record<string, unknown>): Promise<Automation> => {
+    return window.api.automation.create(input) as Promise<Automation>
+  },
+
+  updateAutomation: (id: string, updates: Record<string, unknown>): Promise<Automation | null> => {
+    return window.api.automation.update(id, updates) as Promise<Automation | null>
+  },
+
+  deleteAutomation: (id: string): Promise<boolean> => {
+    return window.api.automation.delete(id)
+  },
+
+  getAutomation: (id: string): Promise<Automation | null> => {
+    return window.api.automation.get(id) as Promise<Automation | null>
+  },
+
+  listAutomations: (): Promise<Automation[]> => {
+    return window.api.automation.list() as Promise<Automation[]>
+  },
+
+  setAutomationEnabled: (id: string, enabled: boolean): Promise<Automation | null> => {
+    return window.api.automation.setEnabled(id, enabled) as Promise<Automation | null>
+  },
+
+  runAutomationNow: (id: string): Promise<{ runId: string; status: string }> => {
+    return window.api.automation.runNow(id) as Promise<{ runId: string; status: string }>
+  },
+
+  listAutomationRuns: (automationId: string, limit = 100): Promise<AutomationRun[]> => {
+    return window.api.automation.listRuns(automationId, limit) as Promise<AutomationRun[]>
   }
 }

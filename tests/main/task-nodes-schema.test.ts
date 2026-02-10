@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { DatabaseConnection } from '../../src/main/services/database/DatabaseConnection'
 
 describe('task nodes schema', () => {
-  it('migrates to schema v3 and creates unique in-progress index', () => {
+  it('migrates to schema v4 and creates unique in-progress index', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'vibework-task-nodes-'))
     const dbPath = join(tempDir, 'test.db')
 
@@ -26,7 +26,7 @@ describe('task nodes schema', () => {
     connection.initTables()
 
     const userVersion = Number(db.pragma('user_version', { simple: true }) ?? 0)
-    expect(userVersion).toBe(3)
+    expect(userVersion).toBe(4)
 
     const taskNodesTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='task_nodes'")
@@ -44,6 +44,26 @@ describe('task nodes schema', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_task_nodes_session_id'")
       .get() as { name?: string } | undefined
     expect(sessionIndex?.name).toBe('idx_task_nodes_session_id')
+
+    const automationTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='automations'")
+      .get() as { name?: string } | undefined
+    expect(automationTable?.name).toBe('automations')
+
+    const automationRunTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='automation_runs'")
+      .get() as { name?: string } | undefined
+    expect(automationRunTable?.name).toBe('automation_runs')
+
+    const automationIdx = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_automations_enabled_next_run'")
+      .get() as { name?: string } | undefined
+    expect(automationIdx?.name).toBe('idx_automations_enabled_next_run')
+
+    const runsIdx = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_runs_automation_created'")
+      .get() as { name?: string } | undefined
+    expect(runsIdx?.name).toBe('idx_runs_automation_created')
 
     const now = new Date().toISOString()
     db.prepare(

@@ -1,6 +1,7 @@
 export default {
   dashboard: 'Dashboard',
   tasks: 'Tasks',
+  automations: 'Automations',
   board: 'Board',
   pipelineTemplates: 'Pipeline Templates',
   skills: 'Skills',

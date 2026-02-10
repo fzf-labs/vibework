@@ -10,6 +10,7 @@ import {
   ProjectsPage,
   PipelineTemplatesPage,
   TasksPage,
+  AutomationsPage,
 } from '@/pages';
 
 import { SetupGuard } from '@/components/shared/SetupGuard';
@@ -39,6 +40,10 @@ export const router = createHashRouter([
       {
         path: 'tasks',
         element: <TasksPage />,
+      },
+      {
+        path: 'automations',
+        element: <AutomationsPage />,
       },
       {
         path: 'pipeline-templates',

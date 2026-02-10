@@ -409,6 +409,20 @@ const api = {
       invoke(IPC_CHANNELS.task.delete, id, removeWorktree),
     startExecution: (taskId: string) => invoke(IPC_CHANNELS.task.startExecution, taskId),
     stopExecution: (taskId: string) => invoke(IPC_CHANNELS.task.stopExecution, taskId)
+  },
+  automation: {
+    create: (input: Record<string, unknown>) =>
+      invoke(IPC_CHANNELS.automation.create, input),
+    update: (id: string, updates: Record<string, unknown>) =>
+      invoke(IPC_CHANNELS.automation.update, id, updates),
+    delete: (id: string) => invoke(IPC_CHANNELS.automation.delete, id),
+    get: (id: string) => invoke(IPC_CHANNELS.automation.get, id),
+    list: () => invoke(IPC_CHANNELS.automation.list),
+    setEnabled: (id: string, enabled: boolean) =>
+      invoke(IPC_CHANNELS.automation.setEnabled, id, enabled),
+    runNow: (id: string) => invoke(IPC_CHANNELS.automation.runNow, id),
+    listRuns: (id: string, limit?: number) =>
+      invoke(IPC_CHANNELS.automation.listRuns, id, limit)
   }
 }
 

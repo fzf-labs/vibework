@@ -7,6 +7,7 @@ import {
   ListChecks,
   Server,
   Sparkles,
+  Clock3,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export function LeftSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const navItems: NavItem[] = [
     { id: 'dashboard', label: t.nav.dashboard, icon: LayoutDashboard, path: '/dashboard' },
     { id: 'tasks', label: t.nav.tasks, icon: ListTodo, path: '/tasks' },
+    { id: 'automations', label: t.nav.automations, icon: Clock3, path: '/automations' },
     { id: 'board', label: t.nav.board, icon: KanbanSquare, path: '/board' },
     {
       id: 'pipelineTemplates',

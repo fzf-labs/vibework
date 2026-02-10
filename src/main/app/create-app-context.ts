@@ -14,6 +14,8 @@ import { SettingsService } from '../services/SettingsService'
 import { TaskService } from '../services/TaskService'
 import { CliSessionService } from '../services/cli/CliSessionService'
 import { TerminalService } from '../services/terminal/TerminalService'
+import { AutomationRunnerService } from '../services/AutomationRunnerService'
+import { AutomationService } from '../services/AutomationService'
 import { AppContext, AppServices } from './AppContext'
 
 export const createAppContext = (): AppContext => {
@@ -34,6 +36,12 @@ export const createAppContext = (): AppContext => {
   const notificationService = new NotificationService()
   const settingsService = new SettingsService()
   const taskService = new TaskService(databaseService, gitService)
+  const automationRunnerService = new AutomationRunnerService(
+    databaseService,
+    taskService,
+    cliSessionService
+  )
+  const automationService = new AutomationService(databaseService, automationRunnerService)
 
   const services: AppServices = {
     projectService,
@@ -50,7 +58,9 @@ export const createAppContext = (): AppContext => {
     settingsService,
     taskService,
     cliSessionService,
-    terminalService
+    terminalService,
+    automationRunnerService,
+    automationService
   }
 
   const serviceOrder = [
@@ -68,7 +78,9 @@ export const createAppContext = (): AppContext => {
     notificationService,
     settingsService,
     taskService,
-    terminalService
+    terminalService,
+    automationRunnerService,
+    automationService
   ]
 
   return new AppContext(appPaths, services, serviceOrder)

@@ -8,6 +8,7 @@ import { ProjectRepository } from './database/ProjectRepository'
 import { WorkflowRepository } from './database/WorkflowRepository'
 import { TaskNodeRepository } from './database/TaskNodeRepository'
 import { AgentToolConfigRepository } from './database/AgentToolConfigRepository'
+import { AutomationRepository } from './database/AutomationRepository'
 import type { CreateProjectInput, Project, UpdateProjectInput } from '../types/project'
 import type {
   CreateTaskInput,
@@ -16,6 +17,14 @@ import type {
   TaskNodeStatus,
   UpdateTaskInput
 } from '../types/task'
+import type {
+  Automation,
+  AutomationRun,
+  CreateAutomationInput,
+  UpdateAutomationInput,
+  UpdateAutomationRunInput,
+  ReservedAutomationRun
+} from '../types/automation'
 import type {
   CreateWorkflowTemplateInput,
   UpdateWorkflowTemplateInput,
@@ -47,6 +56,7 @@ export class DatabaseService {
   private projectRepo: ProjectRepository
   private workflowRepo: WorkflowRepository
   private agentToolConfigRepo: AgentToolConfigRepository
+  private automationRepo: AutomationRepository
   private taskExecutionService: TaskExecutionService
   private taskNodeStatusListeners: Array<(node: TaskNode) => void> = []
   private dbPath: string
@@ -65,6 +75,7 @@ export class DatabaseService {
     this.projectRepo = new ProjectRepository(this.db)
     this.workflowRepo = new WorkflowRepository(this.db)
     this.agentToolConfigRepo = new AgentToolConfigRepository(this.db)
+    this.automationRepo = new AutomationRepository(this.db)
     this.taskExecutionService = new TaskExecutionService(this.taskRepo, this.taskNodeRepo)
   }
 
@@ -384,6 +395,88 @@ export class DatabaseService {
     return this.workflowRepo.copyGlobalWorkflowToProject(globalTemplateId, projectId)
   }
 
+  // ============ Automation 操作 =========
+  createAutomation(input: CreateAutomationInput): Automation {
+    return this.automationRepo.createAutomation(input)
+  }
+
+  getAutomation(id: string): Automation | null {
+    return this.automationRepo.getAutomation(id)
+  }
+
+  listAutomations(): Automation[] {
+    return this.automationRepo.listAutomations()
+  }
+
+  updateAutomation(id: string, updates: UpdateAutomationInput): Automation | null {
+    return this.automationRepo.updateAutomation(id, updates)
+  }
+
+  deleteAutomation(id: string): boolean {
+    return this.automationRepo.deleteAutomation(id)
+  }
+
+  setAutomationEnabled(id: string, enabled: boolean): Automation | null {
+    return this.automationRepo.setAutomationEnabled(id, enabled)
+  }
+
+  listDueAutomations(referenceTimeIso: string): Automation[] {
+    return this.automationRepo.listDueAutomations(referenceTimeIso)
+  }
+
+  reserveDueAutomationRun(params: {
+    automationId: string
+    expectedScheduledAt: string
+    nextRunAt: string
+    triggeredAt: string
+  }): ReservedAutomationRun | null {
+    return this.automationRepo.reserveDueAutomationRun(params)
+  }
+
+  getRunningAutomationRun(automationId: string): AutomationRun | null {
+    return this.automationRepo.getRunningRunByAutomationId(automationId)
+  }
+
+  createAutomationRun(input: {
+    automation_id: string
+    scheduled_at: string
+    triggered_at: string
+    status: 'running' | 'success' | 'failed' | 'skipped'
+    task_id?: string | null
+    task_node_id?: string | null
+    session_id?: string | null
+    error_message?: string | null
+    finished_at?: string | null
+  }): AutomationRun {
+    return this.automationRepo.createAutomationRun(input)
+  }
+
+  updateAutomationRun(id: string, updates: UpdateAutomationRunInput): AutomationRun | null {
+    return this.automationRepo.updateAutomationRun(id, updates)
+  }
+
+  getAutomationRun(id: string): AutomationRun | null {
+    return this.automationRepo.getAutomationRun(id)
+  }
+
+  listAutomationRuns(automationId: string, limit = 100): AutomationRun[] {
+    return this.automationRepo.listAutomationRuns(automationId, limit)
+  }
+
+  updateAutomationLastRun(
+    automationId: string,
+    updates: {
+      last_run_at?: string | null
+      last_status?: 'running' | 'success' | 'failed' | 'skipped' | null
+    }
+  ): Automation | null {
+    return this.automationRepo.updateAutomationLastRun(automationId, updates)
+  }
+
+  markStaleRunningAutomationRunsFailed(errorMessage = 'interrupted_by_app_restart'): number {
+    return this.automationRepo.markStaleRunningRunsFailed(errorMessage)
+  }
+
 
   // ============ 清理和关闭 ============
   close(): void {
@@ -404,5 +497,4 @@ export class DatabaseService {
       }
     })
   }
-
 }
