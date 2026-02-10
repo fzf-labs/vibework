@@ -165,7 +165,9 @@ export function AutomationsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
         <div>
           <h1 className="text-2xl font-semibold">Automations</h1>
-          <p className="mt-1 text-sm text-muted-foreground">管理定时自动执行规则和运行记录</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {currentProject?.name || '请先选择项目'}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
