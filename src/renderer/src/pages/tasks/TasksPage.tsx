@@ -13,6 +13,7 @@ import {
 import { db, type AgentToolConfig } from '@/data'
 import { getSettings } from '@/data/settings'
 import { useProjects } from '@/hooks/useProjects'
+import { normalizeCliTools } from '@/lib/cli-tools'
 
 export function TasksPage() {
   const navigate = useNavigate()
@@ -35,17 +36,18 @@ export function TasksPage() {
     let active = true
     const loadCliTools = async () => {
       try {
-        const detected = await window.api?.cliTools?.detectAll?.()
-        const tools = (Array.isArray(detected) ? detected : []) as TaskMenuCliToolInfo[]
-        const installedTools = tools.filter((tool) => tool.installed !== false)
+        const detected = await window.api?.cliTools?.getSnapshot?.()
+        const tools = normalizeCliTools(detected) as TaskMenuCliToolInfo[]
         if (!active) return
-        setCliTools(installedTools)
+        setCliTools(tools)
 
         const settings = getSettings()
         if (settings.defaultCliToolId) {
-          const hasDefault = installedTools.some((tool) => tool.id === settings.defaultCliToolId)
+          const hasDefault = tools.some((tool) => tool.id === settings.defaultCliToolId)
           if (hasDefault) setSelectedCliToolId(settings.defaultCliToolId)
         }
+
+        void window.api?.cliTools?.refresh?.({ level: 'fast' })
       } catch (error) {
         if (!active) return
         console.error('[TasksPage] Failed to load CLI tools:', error)
@@ -53,9 +55,15 @@ export function TasksPage() {
       }
     }
 
+    const unsubscribe = window.api?.cliTools?.onUpdated?.((tools) => {
+      if (!active) return
+      setCliTools(normalizeCliTools(tools) as TaskMenuCliToolInfo[])
+    })
+
     void loadCliTools()
     return () => {
       active = false
+      unsubscribe?.()
     }
   }, [])
 

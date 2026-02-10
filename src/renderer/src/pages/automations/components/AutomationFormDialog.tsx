@@ -5,13 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useProjects } from '@/hooks/useProjects';
 import type { AgentToolConfig } from '@/data';
 import type { Automation, AutomationTriggerType } from '@/types/automation';
-
-interface CLIToolInfo {
-  id: string;
-  displayName?: string;
-  name?: string;
-  installed?: boolean;
-}
+import { normalizeCliTools, type CLIToolInfo } from '@/lib/cli-tools';
 
 interface AutomationFormDialogProps {
   open: boolean;
@@ -80,19 +74,26 @@ export function AutomationFormDialog({
     let active = true;
     const loadTools = async () => {
       try {
-        const result = await window.api.cliTools.getAll();
+        const result = await window.api.cliTools.getSnapshot();
         if (!active) return;
-        const list = Array.isArray(result) ? (result as CLIToolInfo[]) : [];
-        setCliTools(list.filter((tool) => tool.installed !== false));
+        const list = normalizeCliTools(result);
+        setCliTools(list);
+        void window.api.cliTools.refresh({ level: 'fast' });
       } catch {
         if (!active) return;
         setCliTools([]);
       }
     };
 
+    const unsubscribe = window.api.cliTools.onUpdated((tools) => {
+      if (!active) return;
+      setCliTools(normalizeCliTools(tools));
+    });
+
     void loadTools();
     return () => {
       active = false;
+      unsubscribe?.();
     };
   }, [open]);
 
@@ -401,4 +402,3 @@ export function AutomationFormDialog({
     </Dialog>
   );
 }
-

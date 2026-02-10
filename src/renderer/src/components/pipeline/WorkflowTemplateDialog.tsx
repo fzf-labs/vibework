@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useLanguage } from '@/providers/language-provider';
+import { normalizeCliTools, type CLIToolInfo } from '@/lib/cli-tools';
 
 export interface TaskNodeTemplateDraft {
   name: string;
@@ -17,13 +18,6 @@ export interface TaskNodeTemplateDraft {
   cliToolId: string;
   agentToolConfigId: string;
   requiresApproval: boolean;
-}
-
-interface CLIToolInfo {
-  id: string;
-  displayName?: string;
-  name?: string;
-  installed?: boolean;
 }
 
 export interface WorkflowTemplateFormValues {
@@ -104,21 +98,22 @@ export function WorkflowTemplateDialog({
     let active = true;
     const loadTools = async () => {
       try {
-        const detected =
-          (await window.api?.cliTools?.getAll?.()) ||
-          (await window.api?.cliTools?.detectAll?.());
-        const tools = (Array.isArray(detected)
-          ? detected
-          : []) as CLIToolInfo[];
-        const installedTools = tools.filter((tool) => tool.installed !== false);
-        if (active) setCliTools(installedTools);
+        const detected = await window.api?.cliTools?.getSnapshot?.();
+        if (active) setCliTools(normalizeCliTools(detected));
+        void window.api?.cliTools?.refresh?.({ level: 'fast' });
       } catch {
         if (active) setCliTools([]);
       }
     };
+
+    const unsubscribe = window.api?.cliTools?.onUpdated?.((tools) => {
+      if (!active) return;
+      setCliTools(normalizeCliTools(tools));
+    });
     void loadTools();
     return () => {
       active = false;
+      unsubscribe?.();
     };
   }, [open]);
 

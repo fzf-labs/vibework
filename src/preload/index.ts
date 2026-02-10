@@ -212,8 +212,18 @@ const api = {
   },
   cliTools: {
     getAll: () => invoke(IPC_CHANNELS.cliTools.getAll),
-    detect: (toolId: string) => invoke(IPC_CHANNELS.cliTools.detect, toolId),
-    detectAll: () => invoke(IPC_CHANNELS.cliTools.detectAll)
+    getSnapshot: () => invoke(IPC_CHANNELS.cliTools.getSnapshot),
+    refresh: (options?: { level?: 'fast' | 'full'; force?: boolean; toolIds?: string[] }) =>
+      invoke(IPC_CHANNELS.cliTools.refresh, options),
+    detect: (toolId: string, options?: { level?: 'fast' | 'full'; force?: boolean }) =>
+      invoke(IPC_CHANNELS.cliTools.detect, toolId, options),
+    detectAll: (options?: { level?: 'fast' | 'full'; force?: boolean }) =>
+      invoke(IPC_CHANNELS.cliTools.detectAll, options),
+    onUpdated: (callback: (tools: unknown[]) => void) => {
+      const listener = (_: unknown, tools: unknown[]) => callback(tools)
+      ipcRenderer.on(IPC_EVENTS.cliTools.updated, listener)
+      return () => ipcRenderer.removeListener(IPC_EVENTS.cliTools.updated, listener)
+    }
   },
   cliToolConfig: {
     get: (toolId: string) => invoke(IPC_CHANNELS.cliToolConfig.get, toolId),

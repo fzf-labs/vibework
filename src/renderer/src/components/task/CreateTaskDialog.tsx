@@ -13,6 +13,7 @@ import type { AgentToolConfig } from '@/data'
 import { getSettings } from '@/data/settings'
 import { useLanguage } from '@/providers/language-provider'
 import type { MessageAttachment } from '@/hooks/useAgent'
+import { normalizeCliTools, type CLIToolInfo } from '@/lib/cli-tools'
 import { Sparkles } from 'lucide-react'
 
 interface CreateTaskDialogProps {
@@ -22,13 +23,6 @@ interface CreateTaskDialogProps {
   projectPath?: string
   projectType?: 'normal' | 'git'
   onTaskCreated?: (task: any) => void
-}
-
-interface CLIToolInfo {
-  id: string
-  displayName?: string
-  name?: string
-  installed?: boolean
 }
 
 interface PipelineTemplate {
@@ -70,25 +64,30 @@ export function CreateTaskDialog({
 
     const loadTools = async () => {
       try {
-        const detected = await window.api?.cliTools?.detectAll?.()
-        const tools = (Array.isArray(detected) ? detected : []) as CLIToolInfo[]
-        const installedTools = tools.filter((tool) => tool.installed !== false)
-        setCliTools(installedTools)
+        const snapshot = await window.api?.cliTools?.getSnapshot?.()
+        const tools = normalizeCliTools(snapshot)
+        setCliTools(tools)
 
         const settings = getSettings()
         if (settings.defaultCliToolId) {
-          const hasDefault = installedTools.some(
+          const hasDefault = tools.some(
             (tool) => tool.id === settings.defaultCliToolId
           )
           if (hasDefault) {
             setSelectedCliToolId(settings.defaultCliToolId)
           }
         }
+
+        void window.api?.cliTools?.refresh?.({ level: 'fast' })
       } catch (err) {
         console.error('Failed to detect CLI tools:', err)
         setCliTools([])
       }
     }
+
+    const unsubscribe = window.api?.cliTools?.onUpdated?.((tools) => {
+      setCliTools(normalizeCliTools(tools))
+    })
 
     const loadTemplates = async () => {
       if (!projectId) {
@@ -138,6 +137,10 @@ export function CreateTaskDialog({
     loadTools()
     loadTemplates()
     loadBranches()
+
+    return () => {
+      unsubscribe?.()
+    }
   }, [open, projectId, projectPath, isGitProject])
 
   useEffect(() => {

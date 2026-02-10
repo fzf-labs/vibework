@@ -77,6 +77,8 @@ export const IPC_CHANNELS = {
   },
   cliTools: {
     getAll: 'cliTools:getAll',
+    getSnapshot: 'cliTools:getSnapshot',
+    refresh: 'cliTools:refresh',
     detect: 'cliTools:detect',
     detectAll: 'cliTools:detectAll'
   },
@@ -225,6 +227,9 @@ export const IPC_EVENTS = {
   taskNode: {
     completed: 'taskNode:completed',
     review: 'taskNode:review'
+  },
+  cliTools: {
+    updated: 'cliTools:updated'
   }
 } as const
 
@@ -330,8 +335,10 @@ export interface IpcContracts {
   'logStream:getHistory': IpcContract<[string, (string | null)?, (string | null)?], unknown[]>
 
   'cliTools:getAll': IpcContract<[], unknown[]>
-  'cliTools:detect': IpcContract<[string], unknown>
-  'cliTools:detectAll': IpcContract<[], unknown[]>
+  'cliTools:getSnapshot': IpcContract<[], unknown[]>
+  'cliTools:refresh': IpcContract<[UnknownRecord?], unknown[]>
+  'cliTools:detect': IpcContract<[string, UnknownRecord?], unknown>
+  'cliTools:detectAll': IpcContract<[UnknownRecord?], unknown[]>
 
   'cliToolConfig:get': IpcContract<[string], UnknownRecord>
   'cliToolConfig:save': IpcContract<[string, UnknownRecord], unknown>

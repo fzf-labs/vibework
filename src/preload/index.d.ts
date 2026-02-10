@@ -157,8 +157,11 @@ interface LogStreamAPI {
 
 interface CLIToolsAPI {
   getAll: () => Promise<unknown[]>
-  detect: (toolId: string) => Promise<unknown>
-  detectAll: () => Promise<unknown[]>
+  getSnapshot: () => Promise<unknown[]>
+  refresh: (options?: { level?: 'fast' | 'full'; force?: boolean; toolIds?: string[] }) => Promise<unknown[]>
+  detect: (toolId: string, options?: { level?: 'fast' | 'full'; force?: boolean }) => Promise<unknown>
+  detectAll: (options?: { level?: 'fast' | 'full'; force?: boolean }) => Promise<unknown[]>
+  onUpdated: (callback: (tools: unknown[]) => void) => () => void
 }
 
 interface CLIToolConfigAPI {

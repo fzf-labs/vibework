@@ -14,19 +14,15 @@ import {
 import { db } from '@/data';
 import type { AgentToolConfig } from '@/data';
 import type { SettingsTabProps } from '../types';
+import {
+  normalizeCliTools,
+  isCliToolInstalled,
+  type CLIToolInfo,
+} from '@/lib/cli-tools';
 
 const TOOL_CACHE = {
   tools: null as CLIToolInfo[] | null,
 };
-
-interface CLIToolInfo {
-  id: string;
-  name: string;
-  displayName: string;
-  installed: boolean;
-  version?: string;
-  installPath?: string;
-}
 
 type ConfigFieldType =
   | 'string'
@@ -334,16 +330,22 @@ export function CLISettings({
     setError(false);
     if (!force && TOOL_CACHE.tools) {
       setTools(TOOL_CACHE.tools);
+      void window.api?.cliTools?.refresh?.({ level: 'fast' });
       setLoading(false);
       return;
     }
 
     try {
-      const result = await window.api?.cliTools?.detectAll?.();
+      const result = force
+        ? await window.api?.cliTools?.refresh?.({ level: 'full', force: true })
+        : await window.api?.cliTools?.getSnapshot?.();
       if (Array.isArray(result)) {
-        const detectedTools = result as CLIToolInfo[];
+        const detectedTools = normalizeCliTools(result);
         TOOL_CACHE.tools = detectedTools;
         setTools(detectedTools);
+        if (!force) {
+          void window.api?.cliTools?.refresh?.({ level: 'fast' });
+        }
       } else {
         TOOL_CACHE.tools = [];
         setTools([]);
@@ -359,6 +361,18 @@ export function CLISettings({
   useEffect(() => {
     void loadTools();
   }, [loadTools]);
+
+  useEffect(() => {
+    const unsubscribe = window.api?.cliTools?.onUpdated?.((updatedTools) => {
+      const normalized = normalizeCliTools(updatedTools);
+      TOOL_CACHE.tools = normalized;
+      setTools(normalized);
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     setDefaultCliToolId(settings.defaultCliToolId || '');
@@ -748,10 +762,18 @@ export function CLISettings({
     t.settings?.cliConfigShowSecret,
   ]);
 
-  const statusLabel = (installed: boolean) =>
-    installed
-      ? t.settings?.cliInstalled || 'Installed'
-      : t.settings?.cliNotInstalled || 'Not installed';
+  const statusLabel = (tool: CLIToolInfo) => {
+    if (tool.installState === 'checking') {
+      return t.settings?.cliDetecting || 'Detecting...';
+    }
+    if (isCliToolInstalled(tool)) {
+      return t.settings?.cliInstalled || 'Installed';
+    }
+    if (tool.installState === 'unknown') {
+      return t.settings?.cliDetecting || 'Detecting...';
+    }
+    return t.settings?.cliNotInstalled || 'Not installed';
+  };
 
   const columnLabels = {
     tool: t.settings?.cliTool || 'Tool',
@@ -776,7 +798,7 @@ export function CLISettings({
               {t.settings?.cliDefaultPlaceholder || 'Select default CLI'}
             </option>
             {tools
-              .filter((tool) => tool.installed)
+              .filter((tool) => isCliToolInstalled(tool))
               .map((tool) => (
                 <option key={tool.id} value={tool.id}>
                   {tool.displayName}
@@ -859,7 +881,11 @@ export function CLISettings({
                       <span
                         className={cn(
                           'inline-flex size-2 rounded-full',
-                          tool.installed ? 'bg-emerald-500' : 'bg-rose-500'
+                          isCliToolInstalled(tool)
+                            ? 'bg-emerald-500'
+                            : tool.installState === 'checking' || tool.installState === 'unknown'
+                              ? 'bg-amber-400'
+                              : 'bg-rose-500'
                         )}
                       />
                     </div>
@@ -890,17 +916,20 @@ export function CLISettings({
                     </div>
                     <span
                       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                        activeTool.installed
+                        isCliToolInstalled(activeTool)
                           ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
-                          : 'border-rose-500/30 bg-rose-500/10 text-rose-600'
+                          : activeTool.installState === 'checking' ||
+                              activeTool.installState === 'unknown'
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-700'
+                            : 'border-rose-500/30 bg-rose-500/10 text-rose-600'
                       }`}
                     >
-                      {activeTool.installed ? (
+                      {isCliToolInstalled(activeTool) ? (
                         <Check className="size-3" />
                       ) : (
                         <AlertCircle className="size-3" />
                       )}
-                      {statusLabel(activeTool.installed)}
+                      {statusLabel(activeTool)}
                     </span>
                   </div>
                   <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">

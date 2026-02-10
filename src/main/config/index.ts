@@ -62,6 +62,12 @@ export const config = {
     )
   ),
   commandTimeoutMs: parseNumber(process.env.VIBEWORK_COMMAND_TIMEOUT_MS, 30000),
+  cliToolDetection: {
+    fastTimeoutMs: parseNumber(process.env.VIBEWORK_CLI_DETECT_FAST_TIMEOUT_MS, 800),
+    fullTimeoutMs: parseNumber(process.env.VIBEWORK_CLI_DETECT_FULL_TIMEOUT_MS, 2000),
+    fastCacheMs: parseNumber(process.env.VIBEWORK_CLI_DETECT_FAST_CACHE_MS, 5 * 60 * 1000),
+    fullCacheMs: parseNumber(process.env.VIBEWORK_CLI_DETECT_FULL_CACHE_MS, 24 * 60 * 60 * 1000)
+  },
   log: {
     batchFlushIntervalMs: parseNumber(process.env.VIBEWORK_LOG_FLUSH_INTERVAL_MS, 50),
     maxBatchBytes: parseNumber(process.env.VIBEWORK_LOG_BATCH_MAX_BYTES, 256 * 1024),

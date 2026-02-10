@@ -20,6 +20,7 @@ import { Clock, GitBranch } from 'lucide-react';
 
 import { db, type Task } from '@/data';
 import { getSettings } from '@/data/settings';
+import { normalizeCliTools } from '@/lib/cli-tools';
 import { newUuid } from '@/lib/ids';
 import type { AgentMessage, MessageAttachment } from '@/hooks/useAgent';
 import { hasValidSearchResults, type Artifact } from '@/components/artifacts';
@@ -270,14 +271,22 @@ export function useTaskDetail({
     let active = true;
     const loadCliTools = async () => {
       try {
-        const result = (await window.api?.cliTools?.getAll?.()) || (await window.api?.cliTools?.detectAll?.());
-        if (active) setCliTools(Array.isArray(result) ? (result as CLIToolInfo[]) : []);
+        const result = await window.api?.cliTools?.getSnapshot?.();
+        if (active) setCliTools(normalizeCliTools(result) as CLIToolInfo[]);
+        void window.api?.cliTools?.refresh?.({ level: 'fast' });
       } catch {
         if (active) setCliTools([]);
       }
     };
+    const unsubscribe = window.api?.cliTools?.onUpdated?.((tools) => {
+      if (!active) return;
+      setCliTools(normalizeCliTools(tools) as CLIToolInfo[]);
+    });
     void loadCliTools();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   // ===========================================================================
