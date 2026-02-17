@@ -121,6 +121,7 @@ export const registerDatabaseIpc = ({
       v.string(),
       v.shape({
         session_id: v.optional(v.nullable(v.string({ allowEmpty: true }))),
+        resume_session_id: v.optional(v.nullable(v.string({ allowEmpty: true }))),
         cli_tool_id: v.optional(v.nullable(v.string({ allowEmpty: true }))),
         agent_tool_config_id: v.optional(v.nullable(v.string({ allowEmpty: true })))
       })

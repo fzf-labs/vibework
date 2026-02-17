@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 
-const TARGET_SCHEMA_VERSION = 4
+const TARGET_SCHEMA_VERSION = 5
 
 export class DatabaseConnection {
   private dbPath: string
@@ -219,6 +219,7 @@ export class DatabaseConnection {
           CHECK (status IN ('todo', 'in_progress', 'in_review', 'done')),
 
         session_id TEXT,
+        resume_session_id TEXT,
         result_summary TEXT,
         error_message TEXT,
         cost REAL,
@@ -307,8 +308,26 @@ export class DatabaseConnection {
       console.log('[DatabaseService] Migrated schema to v4')
     }
 
+    if (currentVersion < 5) {
+      const migrateToV5 = db.transaction(() => {
+        if (!this.tableHasColumn(db, 'task_nodes', 'resume_session_id')) {
+          db.exec(`ALTER TABLE task_nodes ADD COLUMN resume_session_id TEXT`)
+        }
+        db.pragma('user_version = 5')
+      })
+
+      migrateToV5()
+      currentVersion = 5
+      console.log('[DatabaseService] Migrated schema to v5')
+    }
+
     if (currentVersion < TARGET_SCHEMA_VERSION) {
       db.pragma(`user_version = ${TARGET_SCHEMA_VERSION}`)
     }
+  }
+
+  private tableHasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
+    const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>
+    return columns.some((column) => column.name === columnName)
   }
 }

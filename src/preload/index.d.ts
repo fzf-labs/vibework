@@ -265,6 +265,7 @@ interface DatabaseAPI {
     taskId: string,
     updates: {
       session_id?: string | null
+      resume_session_id?: string | null
       cli_tool_id?: string | null
       agent_tool_config_id?: string | null
     }

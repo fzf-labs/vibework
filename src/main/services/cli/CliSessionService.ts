@@ -66,6 +66,7 @@ const TOOL_CONFIG_ALLOWED_KEYS: Record<string, Set<string>> = {
     'api_key',
     'force',
     'model',
+    'resume',
     'base_command_override',
     'additional_params',
     'env'
@@ -74,6 +75,7 @@ const TOOL_CONFIG_ALLOWED_KEYS: Record<string, Set<string>> = {
     'append_prompt',
     'model',
     'yolo',
+    'resume',
     'base_command_override',
     'additional_params',
     'env'
@@ -83,6 +85,8 @@ const TOOL_CONFIG_ALLOWED_KEYS: Record<string, Set<string>> = {
     'model',
     'variant',
     'agent',
+    'continue',
+    'session',
     'auto_approve',
     'auto_compact',
     'base_command_override',
@@ -217,6 +221,39 @@ export class CliSessionService extends EventEmitter {
       if (typeof model !== 'string' || !model.trim()) {
         toolConfig.model = 'auto'
       }
+      const configuredResume =
+        typeof toolConfig.resume === 'string' ? toolConfig.resume.trim() : ''
+      if (
+        !configuredResume &&
+        typeof taskNode?.resume_session_id === 'string' &&
+        taskNode.resume_session_id.trim()
+      ) {
+        toolConfig.resume = taskNode.resume_session_id
+      }
+    }
+
+    if (toolId === 'gemini-cli') {
+      const configuredResume =
+        typeof toolConfig.resume === 'string' ? toolConfig.resume.trim() : ''
+      if (
+        !configuredResume &&
+        typeof taskNode?.resume_session_id === 'string' &&
+        taskNode.resume_session_id.trim()
+      ) {
+        toolConfig.resume = taskNode.resume_session_id
+      }
+    }
+
+    if (toolId === 'opencode') {
+      const configuredSession =
+        typeof toolConfig.session === 'string' ? toolConfig.session.trim() : ''
+      if (
+        !configuredSession &&
+        typeof taskNode?.resume_session_id === 'string' &&
+        taskNode.resume_session_id.trim()
+      ) {
+        toolConfig.session = taskNode.resume_session_id
+      }
     }
 
     const resolveConfigString = (...values: unknown[]): string | undefined => {
@@ -253,6 +290,15 @@ export class CliSessionService extends EventEmitter {
       pendingMsgStore ??
       new MsgStoreService(undefined, resolvedTaskId, sessionId, projectId, resolvedTaskNodeId)
 
+    const handleResumeIdCaptured = (resumeId: string): void => {
+      if (!resolvedTaskNodeId) return
+      const normalized = resumeId.trim()
+      if (!normalized) return
+      const latestNode = this.databaseService.getTaskNode(resolvedTaskNodeId)
+      if (latestNode?.resume_session_id === normalized) return
+      this.databaseService.updateTaskNodeResumeSessionId(resolvedTaskNodeId, normalized)
+    }
+
     const handle = await adapter.startSession({
       sessionId,
       toolId,
@@ -265,6 +311,7 @@ export class CliSessionService extends EventEmitter {
       executablePath,
       toolConfig,
       model,
+      onResumeIdCaptured: handleResumeIdCaptured,
       msgStore
     } as CliStartOptions)
 

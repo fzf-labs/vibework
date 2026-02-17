@@ -11,6 +11,7 @@ export interface DbTaskNode {
   requires_approval: number
   status: TaskNodeStatus
   session_id: string | null
+  resume_session_id: string | null
   result_summary: string | null
   error_message: string | null
   cost: number | null

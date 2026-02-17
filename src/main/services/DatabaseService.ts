@@ -196,6 +196,7 @@ export class DatabaseService {
     taskId: string,
     updates: {
       session_id?: string | null
+      resume_session_id?: string | null
       cli_tool_id?: string | null
       agent_tool_config_id?: string | null
     }
@@ -203,6 +204,14 @@ export class DatabaseService {
     const updated = this.taskNodeRepo.updateTaskNodeRuntime(taskId, updates)
     if (updated) {
       this.taskExecutionService.syncTaskStatus(updated.task_id)
+      this.notifyTaskNodeStatusChange(updated)
+    }
+    return updated
+  }
+
+  updateTaskNodeResumeSessionId(nodeId: string, resumeSessionId: string | null): TaskNode | null {
+    const updated = this.taskNodeRepo.setNodeResumeSessionId(nodeId, resumeSessionId)
+    if (updated) {
       this.notifyTaskNodeStatusChange(updated)
     }
     return updated

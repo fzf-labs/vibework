@@ -15,6 +15,7 @@ export interface CliStartOptions {
   executablePath?: string
   toolConfig?: Record<string, unknown>
   model?: string
+  onResumeIdCaptured?: (resumeId: string) => void | Promise<void>
   msgStore?: MsgStoreService
 }
 

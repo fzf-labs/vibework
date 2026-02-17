@@ -9,6 +9,7 @@ import type {
 
 interface UpdateTaskNodeRuntimeInput {
   session_id?: string | null
+  resume_session_id?: string | null
   cli_tool_id?: string | null
   agent_tool_config_id?: string | null
 }
@@ -300,6 +301,15 @@ export class TaskNodeRepository {
     return this.getTaskNode(nodeId)
   }
 
+  setNodeResumeSessionId(nodeId: string, resumeSessionId: string | null): TaskNode | null {
+    const now = new Date().toISOString()
+    const result = this.db
+      .prepare('UPDATE task_nodes SET resume_session_id = ?, updated_at = ? WHERE id = ?')
+      .run(resumeSessionId, now, nodeId)
+    if (result.changes === 0) return null
+    return this.getTaskNode(nodeId)
+  }
+
   updateTaskNodeRuntime(taskId: string, updates: UpdateTaskNodeRuntimeInput): TaskNode | null {
     const node = this.getCurrentTaskNode(taskId) ?? this.getTaskNodes(taskId)[0]
     if (!node) return null
@@ -310,6 +320,10 @@ export class TaskNodeRepository {
     if (updates.session_id !== undefined) {
       fields.push('session_id = ?')
       values.push(updates.session_id)
+    }
+    if (updates.resume_session_id !== undefined) {
+      fields.push('resume_session_id = ?')
+      values.push(updates.resume_session_id)
     }
     if (updates.cli_tool_id !== undefined) {
       fields.push('cli_tool_id = ?')

@@ -126,6 +126,7 @@ const TOOL_CONFIG_SCHEMAS: Record<string, Record<string, ConfigFieldSchema>> = {
     append_prompt: { type: 'string', multiline: true },
     model: { type: 'string' },
     yolo: { type: 'booleanNullable' },
+    resume: { type: 'string' },
     base_command_override: { type: 'string' },
     additional_params: { type: 'stringArray' },
     env: { type: 'stringMap' },
@@ -135,6 +136,8 @@ const TOOL_CONFIG_SCHEMAS: Record<string, Record<string, ConfigFieldSchema>> = {
     model: { type: 'string' },
     variant: { type: 'string' },
     agent: { type: 'string' },
+    continue: { type: 'booleanNullable' },
+    session: { type: 'string' },
     auto_approve: { type: 'boolean', defaultValue: true },
     auto_compact: { type: 'boolean', defaultValue: true },
     base_command_override: { type: 'string' },
@@ -167,8 +170,16 @@ const ADVANCED_FIELDS_BY_TOOL: Record<string, Set<string>> = {
     'env',
   ]),
   'cursor-agent': new Set(['base_command_override', 'additional_params', 'env']),
-  'gemini-cli': new Set(['base_command_override', 'additional_params', 'env']),
-  opencode: new Set(['variant', 'auto_compact', 'base_command_override', 'additional_params', 'env']),
+  'gemini-cli': new Set(['resume', 'base_command_override', 'additional_params', 'env']),
+  opencode: new Set([
+    'variant',
+    'continue',
+    'session',
+    'auto_compact',
+    'base_command_override',
+    'additional_params',
+    'env'
+  ]),
 };
 
 const sanitizeStringMap = (value: unknown): Record<string, string> => {

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { DatabaseConnection } from '../../src/main/services/database/DatabaseConnection'
 
 describe('task nodes schema', () => {
-  it('migrates to schema v4 and creates unique in-progress index', () => {
+  it('migrates to schema v5 and creates unique in-progress index', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'vibework-task-nodes-'))
     const dbPath = join(tempDir, 'test.db')
 
@@ -26,7 +26,7 @@ describe('task nodes schema', () => {
     connection.initTables()
 
     const userVersion = Number(db.pragma('user_version', { simple: true }) ?? 0)
-    expect(userVersion).toBe(4)
+    expect(userVersion).toBe(5)
 
     const taskNodesTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='task_nodes'")
@@ -44,6 +44,11 @@ describe('task nodes schema', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_task_nodes_session_id'")
       .get() as { name?: string } | undefined
     expect(sessionIndex?.name).toBe('idx_task_nodes_session_id')
+
+    const taskNodeColumns = db
+      .prepare("PRAGMA table_info(task_nodes)")
+      .all() as Array<{ name?: string }>
+    expect(taskNodeColumns.some((column) => column.name === 'resume_session_id')).toBe(true)
 
     const automationTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='automations'")
