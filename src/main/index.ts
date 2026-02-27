@@ -63,6 +63,10 @@ function createWindow(): BrowserWindow {
 app.whenReady().then(async () => {
   app.setName(APP_NAME)
   electronApp.setAppUserModelId(APP_IDENTIFIER)
+  console.info('[NotifyDebug][main] App identity', {
+    name: app.getName(),
+    execPath: process.execPath
+  })
 
   if (process.platform === 'darwin' && app.dock) {
     app.dock.setIcon(iconMac)
@@ -98,13 +102,21 @@ app.whenReady().then(async () => {
         name: node.name || '',
         taskId: node.task_id
       }
+      console.info('[NotifyDebug][main] Task node status changed', {
+        nodeId: node.id,
+        taskId: node.task_id,
+        status: node.status,
+        name: node.name || ''
+      })
 
       if (node.status === 'in_review') {
+        console.info('[NotifyDebug][main] Emitting taskNode.review event', payload)
         mainWindow.webContents.send(IPC_EVENTS.taskNode.review, payload)
         return
       }
 
       if (node.status === 'done') {
+        console.info('[NotifyDebug][main] Emitting taskNode.completed event', payload)
         mainWindow.webContents.send(IPC_EVENTS.taskNode.completed, payload)
         return
       }

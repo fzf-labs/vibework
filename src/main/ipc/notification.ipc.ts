@@ -17,17 +17,24 @@ export const registerNotificationIpc = ({ handle, v, services }: IpcModuleContex
       })
     ],
     (_, options) => {
-      notificationService.showNotification(options as Parameters<NotificationService['showNotification']>[0])
+      console.info('[NotifyDebug][main] IPC notification.show invoked', options)
+      const delivered = notificationService.showNotification(
+        options as Parameters<NotificationService['showNotification']>[0]
+      )
+      console.info('[NotifyDebug][main] IPC notification.show result', { delivered })
+      return delivered
     }
   )
 
   handle(IPC_CHANNELS.notification.setEnabled, [v.boolean()], (_, enabled) => {
+    console.info('[NotifyDebug][main] IPC notification.setEnabled invoked', { enabled })
     notificationService.setEnabled(enabled)
   })
 
   handle(IPC_CHANNELS.notification.isEnabled, [], () => notificationService.isEnabled())
 
   handle(IPC_CHANNELS.notification.setSoundEnabled, [v.boolean()], (_, enabled) => {
+    console.info('[NotifyDebug][main] IPC notification.setSoundEnabled invoked', { enabled })
     notificationService.setSoundEnabled(enabled)
   })
 

@@ -380,11 +380,21 @@ export function saveSettings(settings: Settings): void {
     const notificationsEnabled =
       settings.taskCompleteNotificationsEnabled ||
       settings.taskNodeCompleteNotificationsEnabled;
+    console.info('[NotifyDebug][renderer] Sync notification enabled state', {
+      taskCompleteNotificationsEnabled: settings.taskCompleteNotificationsEnabled,
+      taskNodeCompleteNotificationsEnabled: settings.taskNodeCompleteNotificationsEnabled,
+      notificationsEnabled,
+    });
     window.api.notification.setEnabled(notificationsEnabled).catch((error) => {
       console.error('[Settings] Failed to sync notification state:', error);
     });
     const soundEnabled =
       settings.taskCompleteSoundEnabled || settings.taskNodeCompleteSoundEnabled;
+    console.info('[NotifyDebug][renderer] Sync notification sound enabled state', {
+      taskCompleteSoundEnabled: settings.taskCompleteSoundEnabled,
+      taskNodeCompleteSoundEnabled: settings.taskNodeCompleteSoundEnabled,
+      soundEnabled,
+    });
     window.api.notification.setSoundEnabled(soundEnabled).catch((error) => {
       console.error('[Settings] Failed to sync sound alert state:', error);
     });

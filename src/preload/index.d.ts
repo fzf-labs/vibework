@@ -214,7 +214,7 @@ interface NotificationAPI {
     icon?: string
     silent?: boolean
     urgency?: 'normal' | 'critical' | 'low'
-  }) => Promise<unknown>
+  }) => Promise<boolean>
   setEnabled: (enabled: boolean) => Promise<unknown>
   isEnabled: () => Promise<boolean>
   setSoundEnabled: (enabled: boolean) => Promise<unknown>

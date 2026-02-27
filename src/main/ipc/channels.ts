@@ -371,7 +371,7 @@ export interface IpcContracts {
 
   'notification:show': IpcContract<
     [{ title: string; body: string; icon?: string; silent?: boolean; urgency?: 'normal' | 'critical' | 'low' }],
-    unknown
+    boolean
   >
   'notification:setEnabled': IpcContract<[boolean], unknown>
   'notification:isEnabled': IpcContract<[], boolean>

@@ -23,6 +23,15 @@ const AUDIO_FILE_EXTENSIONS = new Set([
   'aac',
   'flac',
 ]);
+const NOTIFY_DEBUG_PREFIX = '[NotifyDebug][renderer]';
+
+const debugNotify = (message: string, payload?: unknown): void => {
+  if (typeof payload === 'undefined') {
+    console.info(`${NOTIFY_DEBUG_PREFIX} ${message}`);
+    return;
+  }
+  console.info(`${NOTIFY_DEBUG_PREFIX} ${message}`, payload);
+};
 
 const normalizePathSeparators = (value: string): string => value.replace(/\\/g, '/');
 
@@ -271,6 +280,46 @@ export const isAudioFileExtensionSupported = (filePath: string): boolean => {
   return AUDIO_FILE_EXTENSIONS.has(ext);
 };
 
+const showBrowserNotification = async (
+  title: string,
+  body: string
+): Promise<boolean> => {
+  if (!isBrowserNotificationSupported()) {
+    debugNotify('Browser Notification API not supported');
+    return false;
+  }
+
+  let permission = Notification.permission;
+  debugNotify('Browser notification permission state', { permission });
+  if (permission === 'default') {
+    try {
+      permission = await Notification.requestPermission();
+      debugNotify('Browser notification permission requested', { permission });
+    } catch {
+      permission = Notification.permission;
+      debugNotify('Browser notification permission request failed', { permission });
+    }
+  }
+
+  if (permission !== 'granted') {
+    debugNotify('Browser notification blocked by permission', { permission });
+    return false;
+  }
+
+  try {
+    new Notification(title, { body });
+    debugNotify('Browser notification displayed', { title, body });
+    return true;
+  } catch (error) {
+    debugNotify('Browser notification failed', {
+      error: error instanceof Error ? error.message : String(error),
+      title,
+      body,
+    });
+    return false;
+  }
+};
+
 export const showTaskCompleteNotification = async (
   taskTitle?: string
 ): Promise<void> => {
@@ -278,29 +327,59 @@ export const showTaskCompleteNotification = async (
   const body = taskTitle
     ? `任务 "${taskTitle}" 已完成`
     : '任务已完成';
+  debugNotify('showTaskCompleteNotification called', { taskTitle, title, body });
 
   if (isElectronNotificationSupported()) {
     try {
-      await window.api.notification.show({
+      debugNotify('Attempting Electron task-complete notification', { title, body });
+      const delivered = await window.api.notification.show({
         title,
         body,
         urgency: 'normal',
         silent: true,
       });
-    } catch {
-      // Ignore notification errors
+      debugNotify('Electron task-complete notification result', { delivered });
+      if (delivered) return;
+    } catch (error) {
+      debugNotify('Electron task-complete notification failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-    return;
   }
 
-  if (!isBrowserNotificationSupported()) return;
-  if (Notification.permission !== 'granted') return;
+  const fallbackDelivered = await showBrowserNotification(title, body);
+  debugNotify('Task-complete notification fallback result', { fallbackDelivered });
+};
 
-  try {
-    new Notification(title, { body });
-  } catch {
-    // Ignore notification errors
+export const showTaskReviewNotification = async (
+  taskTitle?: string
+): Promise<void> => {
+  const title = taskTitle?.trim() || '任务待审核';
+  const body = taskTitle
+    ? `任务 "${taskTitle}" 需要审核`
+    : '任务需要审核';
+  debugNotify('showTaskReviewNotification called', { taskTitle, title, body });
+
+  if (isElectronNotificationSupported()) {
+    try {
+      debugNotify('Attempting Electron task-review notification', { title, body });
+      const delivered = await window.api.notification.show({
+        title,
+        body,
+        urgency: 'normal',
+        silent: true,
+      });
+      debugNotify('Electron task-review notification result', { delivered });
+      if (delivered) return;
+    } catch (error) {
+      debugNotify('Electron task-review notification failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
+
+  const fallbackDelivered = await showBrowserNotification(title, body);
+  debugNotify('Task-review notification fallback result', { fallbackDelivered });
 };
 
 export const showTaskNodeCompleteNotification = async (
@@ -308,51 +387,133 @@ export const showTaskNodeCompleteNotification = async (
 ): Promise<void> => {
   const title = nodeName?.trim() || '任务节点完成';
   const body = nodeName ? `节点 "${nodeName}" 已完成` : '任务节点已完成';
+  debugNotify('showTaskNodeCompleteNotification called', { nodeName, title, body });
 
   if (isElectronNotificationSupported()) {
     try {
-      await window.api.notification.show({
+      debugNotify('Attempting Electron task-node-complete notification', { title, body });
+      const delivered = await window.api.notification.show({
         title,
         body,
         urgency: 'normal',
         silent: true,
       });
-    } catch {
-      // Ignore notification errors
+      debugNotify('Electron task-node-complete notification result', { delivered });
+      if (delivered) return;
+    } catch (error) {
+      debugNotify('Electron task-node-complete notification failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-    return;
   }
 
-  if (!isBrowserNotificationSupported()) return;
-  if (Notification.permission !== 'granted') return;
+  const fallbackDelivered = await showBrowserNotification(title, body);
+  debugNotify('Task-node-complete notification fallback result', { fallbackDelivered });
+};
 
-  try {
-    new Notification(title, { body });
-  } catch {
-    // Ignore notification errors
+export const showTaskNodeReviewNotification = async (
+  nodeName?: string
+): Promise<void> => {
+  const title = nodeName?.trim() || '任务节点待审核';
+  const body = nodeName
+    ? `节点 "${nodeName}" 需要审核`
+    : '任务节点需要审核';
+  debugNotify('showTaskNodeReviewNotification called', { nodeName, title, body });
+
+  if (isElectronNotificationSupported()) {
+    try {
+      debugNotify('Attempting Electron task-node-review notification', { title, body });
+      const delivered = await window.api.notification.show({
+        title,
+        body,
+        urgency: 'normal',
+        silent: true,
+      });
+      debugNotify('Electron task-node-review notification result', { delivered });
+      if (delivered) return;
+    } catch (error) {
+      debugNotify('Electron task-node-review notification failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
+
+  const fallbackDelivered = await showBrowserNotification(title, body);
+  debugNotify('Task-node-review notification fallback result', { fallbackDelivered });
 };
 
 export const notifyTaskCompleted = async (taskTitle?: string): Promise<void> => {
   const settings = getSettings();
+  debugNotify('notifyTaskCompleted called', {
+    taskTitle,
+    taskCompleteNotificationsEnabled: settings.taskCompleteNotificationsEnabled,
+  });
 
   if (!settings.taskCompleteNotificationsEnabled) return;
 
   const permissionState = getNotificationPermissionState();
+  debugNotify('notifyTaskCompleted permission state', { permissionState });
   if (permissionState !== 'granted') return;
 
   await showTaskCompleteNotification(taskTitle);
 };
 
+export const notifyTaskNeedsReview = async (taskTitle?: string): Promise<void> => {
+  const settings = getSettings();
+
+  const reviewNotificationsEnabled =
+    settings.taskCompleteNotificationsEnabled ||
+    settings.taskNodeCompleteNotificationsEnabled;
+  debugNotify('notifyTaskNeedsReview called', {
+    taskTitle,
+    taskCompleteNotificationsEnabled: settings.taskCompleteNotificationsEnabled,
+    taskNodeCompleteNotificationsEnabled: settings.taskNodeCompleteNotificationsEnabled,
+    reviewNotificationsEnabled,
+  });
+  if (!reviewNotificationsEnabled) return;
+
+  const permissionState = getNotificationPermissionState();
+  debugNotify('notifyTaskNeedsReview permission state', { permissionState });
+  if (permissionState !== 'granted') return;
+
+  await showTaskReviewNotification(taskTitle);
+};
+
 export const notifyTaskNodeCompleted = async (nodeName?: string): Promise<void> => {
   const settings = getSettings();
+  debugNotify('notifyTaskNodeCompleted called', {
+    nodeName,
+    taskNodeCompleteNotificationsEnabled: settings.taskNodeCompleteNotificationsEnabled,
+  });
 
   if (!settings.taskNodeCompleteNotificationsEnabled) return;
 
   const permissionState = getNotificationPermissionState();
+  debugNotify('notifyTaskNodeCompleted permission state', { permissionState });
   if (permissionState !== 'granted') return;
 
   await showTaskNodeCompleteNotification(nodeName);
+};
+
+export const notifyTaskNodeNeedsReview = async (nodeName?: string): Promise<void> => {
+  const settings = getSettings();
+
+  const reviewNotificationsEnabled =
+    settings.taskNodeCompleteNotificationsEnabled ||
+    settings.taskCompleteNotificationsEnabled;
+  debugNotify('notifyTaskNodeNeedsReview called', {
+    nodeName,
+    taskNodeCompleteNotificationsEnabled: settings.taskNodeCompleteNotificationsEnabled,
+    taskCompleteNotificationsEnabled: settings.taskCompleteNotificationsEnabled,
+    reviewNotificationsEnabled,
+  });
+  if (!reviewNotificationsEnabled) return;
+
+  const permissionState = getNotificationPermissionState();
+  debugNotify('notifyTaskNodeNeedsReview permission state', { permissionState });
+  if (permissionState !== 'granted') return;
+
+  await showTaskNodeReviewNotification(nodeName);
 };
 
 export const playTaskReviewSound = async (): Promise<void> => {

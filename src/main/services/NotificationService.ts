@@ -1,4 +1,4 @@
-import { Notification } from 'electron'
+import { app, BrowserWindow, Notification } from 'electron'
 import { EventEmitter } from 'events'
 
 interface NotificationOptions {
@@ -29,6 +29,7 @@ export class NotificationService extends EventEmitter {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled
+    console.info('[NotifyDebug][main] Notification service enabled state updated', { enabled })
   }
 
   isEnabled(): boolean {
@@ -37,6 +38,7 @@ export class NotificationService extends EventEmitter {
 
   setSoundEnabled(enabled: boolean): void {
     this.soundSettings.enabled = enabled
+    console.info('[NotifyDebug][main] Notification sound enabled state updated', { enabled })
   }
 
   isSoundEnabled(): boolean {
@@ -51,9 +53,25 @@ export class NotificationService extends EventEmitter {
     return { ...this.soundSettings }
   }
 
-  showNotification(options: NotificationOptions): void {
+  showNotification(options: NotificationOptions): boolean {
+    const focusedWindow = BrowserWindow.getFocusedWindow()
+    console.info('[NotifyDebug][main] showNotification called', {
+      enabled: this.enabled,
+      supported: Notification.isSupported(),
+      appFocused: Boolean(focusedWindow),
+      focusedWindowVisible: focusedWindow?.isVisible() ?? false,
+      appName: app.getName(),
+      execPath: process.execPath,
+      options
+    })
     if (!this.enabled) {
-      return
+      console.info('[NotifyDebug][main] showNotification skipped because notifications are disabled')
+      return false
+    }
+
+    if (!Notification.isSupported()) {
+      console.info('[NotifyDebug][main] showNotification skipped because Notification API is unsupported')
+      return false
     }
 
     try {
@@ -70,13 +88,37 @@ export class NotificationService extends EventEmitter {
         urgency: options.urgency || 'normal'
       })
 
+      notification.on('show', () => {
+        console.info('[NotifyDebug][main] Notification show event emitted', {
+          title: options.title,
+          body: options.body
+        })
+      })
+      notification.on('close', () => {
+        console.info('[NotifyDebug][main] Notification close event emitted', {
+          title: options.title,
+          body: options.body
+        })
+      })
       notification.show()
+      console.info('[NotifyDebug][main] notification.show() invoked')
 
       notification.on('click', () => {
+        console.info('[NotifyDebug][main] Notification click event emitted', {
+          title: options.title,
+          body: options.body
+        })
         this.emit('notification-click', options)
       })
+      console.info('[NotifyDebug][main] Notification displayed successfully', {
+        title: options.title,
+        body: options.body
+      })
+      return true
     } catch (error) {
       console.error('Failed to show notification:', error)
+      console.error('[NotifyDebug][main] Notification display failed', error)
+      return false
     }
   }
 

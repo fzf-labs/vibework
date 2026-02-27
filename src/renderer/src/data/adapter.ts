@@ -1,4 +1,8 @@
-import { notifyTaskCompleted, playTaskReviewSound } from '@/lib/notifications'
+import {
+  notifyTaskCompleted,
+  notifyTaskNeedsReview,
+  playTaskReviewSound
+} from '@/lib/notifications'
 import type { CreateTaskInput, Task, TaskNode, UpdateTaskInput } from './types'
 import type { Automation, AutomationRun } from './types'
 
@@ -17,13 +21,28 @@ export const db = {
 
   updateTask: async (id: string, updates: UpdateTaskInput): Promise<Task | null> => {
     const updatedTask = (await window.api.database.updateTask(id, updates)) as Task | null
+    console.info('[NotifyDebug][renderer] db.updateTask result', {
+      taskId: id,
+      requestedStatus: updates.status,
+      updatedStatus: updatedTask?.status
+    })
 
     if (updates.status === 'done' && updatedTask?.status === 'done') {
       const taskTitle = updatedTask.title || updatedTask.prompt || undefined
+      console.info('[NotifyDebug][renderer] Trigger task-complete notification', {
+        taskId: id,
+        taskTitle
+      })
       void notifyTaskCompleted(taskTitle)
     }
 
     if (updates.status === 'in_review' && updatedTask?.status === 'in_review') {
+      const taskTitle = updatedTask.title || updatedTask.prompt || undefined
+      console.info('[NotifyDebug][renderer] Trigger task-review notification and sound', {
+        taskId: id,
+        taskTitle
+      })
+      void notifyTaskNeedsReview(taskTitle)
       void playTaskReviewSound()
     }
 
